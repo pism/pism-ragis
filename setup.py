@@ -4,6 +4,7 @@
 # pylint: skip-file
 
 from pathlib import Path
+
 from setuptools import setup
 
 with open(str(Path(".", "VERSION").absolute())) as version_file:
@@ -12,7 +13,7 @@ with open(str(Path(".", "VERSION").absolute())) as version_file:
 packages = ["pypac"]
 
 # Dependencies of pism-emulator
-requirements = ["configobj", "jinja2"]
+requirements = ["configobj", "jinja2", "pre-commit"]
 
 setup(
     name="pypac",
