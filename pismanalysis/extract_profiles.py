@@ -14,12 +14,13 @@ sampling 2D and 3D fields on a regular grid at points along a flux
 gate or a any kind of profile.
 """
 
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+import time
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+
 import numpy as np
 import scipy.sparse
-import time
-from pyproj import Proj
 from netCDF4 import Dataset as NC
+from pyproj import Proj
 
 profiledim = "profile"
 stationdim = "station"
@@ -625,8 +626,8 @@ def profile_extraction_test():
         return 10.0 + 0.01 * x + 0.02 * y + 0.03 + 0.04 * z
 
     # create a test file
-    import tempfile
     import os
+    import tempfile
 
     fd, filename = tempfile.mkstemp(suffix=".nc", prefix="extract_profile_test_")
     os.close(fd)
@@ -913,8 +914,7 @@ def read_shapefile(filename):
     lat, lon: array_like coordinates
 
     """
-    from osgeo import ogr
-    from osgeo import osr
+    from osgeo import ogr, osr
 
     driver = ogr.GetDriverByName("ESRI Shapefile")
     data_source = driver.Open(filename, 0)
