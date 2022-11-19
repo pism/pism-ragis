@@ -1654,7 +1654,8 @@ def extract_variable(nc_in, nc_out, profiles, var_name, stations):
     print(("  - done with %s" % var_name))
 
 
-def main() -> None:
+if __name__ == "__main__":  # pragma: no cover
+
     # Set up the option parser
     description = """A script to extract data along (possibly multiple) profile using
     piece-wise constant or bilinear interpolation.
@@ -1853,7 +1854,3 @@ def main() -> None:
     nc_in.close()
     nc_out.close()
     print("Extracted profiles to file {}".format(options.OUTPUTFILE[0]))
-
-
-if __name__ == "__main__":  # pragma: no cover
-    main()
