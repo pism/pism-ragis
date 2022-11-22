@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
 # Copyright (C) 2014-2022 Andy Aschwanden
 
-import codecs
-import itertools
 import operator
 import os
-import re
 from argparse import ArgumentParser
-from colorsys import hls_to_rgb, rgb_to_hls
 
 import cf_units
-import matplotlib as mpl
 import matplotlib.cm as cmx
 import matplotlib.colors as mplcolors
 import numpy as np
@@ -18,9 +13,9 @@ import pandas as pa
 import pylab as plt
 import statsmodels.api as sm
 from netCDF4 import Dataset as NC
-from osgeo import ogr, osr
-from palettable import colorbrewer
 from unidecode import unidecode
+
+from typing import List, Union
 
 
 def reverse_enumerate(iterable):
@@ -92,28 +87,28 @@ class FluxGate(object):
         self.profile_axis = profile_axis
         self.profile_axis_units = profile_axis_units
         self.profile_axis_name = profile_axis_name
-        self.best_rmsd_exp_id = None
-        self.best_rmsd = None
-        self.best_corr_exp_id = None
-        self.best_corr = None
-        self.corr = None
-        self.corr_units = None
-        self.experiments = []
-        self.exp_counter = 0
-        self.has_observations = None
-        self.has_fluxes = None
-        self.has_stats = None
-        self.linear_trend = None
-        self.linear_bias = None
-        self.linear_r2 = None
-        self.linear_p = None
-        self.N_corr = None
-        self.N_rmsd = None
-        self.observed_flux = None
-        self.observed_flux_units = None
-        self.observed_flux_error = None
-        self.observed_mean = None
-        self.observed_mean_units = None
+        self.best_rmsd_exp_id: Union[str, None] = None
+        self.best_rmsd: Union[float, None] = None
+        self.best_corr_exp_id: Union[int, None] = None
+        self.best_corr: Union[float, None] = None
+        self.corr: Union[float, None] = None
+        self.corr_units: Union[str, None] = None
+        self.experiments: List[object] = []
+        self.exp_counter: int = 0
+        self.has_observations: bool = False
+        self.has_fluxes: bool = False
+        self.has_stats: bool = False
+        self.linear_trend: Union[float, None] = None
+        self.linear_bias: Union[float, None] = None
+        self.linear_r2: Union[float, None] = None
+        self.linear_p: Union[float, None] = None
+        self.N_corr: Union[float, None] = None
+        self.N_rmsd: Union[float, None] = None
+        self.observed_flux: Union[float, None] = None
+        self.observed_flux_units: Union[str, None] = None
+        self.observed_flux_error: Union[float, None] = None
+        self.observed_mean: Union[float, None] = None
+        self.observed_mean_units: Union[str, None] = None
         self.p_ols = None
         self.r2 = None
         self.r2_units = None
@@ -180,7 +175,6 @@ class FluxGate(object):
         if not self.has_fluxes:
             self.calculate_fluxes()
         corr = {}
-        N_corr = {}
         N_rmsd = {}
         p_ols = {}
         r2 = {}
@@ -190,7 +184,6 @@ class FluxGate(object):
             id = exp.id
             x = np.squeeze(self.profile_axis)
             obs_vals = np.squeeze(self.observations.values)
-            sigma_obs = self.sigma_obs
             # mask values where obs is zero
             obs_vals = np.ma.masked_where(obs_vals == 0, obs_vals)
             if isinstance(obs_vals, np.ma.MaskedArray):
@@ -199,7 +192,7 @@ class FluxGate(object):
             # Calculate root mean square difference (RMSD), convert units
             my_rmsd, my_N_rmsd = get_rmsd(exp_vals, obs_vals)
             i_units = self.varname_units
-            o_units = v_o_units
+            o_units = var_dict[varname]["v_o_units"]
             i_units_cf = cf_units.Unit(i_units)
             o_units_cf = cf_units.Unit(o_units)
             rmsd[id] = i_units_cf.convert(my_rmsd, o_units_cf)
@@ -217,7 +210,7 @@ class FluxGate(object):
         self.best_corr_exp_id = best_corr_exp_id
         self.best_corr = corr[best_corr_exp_id]
         self.rmsd = rmsd
-        self.rmsd_units = v_o_units
+        self.rmsd_units = var_dict[varname]["v_o_units"]
         self.N_rmsd = N_rmsd
         self.S = S
         self.S_units = "1"
@@ -252,8 +245,8 @@ class FluxGate(object):
             )
         else:
             i_units_cf = cf_units.Unit(x_units) * cf_units.Unit(y_units)
-        o_units_cf = cf_units.Unit(v_flux_o_units)
-        o_units_str = v_flux_o_units_str
+        o_units_cf = cf_units.Unit(var_dict[varname]["v_flux_o_units"])
+        o_units_str = var_dict[varname]["v_flux_o_units_str"]
         o_val = i_units_cf.convert(int_val, o_units_cf)
         observed_flux = o_val
         observed_flux_units = o_units_str
@@ -298,12 +291,11 @@ class FluxGate(object):
                 )
             else:
                 i_units = cf_units.Unit(x_units) * cf_units.Unit(y_units)
-            o_units = cf_units.Unit(v_flux_o_units)
-            o_units_str = v_flux_o_units_str
+            o_units = cf_units.Unit(var_dict[varname]["v_flux_o_units"])
+            o_units_str = var_dict[varname]["v_flux_o_units_str"]
             o_val = i_units.convert(int_val, o_units)
             experiment_fluxes[id] = o_val
             experiment_fluxes_units[id] = o_units_str
-            config = exp.config
             if label_params:
                 my_exp_str = ", ".join(
                     [
@@ -386,26 +378,22 @@ class FluxGate(object):
             obs = self.observations
             if legend == "long":
                 if obs.has_error:
-                    label = "obs: {:6.1f}$\pm${:4.1f}".format(
-                        self.observed_flux, self.observed_flux_error
-                    )
+                    label = f"obs: {self.observed_flux:6.1f}$\pm${self.observed_flux_error:4.1f}"
                 else:
-                    label = "obs: {:6.1f}".format(self.observed_flux)
+                    label = f"obs: {self.observed_flux:6.1f}"
             elif legend in ("short", "regress", "exp"):
                 label = "observed"
             elif legend in ("attr"):
                 label = "AERODEM"
             else:
                 if obs.has_error:
-                    label = "{:6.1f}$\pm${:4.1f}".format(
-                        self.observed_flux, self.observed_flux_error
-                    )
+                    label = f"obs: {self.observed_flux:6.1f}$\pm${self.observed_flux_error:4.1f}"
                 else:
-                    label = "{:6.1f}".format(self.observed_flux)
+                    label = f"obs: {self.observed_flux:6.1f}"
             has_error = obs.has_error
             i_vals = obs.values
             i_units_cf = cf_units.Unit(v_units)
-            o_units_cf = cf_units.Unit(v_o_units)
+            o_units_cf = cf_units.Unit(var_dict[varname]["v_o_units"])
             obs_o_vals = i_units_cf.convert(i_vals, o_units_cf)
             obs_max = np.max(obs_o_vals)
             if has_error:
@@ -432,7 +420,6 @@ class FluxGate(object):
                     label=label,
                 )
 
-        ne = len(experiments)
         lines_d = []
         lines_c = []
         # We need to carefully reverse list and properly order
@@ -440,7 +427,7 @@ class FluxGate(object):
         for k, exp in enumerate(reversed(experiments)):
             i_vals = exp.values
             i_units_cf = cf_units.Unit(v_units)
-            o_units_cf = cf_units.Unit(v_o_units)
+            o_units_cf = cf_units.Unit(var_dict[varname]["v_o_units"])
             exp_o_vals = i_units_cf.convert(i_vals, o_units_cf)
             if normalize:
                 exp_max = np.max(exp_o_vals)
@@ -467,10 +454,10 @@ class FluxGate(object):
                                 ": ".join(
                                     [
                                         exp_str,
-                                        "{:6.1f}".format(self.experiment_fluxes[id]),
+                                        f"{self.experiment_fluxes[id]:6.1f}",
                                     ]
                                 ),
-                                "=".join(["r", "{:1.2f}".format(self.corr[id])]),
+                                "=".join(["r", f"{self.corr[id]:1.2f}"]),
                             ]
                         )
                         # label = ', '.join(['{:6.1f}'.format(self.experiment_fluxes[id]), '='.join(['r', '{:1.2f}'.format(self.corr[id])])])
@@ -504,21 +491,19 @@ class FluxGate(object):
                         )
                         label = exp_str
                     else:
-                        label = "r={:1.2f}".format(self.corr[id])
+                        label = f"r={self.corr[id]:1.2f}"
                     if legend == "regress":
-                        label = "{:4.0f}m, r={:1.2f}".format(
-                            config["grid_dx_meters"], self.corr[id]
+                        label = (
+                            f"{config['grid_dx_meters']:4.0f}m, r={self.corr[id]:1.2f}"
                         )
                     elif legend == "short":
-                        label = "r={:1.2f}".format(self.corr[id])
+                        label = f"r={self.corr[id]:1.2f}"
                     else:
                         pass
                 else:
                     label = config.get("grid_dx_meters")
-                    # label = ", ".join([": ".join([exp_str, "{:6.1f}".format(self.experiment_fluxes[id])])])
                 labels.append(label)
             my_color = my_colors[k]
-            my_color_light = my_colors_light[k]
             if simple_plot:
                 (line_c,) = ax.plot(
                     profile_axis_out, exp_o_vals, color=my_color, label=label
@@ -541,15 +526,14 @@ class FluxGate(object):
             lines_d.append(line_d)
             lines_c.append(line_c)
 
-        # ax.text(0.05, 0.85, 'r={:1.2f}'.format(self.corr[id]), transform=ax.transAxes)
         ax.set_xlim(0, np.max(profile_axis_out))
-        xlabel = "{0} ({1})".format(profile_axis_name, profile_axis_out_units)
+        xlabel = f"{profile_axis_name} ({profile_axis_out_units})"
         ax.set_xlabel(xlabel)
         if varname in list(var_name_dict.keys()):
             v_name = var_name_dict[varname]
         else:
             v_name = varname
-        ylabel = "{0} ({1})".format(v_name, v_o_units_str)
+        ylabel = f"{v_name} ({var_dict[varname]['v_o_units_str']})"
         ax.set_ylabel(ylabel)
         ax.set_ylim(bottom=y_lim_min, top=y_lim_max)
         handles, labels = ax.get_legend_handles_labels()
@@ -573,7 +557,7 @@ class FluxGate(object):
                     ordered_handles,
                     ordered_labels,
                     loc="upper right",
-                    title="{} ({})".format(flux_type, self.experiment_fluxes_units[0]),
+                    title=f"{var_dict[varname]['flux_type']} ({self.experiment_fluxes_units[0]})",
                     shadow=True,
                     numpoints=numpoints,
                     bbox_to_anchor=(0, 0, 1, 1),
@@ -604,7 +588,7 @@ class FluxGate(object):
             )
         else:
             gate_name = "_".join([unidecode(gate.gate_name), varname, "profile"])
-        outname = ".".join([gate_name, "pdf"]).replace(" ", "_")
+        outname = os.path.join(odir, ".".join([gate_name, "pdf"]).replace(" ", "_"))
         print(f"Saving {outname}")
         fig.tight_layout()
         fig.savefig(outname)
@@ -649,7 +633,7 @@ class Dataset(object):
         print(("  opening NetCDF file %s ..." % filename))
         try:
             nc = NC(filename, "r")
-        except:
+        except FileNotFoundError:
             print(
                 (
                     "ERROR:  file '%s' not found or not NetCDF format ... ending ..."
@@ -663,9 +647,7 @@ class Dataset(object):
         for name in nc.variables:
             v = nc.variables[name]
             if getattr(v, "standard_name", "") == varname:
-                print(
-                    ("variabe {0} found by its standard_name {1}".format(name, varname))
-                )
+                print((f"variabe {name} found by its standard_name {varname}"))
                 varname = name
 
         self.values = np.squeeze(nc.variables[varname][:])
@@ -696,7 +678,7 @@ class ExperimentDataset(Dataset):
     def __init__(self, id, *args, **kwargs):
         super(ExperimentDataset, self).__init__(*args, **kwargs)
 
-        print("Experiment {}".format(id))
+        print(f"Experiment {id}")
         self.id = id
         self.config = dict()
         for v in ["pism_config", "run_stats", "config"]:
@@ -705,7 +687,7 @@ class ExperimentDataset(Dataset):
                 for attr in ncv.ncattrs():
                     self.config[attr] = getattr(ncv, attr)
             else:
-                print("Variable {} not found".format(v))
+                print(f"Variable {v} not found")
 
     def __repr__(self):
         return "ExperimentDataset"
@@ -774,12 +756,10 @@ def make_correlation_figure(filename, exp):
             corrs[id] = r
     sort_order = sorted(corrs, key=lambda x: corrs[x])
     corrs_sorted = [corrs[x] for x in sort_order]
-    names_sorted = [flux_gates[x].gate_name for x in sort_order]
     gate_id_sorted = [flux_gates[x].gate_id for x in sort_order]
     corrs_dict = dict(zip(gate_id_sorted, corrs_sorted))
     fig = plt.figure(figsize=[6.4, 12])
     ax = fig.add_subplot(111)
-    height = 0.4
     y = np.arange(len(list(corrs.keys()))) + 1.25
     for k, corr in enumerate(corrs_sorted):
         if corr < 0.5:
@@ -793,13 +773,10 @@ def make_correlation_figure(filename, exp):
 
     corr_median = np.nanmedian(list(corrs.values()))
     ax.vlines(corr_median, 0, y[-1], linestyle="dotted", color="0.5")
-    print(("median correlation: {:1.2f}".format(corr_median)))
+    print(f"median correlation: {corr_median:1.2f}")
     plt.yticks(
         y,
-        [
-            "{} ({})".format(flux_gates[x].gate_name, flux_gates[x].gate_id)
-            for x in sort_order
-        ],
+        [f"{flux_gates[x].gate_name} ({flux_gates[x].gate_id})" for x in sort_order],
     )
     ax.set_xlabel("r (-)", labelpad=0.2)
     ax.set_xlim(-1, 1.1)
@@ -832,7 +809,6 @@ def make_regression(gate):
         rmsdS = pa.Series(data=rmsd_data, index=list(gate.rmsd.keys()))
         gridS = pa.Series(data=grid_dx_meters, index=list(gate.rmsd.keys()))
         d = {"grid_resolution": gridS, "RMSD": rmsdS}
-        df = pa.DataFrame(d)
         model = sm.OLS(rmsdS, sm.add_constant(gridS)).fit()
         # Calculate PISM trends and biases (intercepts)
         bias, trend = model.params
@@ -853,7 +829,7 @@ def make_regression(gate):
         )
         ax.set_xticks(grid_dx_meters)
         ax.set_xlabel("grid resolution (m)")
-        ax.set_ylabel("$\chi$ ({})".format(v_o_units_str))
+        ax.set_ylabel(f"$\chi$ ({var_dict[varname]['v_o_units_str']})")
         ax.set_xlim(xmin, xmax)
         ticklabels = ax.get_xticklabels()
         for tick in ticklabels:
@@ -861,14 +837,10 @@ def make_regression(gate):
         plt.title(gate.gate_name)
         fig.tight_layout()
         gate_name = "_".join([unidecode(gate.gate_name), varname, "rmsd", "regress"])
-        outname = ".".join([gate_name, "pdf"]).replace(" ", "_")
+        outname = os.path.join(odir, ".".join([gate_name, "pdf"]).replace(" ", "_"))
         print(f"Saving {outname}")
         fig.savefig(outname)
         plt.close("all")
-
-    nocol = 4
-    colormap = ["RdYlGn", "Diverging", nocol, 0]
-    my_ok_colors = colorbrewer.get_map(*colormap).mpl_colors
 
     grid_dx_meters = [x.config["grid_dx_meters"] for x in gate.experiments]
 
@@ -886,7 +858,6 @@ def make_regression(gate):
         rmsdS = pa.Series(data=rmsd_data, index=list(gate.rmsd.keys()))
         gridS = pa.Series(data=grid_dx_meters, index=list(gate.rmsd.keys()))
         d = {"grid_resolution": gridS, "RMSD": rmsdS}
-        df = pa.DataFrame(d)
         model = sm.OLS(rmsdS, sm.add_constant(gridS)).fit()
         # trend and bias (intercept)
         bias, trend = model.params
@@ -930,14 +901,12 @@ def make_regression(gate):
     for id in (1, 11, 19, 23):
 
         gate = flux_gates[id]
-        # print(u"selecting glacier {}".format(gate.gate_name))
 
         # RMSD
         rmsd_data = list(gate.rmsd.values())
         rmsdS = pa.Series(data=rmsd_data, index=list(gate.rmsd.keys()))
         gridS = pa.Series(data=grid_dx_meters, index=list(gate.rmsd.keys()))
         d = {"grid_resolution": gridS, "RMSD": rmsdS}
-        df = pa.DataFrame(d)
         model = sm.OLS(rmsdS, sm.add_constant(gridS)).fit()
         # trend and bias (intercept)
         bias_selected, trend_selected = model.params
@@ -982,95 +951,14 @@ def make_regression(gate):
         )
         legend_handles.append(line_l)
 
-    # all isbrae RMSD
-    rmsd_data = list(rmsd_isbrae_cum_dict.values())
-    rmsdS = pa.Series(data=rmsd_data, index=list(rmsd_isbrae_cum_dict.keys()))
-    gridS = pa.Series(data=grid_dx_meters, index=list(gate.rmsd.keys()))
-    d = {"grid_resolution": gridS, "RMSD": rmsdS}
-    df = pa.DataFrame(d)
-    model = sm.OLS(rmsdS, sm.add_constant(gridS)).fit()
-    # Calculate PISM trends and biases (intercepts)
-    bias_isbrae, trend_isbrae = model.params
-    r2_isbrae = model.rsquared
-    p_isbrae = model.f_pvalue
-    if p_isbrae > 0.05:
-        (line_l,) = ax.plot(
-            [grid_dx_meters[0], grid_dx_meters[-1]],
-            bias_isbrae
-            + np.array([grid_dx_meters[0], grid_dx_meters[-1]]) * trend_isbrae,
-            color="#8c510a",
-            linewidth=1,
-            linestyle="dashed",
-        )
-    else:
-        (line_l,) = ax.plot(
-            [grid_dx_meters[0], grid_dx_meters[-1]],
-            bias_isbrae
-            + np.array([grid_dx_meters[0], grid_dx_meters[-1]]) * trend_isbrae,
-            color="#8c510a",
-            linewidth=1,
-        )
-    ax.plot(
-        grid_dx_meters,
-        rmsd_data,
-        dash_style,
-        color="#8c510a",
-        markeredgewidth=markeredgewidth,
-    )
-    legend_handles.append(line_l)
-
-    print(("Isbrae regression r2 = {:2.2f}".format(r2_isbrae)))
-
-    # all ice-stream RMSD
-    rmsd_data = list(rmsd_ice_stream_cum_dict.values())
-    rmsdS = pa.Series(data=rmsd_data, index=list(rmsd_ice_stream_cum_dict.keys()))
-    gridS = pa.Series(data=grid_dx_meters, index=list(gate.rmsd.keys()))
-    d = {"grid_resolution": gridS, "RMSD": rmsdS}
-    df = pa.DataFrame(d)
-    model = sm.OLS(rmsdS, sm.add_constant(gridS)).fit()
-    # Calculate PISM trends and biases (intercepts)
-    bias_ice_stream, trend_ice_stream = model.params
-    r2_ice_stream = model.rsquared
-    p_ice_stream = model.f_pvalue
-    if p_ice_stream > 0.05:
-        (line_l,) = ax.plot(
-            [grid_dx_meters[0], grid_dx_meters[-1]],
-            bias_ice_stream
-            + np.array([grid_dx_meters[0], grid_dx_meters[-1]]) * trend_ice_stream,
-            color="#01665e",
-            linewidth=1,
-            linestyle="dashed",
-        )
-    else:
-        (line_l,) = ax.plot(
-            [grid_dx_meters[0], grid_dx_meters[-1]],
-            bias_ice_stream
-            + np.array([grid_dx_meters[0], grid_dx_meters[-1]]) * trend_ice_stream,
-            color="#01665e",
-            linewidth=1,
-        )
-
-    ax.plot(
-        grid_dx_meters,
-        rmsd_data,
-        dash_style,
-        color="#01665e",
-        markeredgewidth=markeredgewidth,
-    )
-    legend_handles.append(line_l)
-
-    print(("Ice-stream regression r2 = {:2.2f}".format(r2_ice_stream)))
-
     # global RMSD
     rmsd_data = list(rmsd_cum_dict.values())
     rmsdS = pa.Series(data=rmsd_data, index=list(rmsd_cum_dict.keys()))
     gridS = pa.Series(data=grid_dx_meters, index=list(gate.rmsd.keys()))
     d = {"grid_resolution": gridS, "RMSD": rmsdS}
-    df = pa.DataFrame(d)
     model = sm.OLS(rmsdS, sm.add_constant(gridS)).fit()
     # Calculate PISM trends and biases (intercepts)
     bias_global, trend_global = model.params
-    r2_global = model.rsquared
     p_global = model.f_pvalue
     if p_global > 0.05:
         (line_l,) = ax.plot(
@@ -1103,7 +991,7 @@ def make_regression(gate):
     # make x lims from 0 to 5000 m
     xmin, xmax = 0, 5000
 
-    jet = cm = plt.get_cmap("jet")
+    jet = plt.get_cmap("jet")
     cNorm = mplcolors.Normalize(vmin=0, vmax=15)
     scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=jet)
 
@@ -1113,8 +1001,6 @@ def make_regression(gate):
         corr_data = list(gate.corr.values())
         corrS = pa.Series(data=corr_data, index=list(gate.corr.keys()))
         gridS = pa.Series(data=grid_dx_meters, index=list(gate.corr.keys()))
-        d = {"grid_resolution": gridS, "correlation": corrS}
-        df = pa.DataFrame(d)
         model = pa.ols(x=gridS, y=corrS)
         # Calculate PISM trends and biases (intercepts)
         trend, bias = model.beta
@@ -1144,7 +1030,9 @@ def make_regression(gate):
         tick.set_rotation(40)
 
     fig.tight_layout()
-    outname = ".".join(["pearson_r_regression", "pdf"]).replace(" ", "_")
+    outname = os.path.join(
+        odir, ".".join(["pearson_r_regression", "pdf"]).replace(" ", "_")
+    )
     print("Saving {outname}")
     fig.savefig(outname)
     plt.close("all")
@@ -1219,12 +1107,6 @@ if __name__ == "__main__":
         default="default",
     )
     parser.add_argument(
-        "--o_dir",
-        dest="odir",
-        help="output directory. Default: current directory",
-        default="foo",
-    )
-    parser.add_argument(
         "--plot_title",
         dest="plot_title",
         action="store_true",
@@ -1264,6 +1146,13 @@ if __name__ == "__main__":
         help="""Variable to plot, default = 'velsurf_mag'.""",
         default="velsurf_mag",
     )
+    parser.add_argument(
+        "-o",
+        "--o_dir",
+        dest="odir",
+        help="""Directory to put results""",
+        default="results",
+    )
 
     options = parser.parse_args()
     args = options.FILE
@@ -1283,6 +1172,11 @@ if __name__ == "__main__":
     odir = options.odir
     simple_plot = options.simple_plot
     y_lim_min, y_lim_max = options.y_lim
+    odir = options.odir
+
+    if not os.path.isdir(odir):
+        os.makedirs(odir)
+
     ice_density = 910.0
     ice_density_units = "910 kg m-3"
     vol_to_mass = False
@@ -1295,43 +1189,57 @@ if __name__ == "__main__":
     if y_lim_max is not None:
         y_lim_max = np.float(y_lim_max)
 
-    if varname in ("velsurf_mag", "velbase_mag", "velsurf_normal", "v"):
-        flux_type = "flux"
-        v_o_units = "m yr-1"
-        v_o_units_str = "m yr$^\mathregular{{-1}}$"
-        v_o_units_str_tex = "m\,yr$^{-1}$"
-        v_flux_o_units = "km2 yr-1"
-        v_flux_o_units_str = "km$^\mathregular{2}$ yr$^\mathregular{{-1}}$"
-        v_flux_o_units_str_tex = "km$^2$\,yr$^{-1}$"
-    elif varname in ("flux_mag", "flux_normal"):
-        flux_type = "flux"
-        v_o_units = "km2 yr-1"
-        v_o_units_str = "km$^\mathregular{2}$ yr$^\mathregular{{-1}}$"
-        v_o_units_str_tex = "km$^2$\,yr$^{-1}$"
-        vol_to_mass = True
-        v_flux_o_units = "Gt yr-1"
-        v_flux_o_units_str = "Gt yr$^\mathregular{{-1}}$"
-        v_flux_o_units_str_tex = "Gt\,yr$^{-1}$"
-    elif varname in ("thk", "thickness", "land_ice_thickness"):
-        flux_type = "area"
-        v_o_units = "m"
-        v_o_units_str = "m"
-        v_o_units_str_tex = "m"
-        vol_to_mass = False
-        v_flux_o_units = "km2"
-        v_flux_o_units_str = "km$^\mathregular{2}$"
-        v_flux_o_units_str_tex = "km$^2$"
-    elif varname in ("usurf", "surface", "surface_altitude"):
-        flux_type = "area"
-        v_o_units = "m"
-        v_o_units_str = "m"
-        v_o_units_str_tex = "m"
-        vol_to_mass = False
-        v_flux_o_units = "km2"
-        v_flux_o_units_str = "km$^\mathregular{2}$"
-        v_flux_o_units_str_tex = "km$^2$"
-    else:
-        print(("variable {} not supported".format(varname)))
+    var_dict = {
+        "velsurf_mag": {
+            "flux_type": "flux",
+            "v_o_units": "m yr-1",
+            "v_o_units_str": "m yr$^\mathregular{{-1}}$",
+            "v_o_units_str_tex": "m\,yr$^{-1}$",
+            "v_flux_o_units": "km2 yr-1",
+            "v_flux_o_units_str": "km$^\mathregular{2}$ yr$^\mathregular{{-1}}$",
+            "v_flux_o_units_str_tex": "km$^2$\,yr$^{-1}$",
+        },
+        "velbase_mag": {
+            "flux_type": "flux",
+            "v_o_units": "m yr-1",
+            "v_o_units_str": "m yr$^\mathregular{{-1}}$",
+            "v_o_units_str_tex": "m\,yr$^{-1}$",
+            "v_flux_o_units": "km2 yr-1",
+            "v_flux_o_units_str": "km$^\mathregular{2}$ yr$^\mathregular{{-1}}$",
+            "v_flux_o_units_str_tex": "km$^2$\,yr$^{-1}$",
+        },
+        "velsurf_normal": {
+            "flux_type": "flux",
+            "v_o_units": "m yr-1",
+            "v_o_units_str": "m yr$^\mathregular{{-1}}$",
+            "v_o_units_str_tex": "m\,yr$^{-1}$",
+            "v_flux_o_units": "km2 yr-1",
+            "v_flux_o_units_str": "km$^\mathregular{2}$ yr$^\mathregular{{-1}}$",
+            "v_flux_o_units_str_tex": "km$^2$\,yr$^{-1}$",
+        },
+        "v": {
+            "flux_type": "flux",
+            "v_o_units": "m yr-1",
+            "v_o_units_str": "m yr$^\mathregular{{-1}}$",
+            "v_o_units_str_tex": "m\,yr$^{-1}$",
+            "v_flux_o_units": "km2 yr-1",
+            "v_flux_o_units_str": "km$^\mathregular{2}$ yr$^\mathregular{{-1}}$",
+            "v_flux_o_units_str_tex": "km$^2$\,yr$^{-1}$",
+        },
+        "flux_mag": {
+            "flux_type": "flux",
+            "v_o_units": "km2 yr-1",
+            "v_o_units_str": "km$^\mathregular{2}$ yr$^\mathregular{{-1}}$",
+            "v_o_units_str_tex": "km$^2$\,yr$^{-1}$",
+            "v_flux_o_units": "Gt yr-1",
+            "v_flux_o_units_str": "Gt yr$^\mathregular{{-1}}$",
+            "v_flux_o_units_str_tex": "Gt\,yr$^{-1}$",
+            "vol_to_mass": True,
+        },
+    }
+
+    if varname not in var_dict.keys():
+        print(f"variable {varname} not supported")
 
     na = len(args)
     shade = 0.15
@@ -1339,13 +1247,6 @@ if __name__ == "__main__":
     # FIXME: make option
     cstride = 2
     my_colors = plt.get_cmap(colormap).colors[::cstride]
-    my_colors_light = []
-    for rgb in my_colors:
-        h, l, s = rgb_to_hls(*rgb[0:3])
-        l *= 1 + shade
-        l = min(0.9, l)
-        l = max(0, l)
-        my_colors_light.append(hls_to_rgb(h, l, s))
 
     alpha = 0.75
     dash_style = "o"
@@ -1447,7 +1348,7 @@ if __name__ == "__main__":
     print(("  opening NetCDF file %s ..." % filename))
     try:
         nc0 = NC(filename, "r")
-    except:
+    except FileNotFoundError:
         print(
             (
                 "ERROR:  file '%s' not found or not NetCDF format ... ending ..."
@@ -1508,15 +1409,12 @@ if __name__ == "__main__":
     if obs_file:
         # write rmsd and pearson r tables per gate
         for gate in flux_gates:
-            gate_name = "_".join([unidecode(gate.gate_name), "rmsd", varname])
-            outname = ".".join([gate_name, "tex"]).replace(" ", "_")
             gate_name = "_".join([unidecode(gate.gate_name), "pearson_r", varname])
             outname = ".".join([gate_name, "csv"]).replace(" ", "_")
             ids = sorted(gate.p_ols, key=lambda x: gate.corr[x], reverse=True)
             corrs = [gate.corr[x] for x in ids]
             corrs_dict = dict(zip(ids, corrs))
             export_csv_from_dict(outname, corrs_dict, header="id,correlation")
-            # outname = ".".join([gate_name, "tex"]).replace(" ", "_")
         # write rmsd and person r figure per experiment
         for exp in flux_gates[0].experiments:
             exp_str = "_".join(["pearson_r_experiment", str(exp.id), varname])
@@ -1525,13 +1423,8 @@ if __name__ == "__main__":
             exp_str = "_".join(["coors_experiment", str(exp.id), varname])
             outname = ".".join([exp_str, "csv"])
             export_csv_from_dict(outname, corrs, header="id,correlation")
-            exp_str = "_".join(["rmsd_experiment", str(exp.id), varname])
-            outname = ".".join([exp_str, "tex"])
 
         experiments_df = []
-        experiments_isbrae_df = []
-        experiments_ice_stream_df = []
-        experiments_undetermined_df = []
         glaciers_above_threshold = []
         lengths = [gate.length() for gate in flux_gates]
         for exp in range(ne):
@@ -1559,22 +1452,20 @@ if __name__ == "__main__":
                 df[df["correlation"] > pearson_r_threshold_high]
             )
 
-            print("Experiment {}".format(exp))
+            print(f"Experiment {exp}")
             print(
                 "  Number of glaciers with r(all) > {}: {}".format(
                     pearson_r_threshold_high, no_glaciers_above_threshold
                 )
             )
             glaciers_above_threshold.append(no_glaciers_above_threshold)
-            print(
-                "  RMS difference {:4.0f}".format(
-                    np.sqrt(
-                        np.sum(df["rmsd"].values ** 2 * df["N"].values)
-                        * (1.0 / df["N"].values.sum())
-                    )
-                )
+            rmsdd = np.sqrt(
+                np.sum(df["rmsd"].values ** 2 * df["N"].values)
+                * (1.0 / df["N"].values.sum())
             )
-            print("  median(pearson r(all): {:1.2f}".format(df["correlation"].median()))
+            corr_median = df["correlation"].median()
+            print(f"  RMS difference {rmsdd:4.0f}")
+            print(f"  median(pearson r(all): {corr_median:1.2f}")
 
         # Calculate cumulative values of rms differences of all glaciers together
         rmsd_cum_dict = {}
@@ -1590,7 +1481,9 @@ if __name__ == "__main__":
         rmsd_cum_dict_sorted = sorted(
             iter(rmsd_cum_dict.items()), key=operator.itemgetter(1)
         )
-        outname = ".".join(["rmsd_sorted_{}".format(varname), "csv"])
+        outname = os.path.join(
+            odir, ".".join(["rmsd_sorted_{}".format(varname), "csv"])
+        )
         print(f"  - saving {outname}")
         export_csv_from_dict(outname, dict(rmsd_cum_dict_sorted), header="id,rmsd")
 
@@ -1600,7 +1493,9 @@ if __name__ == "__main__":
             iter(corr_dict.items()), key=operator.itemgetter(1), reverse=True
         )
 
-        outname = ".".join(["pearson_r_sorted_{}".format(varname), "csv"])
+        outname = os.path.join(
+            odir, ".".join(["pearson_r_sorted_{}".format(varname), "csv"])
+        )
         print(("  - saving {0}".format(outname)))
         export_csv_from_dict(outname, dict(corr_dict_sorted), header="id,correlation")
 
@@ -1609,7 +1504,9 @@ if __name__ == "__main__":
             iter(glaciers_dict.items()), key=operator.itemgetter(1), reverse=True
         )
 
-        outname = ".".join(["glaciers_above_threshold_{}".format(varname), "csv"])
+        outname = os.path.join(
+            odir, ".".join(["glaciers_above_threshold_{}".format(varname), "csv"])
+        )
         print(("  - saving {0}".format(outname)))
         export_csv_from_dict(
             outname,
