@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-# Copyright (C) 2014-2019 Andy Aschwanden
+#!/usr/bin/env python3
+# Copyright (C) 2014-2022 Andy Aschwanden
 
 import codecs
 import itertools
@@ -21,357 +21,6 @@ from netCDF4 import Dataset as NC
 from osgeo import ogr, osr
 from palettable import colorbrewer
 from unidecode import unidecode
-
-
-def set_mode(mode, aspect_ratio=0.95):
-    """
-    Set the print mode, i.e. document and font size. Options are:
-    - onecol: width=80mm, font size=8pt. Appropriate for 1-column figures
-    - twocol: width=160mm, font size=8pt. Default.
-              Appropriate for 2-column figures
-    - medium: width=121mm, font size=7pt.
-    - small_font: width=121mm, font size=6pt.
-    - height: height=2.5in.
-    - small: width=80mm, font size=6pt
-    - presentation: width=85mm, font size=10pt. For presentations.
-    """
-
-    linestyle = "-"
-
-    def set_onecol():
-        """
-        Define parameters for "publish" mode and return value for pad_inches
-        """
-
-        fontsize = 6
-        lw = 0.5
-        markersize = 2
-        fig_width = 3.15  # inch
-        fig_height = aspect_ratio * fig_width  # inch
-        fig_size = [fig_width, fig_height]
-
-        params = {
-            "backend": "ps",
-            "axes.linewidth": 0.5,
-            "lines.linewidth": lw,
-            "axes.labelsize": fontsize,
-            "font.size": fontsize,
-            "xtick.labelsize": fontsize,
-            "ytick.labelsize": fontsize,
-            "legend.fontsize": fontsize,
-            "lines.linestyle": linestyle,
-            "lines.markersize": markersize,
-            "font.size": fontsize,
-            "figure.figsize": fig_size,
-        }
-
-        plt.rcParams.update(params)
-
-        return lw, 0.30
-
-    def set_small():
-        """
-        Define parameters for "publish" mode and return value for pad_inches
-        """
-
-        fontsize = 6
-        lw = 0.5
-        markersize = 2
-        fig_width = 3.15  # inch
-        fig_height = aspect_ratio * fig_width  # inch
-        fig_size = [fig_width, fig_height]
-
-        params = {
-            "backend": "ps",
-            "axes.linewidth": 0.5,
-            "lines.linewidth": lw,
-            "axes.labelsize": fontsize,
-            "font.size": fontsize,
-            "xtick.labelsize": fontsize,
-            "ytick.labelsize": fontsize,
-            "legend.fontsize": fontsize,
-            "lines.linestyle": linestyle,
-            "lines.markersize": markersize,
-            "lines.markeredgewidth": 0.2,
-            "font.size": fontsize,
-            "figure.figsize": fig_size,
-        }
-
-        plt.rcParams.update(params)
-
-        return lw, 0.20
-
-    def set_72mm():
-        """
-        Define parameters for "72mm" mode and return value for pad_inches
-        """
-
-        fontsize = 6
-        markersize = 3
-        lw = 0.7
-        fig_width = 2.8  # inch
-        fig_height = aspect_ratio * fig_width  # inch
-        fig_size = [fig_width, fig_height]
-
-        params = {
-            "backend": "ps",
-            "axes.linewidth": 0.35,
-            "lines.linewidth": lw,
-            "axes.labelsize": fontsize,
-            "font.size": fontsize,
-            "xtick.labelsize": fontsize,
-            "ytick.labelsize": fontsize,
-            "legend.fontsize": fontsize,
-            "lines.linestyle": linestyle,
-            "lines.markersize": markersize,
-            "font.size": fontsize,
-            "figure.figsize": fig_size,
-        }
-
-        plt.rcParams.update(params)
-
-        return lw, 0.20
-
-    def set_50mm():
-        """
-        Define parameters for "72mm" mode and return value for pad_inches
-        """
-
-        fontsize = 5
-        markersize = 2.5
-        lw = 0.6
-        fig_width = 2.0  # inch
-        fig_height = aspect_ratio * fig_width  # inch
-        fig_size = [fig_width, fig_height]
-
-        params = {
-            "backend": "ps",
-            "axes.linewidth": 0.3,
-            "lines.linewidth": lw,
-            "axes.labelsize": fontsize,
-            "font.size": fontsize,
-            "xtick.labelsize": fontsize,
-            "ytick.labelsize": fontsize,
-            "legend.fontsize": fontsize,
-            "lines.linestyle": linestyle,
-            "lines.markersize": markersize,
-            "font.size": fontsize,
-            "figure.figsize": fig_size,
-        }
-
-        plt.rcParams.update(params)
-
-        return lw, 0.10
-
-    def set_medium():
-        """
-        Define parameters for "medium" mode and return value for pad_inches
-        """
-
-        fontsize = 8
-        markersize = 3
-        lw = 0.75
-        fig_width = 3.15  # inch
-        fig_height = aspect_ratio * fig_width  # inch
-        fig_size = [fig_width, fig_height]
-
-        params = {
-            "backend": "ps",
-            "axes.linewidth": 0.5,
-            "lines.linewidth": lw,
-            "axes.labelsize": fontsize,
-            "font.size": fontsize,
-            "xtick.labelsize": fontsize,
-            "ytick.labelsize": fontsize,
-            "legend.fontsize": fontsize,
-            "lines.linestyle": linestyle,
-            "lines.markersize": markersize,
-            "font.size": fontsize,
-            "figure.figsize": fig_size,
-        }
-
-        plt.rcParams.update(params)
-
-        return lw, 0.10
-
-    def set_small_font():
-        """
-        Define parameters for "small_font" mode and return value for pad_inches
-        """
-
-        fontsize = 6
-        markersize = 2
-        lw = 0.6
-        fig_width = 3.15  # inch
-        fig_height = aspect_ratio * fig_width  # inch
-        fig_size = [fig_width, fig_height]
-
-        params = {
-            "backend": "ps",
-            "axes.linewidth": 0.5,
-            "lines.linewidth": lw,
-            "axes.labelsize": fontsize,
-            "font.size": fontsize,
-            "xtick.labelsize": fontsize,
-            "ytick.labelsize": fontsize,
-            "legend.fontsize": fontsize,
-            "lines.linestyle": linestyle,
-            "lines.markersize": markersize,
-            "font.size": fontsize,
-            "figure.figsize": fig_size,
-        }
-
-        plt.rcParams.update(params)
-
-        return lw, 0.10
-
-    def set_large_font():
-        """
-        Define parameters for "large_font" mode and return value for pad_inches
-        """
-
-        fontsize = 10
-        markersize = 9
-        lw = 0.75
-        fig_width = 6.2  # inch
-        fig_height = aspect_ratio * fig_width  # inch
-        fig_size = [fig_width, fig_height]
-
-        params = {
-            "backend": "ps",
-            "axes.linewidth": 0.5,
-            "lines.linewidth": lw,
-            "axes.labelsize": fontsize,
-            "font.size": fontsize,
-            "xtick.labelsize": fontsize,
-            "ytick.labelsize": fontsize,
-            "legend.fontsize": fontsize,
-            "lines.linestyle": linestyle,
-            "lines.markersize": markersize,
-            "font.size": fontsize,
-            "figure.figsize": fig_size,
-        }
-
-        plt.rcParams.update(params)
-
-        return lw, 0.20
-
-    def set_presentation():
-        """
-        Define parameters for "presentation" mode and return value
-        for pad_inches
-        """
-
-        fontsize = 8
-        lw = 1.5
-        markersize = 3
-        fig_width = 6.64  # inch
-        fig_height = aspect_ratio * fig_width  # inch
-        fig_size = [fig_width, fig_height]
-
-        params = {
-            "backend": "ps",
-            "axes.linewidth": 0.75,
-            "lines.linewidth": lw,
-            "axes.labelsize": fontsize,
-            "font.size": fontsize,
-            "xtick.labelsize": fontsize,
-            "ytick.labelsize": fontsize,
-            "lines.linestyle": linestyle,
-            "lines.markersize": markersize,
-            "legend.fontsize": fontsize,
-            "font.size": fontsize,
-            "figure.figsize": fig_size,
-        }
-
-        plt.rcParams.update(params)
-
-        return lw, 0.2
-
-    def set_twocol():
-        """
-        Define parameters for "twocol" mode and return value for pad_inches
-        """
-
-        fontsize = 7
-        lw = 0.75
-        markersize = 3
-        fig_width = 6.3  # inch
-        fig_height = aspect_ratio * fig_width  # inch
-        fig_size = [fig_width, fig_height]
-
-        params = {
-            "backend": "ps",
-            "axes.linewidth": 0.5,
-            "lines.linewidth": lw,
-            "axes.labelsize": fontsize,
-            "font.size": fontsize,
-            "xtick.labelsize": fontsize,
-            "ytick.labelsize": fontsize,
-            "lines.linestyle": linestyle,
-            "lines.markersize": markersize,
-            "legend.fontsize": fontsize,
-            "font.size": fontsize,
-            "figure.figsize": fig_size,
-        }
-
-        plt.rcParams.update(params)
-
-        return lw, 0.35
-
-    def set_height():
-        """
-        Define parameters for "twocol" mode and return value for pad_inches
-        """
-        fontsize = 8
-        lw = 1.1
-        markersize = 1.5
-        fig_height = 2.5  # inch
-        fig_width = fig_height / aspect_ratio  # inch
-        fig_size = [fig_width, fig_height]
-
-        params = {
-            "backend": "ps",
-            "axes.linewidth": 0.65,
-            "lines.linewidth": lw,
-            "axes.labelsize": fontsize,
-            "font.size": fontsize,
-            "xtick.labelsize": fontsize,
-            "ytick.labelsize": fontsize,
-            "lines.linestyle": linestyle,
-            "lines.markersize": markersize,
-            "legend.fontsize": fontsize,
-            "font.size": fontsize,
-            "figure.figsize": fig_size,
-        }
-
-        plt.rcParams.update(params)
-
-        return lw, 0.025
-
-    if mode == "onecol":
-        return set_onecol()
-    elif mode == "small":
-        return set_small()
-    elif mode == "medium":
-        return set_medium()
-    elif mode == "72mm":
-        return set_72mm()
-    elif mode == "50mm":
-        return set_50mm()
-    elif mode == "small_font":
-        return set_small_font()
-    elif mode == "large_font":
-        return set_large_font()
-    elif mode == "presentation":
-        return set_presentation()
-    elif mode == "twocol":
-        return set_twocol()
-    elif mode == "height":
-        return set_height()
-    else:
-        print(("%s mode not recognized, using onecol instead" % mode))
-        return set_twocol()
 
 
 def reverse_enumerate(iterable):
@@ -429,31 +78,20 @@ class FluxGate(object):
     def __init__(
         self,
         pos_id,
-        gate_name,
-        gate_id,
+        gate_name: str,
+        gate_id: str,
         profile_axis,
-        profile_axis_units,
-        profile_axis_name,
-        clon,
-        clat,
-        flightline,
-        glaciertype,
-        flowtype,
+        profile_axis_units: str,
+        profile_axis_name: str,
         *args,
         **kwargs,
     ):
-        super(FluxGate, self).__init__(*args, **kwargs)
         self.pos_id = pos_id
         self.gate_name = gate_name
         self.gate_id = gate_id
         self.profile_axis = profile_axis
         self.profile_axis_units = profile_axis_units
         self.profile_axis_name = profile_axis_name
-        self.clon = clon
-        self.clat = clat
-        self.flightline = flightline
-        self.glaciertype = glaciertype
-        self.flowtype = flowtype
         self.best_rmsd_exp_id = None
         self.best_rmsd = None
         self.best_corr_exp_id = None
@@ -498,7 +136,7 @@ class FluxGate(object):
 
         """
 
-        print(("      adding experiment to flux gate {0}".format(self.gate_name)))
+        print(f"      adding experiment to flux gate {self.gate_name}")
         pos_id = self.pos_id
         fg_exp = FluxGateExperiment(data, pos_id)
         self.experiments.append(fg_exp)
@@ -514,7 +152,7 @@ class FluxGate(object):
 
         """
 
-        print(("      adding observations to flux gate {0}".format(self.gate_name)))
+        print(f"      adding observations to flux gate {self.gate_name}")
         pos_id = self.pos_id
         fg_obs = FluxGateObservations(data, pos_id)
         self.observations = fg_obs
@@ -1085,29 +723,10 @@ class ObservationsDataset(Dataset):
     def __init__(self, *args, **kwargs):
         super(ObservationsDataset, self).__init__(*args, **kwargs)
         self.has_error = None
-        try:
-            self.clon = self.nc.variables["clon"][:]
-        except:
-            self.clon = None
-        try:
-            self.clat = self.nc.variables["clat"][:]
-        except:
-            self.clat = None
-        try:
-            self.flightline = self.nc.variables["flightline"][:]
-        except:
-            self.flightline = None
-        try:
-            self.glaciertype = self.nc.variables["glaciertype"][:]
-        except:
-            self.glaciertype = None
-        try:
-            self.flowtype = self.nc.variables["flowtype"][:]
-        except:
-            self.flowtype = None
         varname = self.varname
         error_varname = "_".join([varname, "error"])
         if error_varname in list(self.nc.variables.keys()):
+            print(f"Observational uncertainty found in {error_varname}.")
             self.error = self.nc.variables[error_varname][:]
             self.has_error = True
 
@@ -1158,7 +777,6 @@ def make_correlation_figure(filename, exp):
     names_sorted = [flux_gates[x].gate_name for x in sort_order]
     gate_id_sorted = [flux_gates[x].gate_id for x in sort_order]
     corrs_dict = dict(zip(gate_id_sorted, corrs_sorted))
-    lw, pad_inches = set_mode(print_mode, aspect_ratio=1.2)
     fig = plt.figure(figsize=[6.4, 12])
     ax = fig.add_subplot(111)
     height = 0.4
@@ -1253,7 +871,6 @@ def make_regression(gate):
     my_ok_colors = colorbrewer.get_map(*colormap).mpl_colors
 
     grid_dx_meters = [x.config["grid_dx_meters"] for x in gate.experiments]
-    lw, pad_inches = set_mode(print_mode, aspect_ratio=1.25)
 
     # Create RMSD figure
     fig = plt.figure()
@@ -1533,134 +1150,6 @@ def make_regression(gate):
     plt.close("all")
 
 
-def write_shapefile(filename, flux_gates):
-    """
-    Writes metrics to a ESRI shape file.
-
-    Paramters
-    ----------
-    filename: filename of ESRI shape file.
-    flux_gates: list of FluxGates
-
-    """
-
-    driver = ogr.GetDriverByName("ESRI Shapefile")
-    if os.path.exists(filename):
-        os.remove(filename)
-    ds = driver.CreateDataSource(filename)
-    # Create spatialReference, EPSG 4326 (lonlat)
-    srs = osr.SpatialReference()
-    srs.ImportFromEPSG(4326)
-    layer = ds.CreateLayer("Flux Gates", srs, ogr.wkbPoint)
-    g_name = ogr.FieldDefn("name", ogr.OFTString)
-    layer.CreateField(g_name)
-    g_id = ogr.FieldDefn("id", ogr.OFTInteger)
-    layer.CreateField(g_id)
-    obs_flux = ogr.FieldDefn("obs", ogr.OFTReal)
-    layer.CreateField(obs_flux)
-    obs_flux_error = ogr.FieldDefn("obs_e", ogr.OFTReal)
-    layer.CreateField(obs_flux_error)
-    obs_mean = ogr.FieldDefn("obs_mean", ogr.OFTReal)
-    layer.CreateField(obs_mean)
-    gtype = ogr.FieldDefn("gtype", ogr.OFTInteger)
-    layer.CreateField(gtype)
-    ftype = ogr.FieldDefn("ftype", ogr.OFTInteger)
-    layer.CreateField(ftype)
-    flightline = ogr.FieldDefn("flightline", ogr.OFTInteger)
-    layer.CreateField(flightline)
-    for cnt in range(flux_gates[0].exp_counter):
-        for var in ("skill", "r2", "r", "rmsd", "sigma", "exp"):
-            my_exp = "_".join([var, str(int(cnt))])
-            my_var = ogr.FieldDefn(my_exp, ogr.OFTReal)
-            layer.CreateField(my_var)
-
-    for svar in ("lin_trend", "lin_bias", "lin_r2", "lin_p"):
-        ogrvar = ogr.FieldDefn(svar, ogr.OFTReal)
-        layer.CreateField(ogrvar)
-
-    featureIndex = 0
-    layer_defn = layer.GetLayerDefn()
-    for gate in flux_gates:
-        # Create point
-        geometry = ogr.Geometry(ogr.wkbPoint)
-        geometry.SetPoint(0, float(gate.clon), float(gate.clat))
-        # Create feature
-        feature = ogr.Feature(layer_defn)
-        feature.SetGeometry(geometry)
-        feature.SetFID(featureIndex)
-        i = feature.GetFieldIndex("id")
-        feature.SetField(i, gate.gate_id)
-        i = feature.GetFieldIndex("name")
-        # This does not work though it should?
-        # feature.SetField(i, gate.gate_name.encode('utf-8'))
-        feature.SetField(i, unidecode(gate.gate_name))
-        if gate.observed_flux is not None:
-            i = feature.GetFieldIndex("obs")
-            feature.SetField(i, gate.observed_flux)
-        if gate.observed_flux_error is not None:
-            i = feature.GetFieldIndex("obs_e")
-            feature.SetField(i, gate.observed_flux_error)
-        if gate.observed_mean is not None:
-            i = feature.GetFieldIndex("obs_mean")
-            feature.SetField(i, float(gate.observed_mean))
-        # OGR doesn't like numpy.int8
-        if gate.glaciertype is not (None or ""):
-            i = feature.GetFieldIndex("gtype")
-            feature.SetField(i, int(gate.glaciertype))
-        if gate.flowtype is not (None or ""):
-            i = feature.GetFieldIndex("ftype")
-            feature.SetField(i, int(gate.flowtype))
-        if gate.flightline is not (None or ""):
-            i = feature.GetFieldIndex("flightline")
-            feature.SetField(i, int(gate.flightline))
-        if gate.linear_trend is not (None or ""):
-            i = feature.GetFieldIndex("lin_trend")
-            feature.SetField(i, gate.linear_trend)
-        if gate.linear_bias is not (None or ""):
-            i = feature.GetFieldIndex("lin_bias")
-            feature.SetField(i, gate.linear_bias)
-        if gate.linear_r2 is not (None or ""):
-            i = feature.GetFieldIndex("lin_r2")
-            feature.SetField(i, gate.linear_r2)
-        if gate.linear_p is not (None or ""):
-            i = feature.GetFieldIndex("lin_p")
-            feature.SetField(i, gate.linear_p)
-        for cnt in range(flux_gates[0].exp_counter):
-            flux_exp = "_".join(["exp", str(int(cnt))])
-            i = feature.GetFieldIndex(flux_exp)
-            exp_flux = gate.experiment_fluxes[cnt]
-            feature.SetField(i, exp_flux)
-            if gate.p_ols is not (None or ""):
-                r2_exp = "_".join(["r2", str(int(cnt))])
-                i = feature.GetFieldIndex(r2_exp)
-                feature.SetField(i, gate.p_ols[cnt].rsquared)
-                corr_exp = "_".join(["r", str(int(cnt))])
-                i = feature.GetFieldIndex(corr_exp)
-                feature.SetField(i, gate.corr[cnt])
-            rmsd_exp = "_".join(["rmsd", str(int(cnt))])
-            i = feature.GetFieldIndex(rmsd_exp)
-            if gate.rmsd is not (None or ""):
-                i_units_cf = cf_units.Unit(gate.rmsd_units)
-                o_units_cf = cf_units.Unit(v_o_units)
-                chi = i_units_cf.convert(gate.rmsd[cnt], o_units_cf)
-                feature.SetField(i, chi)
-            sigma_exp = "_".join(["sigma", str(int(cnt))])
-            i = feature.GetFieldIndex(sigma_exp)
-            if gate.sigma_obs is not (None or ""):
-                i_units_cf = cf_units.Unit(gate.varname_units)
-                o_units_cf = cf_units.Unit(v_o_units)
-                sigma_obs = i_units_cf.convert(gate.sigma_obs, o_units_cf)
-                feature.SetField(i, sigma_obs)
-        # Save feature
-        layer.CreateFeature(feature)
-        layer.SetFeature(feature)
-        # Cleanup
-        geometry = None
-        feature = None
-
-    ds = None
-
-
 # ##############################################################################
 # MAIN
 # ##############################################################################
@@ -1692,7 +1181,7 @@ if __name__ == "__main__":
         dest="label_params",
         help='''comma-separated list of parameters that appear in the legend,
                       e.g. "sia_enhancement_factor"''',
-        default="dataset",
+        default="bed",
     )
     parser.add_argument(
         "--normalize",
@@ -1757,25 +1246,6 @@ if __name__ == "__main__":
         default=True,
     )
     parser.add_argument(
-        "-p",
-        "--print_size",
-        dest="print_mode",
-        choices=[
-            "onecol",
-            "medium",
-            "twocol",
-            "height",
-            "presentation",
-            "small_font",
-            "large_font",
-            "50mm",
-            "72mm",
-        ],
-        help="sets figure size and font size, available options are: \
-                        'onecol','medium','twocol','presentation'",
-        default="medium",
-    )
-    parser.add_argument(
         "-r",
         "--output_resolution",
         dest="out_res",
@@ -1802,7 +1272,6 @@ if __name__ == "__main__":
     aspect_ratio = options.aspect_ratio
     tol = 1e-6
     normalize = options.normalize
-    print_mode = options.print_mode
     obs_file = options.obs_file
     out_res = int(options.out_res)
     varname = options.varname
@@ -1890,6 +1359,7 @@ if __name__ == "__main__":
         "dataset": {"abbr": "Dataset", "format": "{}"},
         "dem": {"abbr": "DEM", "format": "{}"},
         "bed": {"abbr": "bed", "format": "{}"},
+        "init": {"abbr": "INIT", "format": "{}"},
         "surface.pdd.factor_ice": {
             "abbr": "$f_{\mathregular{i}}$",
             "format": "{:1.0f}",
@@ -1998,26 +1468,6 @@ if __name__ == "__main__":
         profile_axis_units = nc0.variables["profile_axis"].units
         profile_axis_name = nc0.variables["profile_axis"].long_name
         profile_id = int(nc0.variables["profile_id"][pos_id])
-        try:
-            clon = nc0.variables["clon"][pos_id]
-        except:
-            clon = 0.0
-        try:
-            clat = nc0.variables["clat"][pos_id]
-        except:
-            clat = 0.0
-        try:
-            flightline = nc0.variables["flightline"][pos_id]
-        except:
-            flightline = 0
-        try:
-            glaciertype = nc0.variables["glaciertype"][pos_id]
-        except:
-            glaciertype = ""
-        try:
-            flowtype = nc0.variables["flowtype"][pos_id]
-        except:
-            flowtype = ""
         flux_gate = FluxGate(
             pos_id,
             profile_name,
@@ -2025,11 +1475,6 @@ if __name__ == "__main__":
             profile_axis,
             profile_axis_units,
             profile_axis_name,
-            clon,
-            clat,
-            flightline,
-            glaciertype,
-            flowtype,
         )
         flux_gates.append(flux_gate)
     nc0.close()
@@ -2046,9 +1491,6 @@ if __name__ == "__main__":
         experiment = ExperimentDataset(id, filename, varname)
         for flux_gate in flux_gates:
             flux_gate.add_experiment(experiment)
-
-    # set the print mode
-    lw, pad_inches = set_mode(print_mode, aspect_ratio=aspect_ratio)
 
     ne = len(flux_gates[0].experiments)
     ng = len(flux_gates)
@@ -2097,15 +1539,11 @@ if __name__ == "__main__":
             corrs = [gate.corr[exp] for gate in flux_gates]
             rmsds = [gate.rmsd[exp] for gate in flux_gates]
             Ns = [gate.N_rmsd[exp] for gate in flux_gates]
-            gl_types = [int(gate.glaciertype) for gate in flux_gates]
-            fl_types = [int(gate.flowtype) for gate in flux_gates]
             d = {
                 "name": names,
                 "correlation": corrs,
                 "rmsd": rmsds,
                 "N": Ns,
-                "glacier_type": gl_types,
-                "flow_type": fl_types,
                 "length": lengths,
             }
             df = pa.DataFrame(d)
@@ -2116,15 +1554,6 @@ if __name__ == "__main__":
                 * (1.0 / df["N"].values.sum())
             )
             experiments_df.append(df)
-            # It would be nice to select for flow types later, with something like:
-            #  [
-            # np.sqrt(np.sum(df["rmsd"].values ** 2 * df["N"].values) * (1.0 / df["N"].values.sum()))
-            # for df in experiments_df if df[df["flow_type"] == 0]
-            # ]
-            #
-            experiments_isbrae_df.append(df[df["flow_type"] == 0])
-            experiments_ice_stream_df.append(df[df["flow_type"] == 1])
-            experiments_undetermined_df.append(df[df["flow_type"] == 2])
 
             no_glaciers_above_threshold = len(
                 df[df["correlation"] > pearson_r_threshold_high]
@@ -2146,27 +1575,9 @@ if __name__ == "__main__":
                 )
             )
             print("  median(pearson r(all): {:1.2f}".format(df["correlation"].median()))
-            print(
-                "  median(pearson r(isbrae): {:1.2f}".format(
-                    df[df["flow_type"] == 0]["correlation"].median()
-                )
-            )
-            print(
-                "  median(pearson r(ice-stream): {:1.2f}".format(
-                    df[df["flow_type"] == 1]["correlation"].median()
-                )
-            )
-            print(
-                "  median(pearson r(undetermined): {:1.2f}".format(
-                    df[df["flow_type"] == 2]["correlation"].median()
-                )
-            )
 
         # Calculate cumulative values of rms differences of all glaciers together
         rmsd_cum_dict = {}
-        rmsd_isbrae_cum_dict = {}
-        rmsd_ice_stream_cum_dict = {}
-        rmsd_undetermined_cum_dict = {}
         keys = range(ne)
         rmsd_cum = [
             np.sqrt(
@@ -2176,39 +1587,11 @@ if __name__ == "__main__":
             for df in experiments_df
         ]
         rmsd_cum_dict = dict(zip(keys, rmsd_cum))
-
-        rmsd_isbrae_cum = [
-            np.sqrt(
-                np.sum(df["rmsd"].values ** 2 * df["N"].values)
-                * (1.0 / df["N"].values.sum())
-            )
-            for df in experiments_isbrae_df
-        ]
-        rmsd_isbrae_cum_dict = dict(zip(keys, rmsd_isbrae_cum))
-
-        rmsd_ice_stream_cum = [
-            np.sqrt(
-                np.sum(df["rmsd"].values ** 2 * df["N"].values)
-                * (1.0 / df["N"].values.sum())
-            )
-            for df in experiments_isbrae_df
-        ]
-        rmsd_ice_stream_cum_dict = dict(zip(keys, rmsd_isbrae_cum))
-
-        rmsd_undetermined_cum = [
-            np.sqrt(
-                np.sum(df["rmsd"].values ** 2 * df["N"].values)
-                * (1.0 / df["N"].values.sum())
-            )
-            for df in experiments_isbrae_df
-        ]
-        rmsd_undetermined_cum_dict = dict(zip(keys, rmsd_isbrae_cum))
         rmsd_cum_dict_sorted = sorted(
             iter(rmsd_cum_dict.items()), key=operator.itemgetter(1)
         )
-
         outname = ".".join(["rmsd_sorted_{}".format(varname), "csv"])
-        print(("  - saving {0}".format(outname)))
+        print(f"  - saving {outname}")
         export_csv_from_dict(outname, dict(rmsd_cum_dict_sorted), header="id,rmsd")
 
         corr = [df["correlation"].median() for df in experiments_df]
@@ -2239,7 +1622,3 @@ if __name__ == "__main__":
     # make a global regression figure
     if do_regress:
         make_regression(gate)
-
-    # Write results to shape file
-    outname = "statistics.shp"
-    write_shapefile(outname, flux_gates)
