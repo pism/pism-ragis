@@ -1,27 +1,26 @@
 #!/usr/bin/env python
 # Copyright (C) 2014-2019 Andy Aschwanden
 
-from osgeo import ogr
-from osgeo import osr
-import os
-from unidecode import unidecode
-import itertools
 import codecs
+import itertools
 import operator
-import numpy as np
-import pylab as plt
-import matplotlib as mpl
-from colorsys import rgb_to_hls, hls_to_rgb
-import matplotlib.cm as cmx
-import matplotlib.colors as mplcolors
-from argparse import ArgumentParser
-import pandas as pa
-from palettable import colorbrewer
-import statsmodels.api as sm
-from netCDF4 import Dataset as NC
+import os
 import re
+from argparse import ArgumentParser
+from colorsys import hls_to_rgb, rgb_to_hls
 
 import cf_units
+import matplotlib as mpl
+import matplotlib.cm as cmx
+import matplotlib.colors as mplcolors
+import numpy as np
+import pandas as pa
+import pylab as plt
+import statsmodels.api as sm
+from netCDF4 import Dataset as NC
+from osgeo import ogr, osr
+from palettable import colorbrewer
+from unidecode import unidecode
 
 
 def set_mode(mode, aspect_ratio=0.95):
@@ -520,13 +519,8 @@ class FluxGate(object):
         fg_obs = FluxGateObservations(data, pos_id)
         self.observations = fg_obs
         if self.has_observations is not None:
-            print(
-                (
-                    "Flux gate {0} already has observations, overriding".format(
-                        self.gate_name.encode("utf-8")
-                    )
-                )
-            )
+            gate_name = self.gate_name.encode("utf-8")
+            print((f"Flux gate {gate_name} already has observations, overriding"))
         self.has_observations = True
 
     def calculate_fluxes(self):
@@ -672,7 +666,6 @@ class FluxGate(object):
             experiment_fluxes[id] = o_val
             experiment_fluxes_units[id] = o_units_str
             config = exp.config
-            print(params_dict["grid_dx_meters"]["format"], label_params)
             if label_params:
                 my_exp_str = ", ".join(
                     [
@@ -694,66 +687,6 @@ class FluxGate(object):
         """
 
         return np.around(self.profile_axis.max())
-
-    def return_gate_flux_str(self, islast):
-        """
-        Returns a LaTeX-table compatible string
-        """
-
-        if not self.has_stats:
-            self.calculate_stats()
-        gate_name = self.gate_name
-        p_ols = self.p_ols
-        observed_flux = self.observed_flux
-        observed_flux_units = self.observed_flux_units
-        experiment_fluxes = self.experiment_fluxes
-        experiment_fluxes_units = self.experiment_fluxes_units
-        observed_flux_error = self.observed_flux_error
-        if observed_flux_error:
-            obs_str = "$\pm$".join(
-                ["{:2.1f}".format(observed_flux), "{:2.1f}".format(observed_flux_error)]
-            )
-        else:
-            obs_str = "{:2.1f}".format(observed_flux)
-        exp_str = " & ".join(
-            [
-                "".join(
-                    [
-                        "{:2.1f}".format(experiment_fluxes[key]),
-                        "({:1.2f})".format(p_ols[key].rsquared),
-                    ]
-                )
-                for key in experiment_fluxes
-            ]
-        )
-        if islast:
-            gate_str = " & ".join([gate_name, obs_str, "", exp_str])
-        else:
-            gate_str = " & ".join([gate_name, obs_str, "", " ".join([exp_str, r" \\"])])
-        return gate_str
-
-    def return_gate_flux_str_short(self):
-        """
-        Returns a LaTeX-table compatible string
-        """
-
-        if not self.has_stats:
-            self.calculate_stats()
-        gate_name = self.gate_name
-        p_ols = self.p_ols
-        observed_flux = self.observed_flux
-        observed_flux_units = self.observed_flux_units
-        experiment_fluxes = self.experiment_fluxes
-        experiment_fluxes_units = self.experiment_fluxes_units
-        observed_flux_error = self.observed_flux_error
-        if observed_flux_error:
-            obs_str = "$\pm$".join(
-                ["{:2.1f}".format(observed_flux), "{:2.1f}".format(observed_flux_error)]
-            )
-        else:
-            obs_str = "{:2.1f}".format(observed_flux)
-        gate_str = " & ".join([gate_name, obs_str])
-        return gate_str
 
     def _line_integral(self, y, x):
         """
@@ -777,9 +710,13 @@ class FluxGate(object):
         # since it's not used for the computation
 
         if isinstance(y, np.ma.MaskedArray):
+            x = x.filled(0)
+        if isinstance(y, np.ma.MaskedArray):
             y = y.filled(0)
 
-        return float(np.squeeze(np.trapz(y, x)))
+        y_int = float(np.squeeze(np.trapz(y, x)))
+
+        return y_int
 
     def make_line_plot(self, **kwargs):
         """
@@ -1030,7 +967,7 @@ class FluxGate(object):
         else:
             gate_name = "_".join([unidecode(gate.gate_name), varname, "profile"])
         outname = ".".join([gate_name, "pdf"]).replace(" ", "_")
-        print(("Saving {0}".format(outname)))
+        print(f"Saving {outname}")
         fig.tight_layout()
         fig.savefig(outname)
         plt.close(fig)
@@ -1178,267 +1115,6 @@ class ObservationsDataset(Dataset):
         return "ObservationsDataset"
 
 
-def export_latex_table_flux(filename, flux_gates, params):
-    """
-    Create a latex table with fluxes through gates.
-
-    Create a latex table with flux gates sorted by
-    observed flux in decreasing order.
-
-    Parameters
-    ----------
-
-    filename: string, name of the outputfile
-    flux_gates: list of FluxGate objects
-    params: dict, parameters to be listed
-    """
-
-    f = codecs.open(filename, "w", "utf-8")
-    tab_str = " ".join(["{l r r c c}"])
-    f.write(" ".join(["\\begin{tabular}", tab_str, "\n"]))
-    f.write("\\toprule \n")
-    f.write(
-        "Glacier & flux & with & glacier type & flow type \\\ \n".format(
-            v_flux_o_units_str_tex
-        )
-    )
-    f.write(
-        " &  ({}) &  ({}) \\\ \n".format(v_flux_o_units_str_tex, profile_axis_out_units)
-    )
-    f.write("\midrule \n")
-    # We need to calculate fluxes first
-    for gate in flux_gates:
-        gate.calculate_fluxes()
-    cum_flux = 0
-    cum_flux_error = 0
-    cum_length = 0
-    # Sort: largest flux gate first
-    for gate in sorted(flux_gates, key=lambda x: x.observed_flux, reverse=True):
-        profile_axis = gate.profile_axis
-        profile_axis_units = gate.profile_axis_units
-        length = gate.length()
-        i_units_cf = cf_units.Unit(profile_axis_units)
-        o_units_cf = cf_units.Unit(profile_axis_out_units)
-        profile_length = i_units_cf.convert(length, o_units_cf)
-        glaciertype = glacier_types[gate.glaciertype]
-        flowtype = flow_types[gate.flowtype]
-        line_str = "".join(
-            [
-                gate.return_gate_flux_str_short(),
-                "& {:2.1f} ".format(profile_length),
-                "& {} ".format(glaciertype),
-                "& {} ".format(flowtype),
-                "\\\ \n",
-            ]
-        )
-        cum_flux += gate.observed_flux
-        cum_flux_error += gate.observed_flux_error**2
-        cum_length += profile_length
-        f.write(line_str)
-    cum_flux_error = np.sqrt(cum_flux_error)
-    f.write("\midrule \n")
-    f.write(
-        "Total & {:2.1f}$\pm${:2.1f} & {:2.1f} \\\ \n".format(
-            cum_flux, cum_flux_error, cum_length
-        )
-    )
-    f.write("\\bottomrule \n")
-    f.write("\\end{tabular} \n")
-    f.close
-
-
-def export_latex_table_rmsd(filename, gate):
-    """
-    Create a latex table for a flux gate
-
-    Create a latex table for a flux gate with a sorted list of
-    experiments increasing in RMSD.
-
-    Parameters
-    ----------
-    filename: string
-    gate: FluxGate
-
-    """
-
-    i_units_cf = cf_units.Unit(gate.varname_units)
-    o_units_cf = cf_units.Unit(v_o_units)
-    error_norm = i_units_cf.convert(gate.sigma_obs, o_units_cf)
-    f = codecs.open(filename, "w", "utf-8")
-    f.write("\\begin{tabular} {l l cc }\n")
-    f.write("\\toprule \n")
-    f.write(
-        "\multicolumn{{2}}{{l}}{{{}}} & flux  & $\chi_{{g}}$ \\\ \n".format(
-            unidecode(gate.gate_name)
-        )
-    )
-    f.write("&& ({})  & ({})  \\\ \n".format(v_flux_o_units_str_tex, v_o_units_str_tex))
-    f.write("\midrule\n")
-    observed_flux = gate.observed_flux
-    observed_flux_error = gate.observed_flux_error
-    f.write(
-        "observed && {:3.1f}$\pm${:2.1f} & {:2.2f} \\\ \n".format(
-            observed_flux, observed_flux_error, error_norm
-        )
-    )
-    best_rmsd = gate.best_rmsd
-    for k, val in enumerate(
-        sorted(gate.p_ols, key=lambda x: gate.rmsd[x], reverse=False)
-    ):
-        config = gate.experiments[val].config
-        my_flux = gate.experiment_fluxes[val]
-        my_exp_str = ", ".join(
-            [
-                "=".join(
-                    [
-                        params_dict[key]["abbr"],
-                        params_dict[key]["format"].format(config.get(key)),
-                    ]
-                )
-                for key in label_params
-            ]
-        )
-        if k == 0:
-            f.write(
-                "Experiment {} & {} & {:2.1f}  & \\textit{{{:1.2f}}} \\\ \n".format(
-                    val, my_exp_str, my_flux, gate.rmsd[val]
-                )
-            )
-        else:
-            if gate.rmsd[val] < (error_norm + best_rmsd):
-                f.write(
-                    "Experiment {} & {} & {:2.1f}  & \\textit{{{:1.2f}}} \\\ \n".format(
-                        val, my_exp_str, my_flux, gate.rmsd[val]
-                    )
-                )
-            else:
-                f.write(
-                    "Experiment {} & {} & {:2.1f}  & {:1.2f} \\\ \n".format(
-                        val, my_exp_str, my_flux, gate.rmsd[val]
-                    )
-                )
-    f.write("\\bottomrule\n")
-    f.write("\end{tabular}\n")
-    f.close()
-
-
-def export_latex_table_corr(filename, gate):
-    """
-    Create a latex table for a flux gate
-
-    Create a latex table for a flux gate with a sorted list of
-    experiments increasing in correlation coefficient.
-
-    Parameters
-    ----------
-    filename: string
-    gate: FluxGate
-
-    """
-
-    f = codecs.open(filename, "w", "utf-8")
-    f.write("\\begin{tabular} {l l cc }\n")
-    f.write("\\toprule \n")
-    f.write(
-        "\multicolumn{{2}}{{l}}{{{}}} &  $r$ & increase \\\ \n".format(
-            unidecode(gate.gate_name)
-        )
-    )
-    f.write("&& (-)  & (\%)  \\\ \n")
-    f.write("\midrule\n")
-    best_corr = gate.best_corr
-    for k, val in enumerate(
-        sorted(gate.p_ols, key=lambda x: gate.corr[x], reverse=False)
-    ):
-        config = gate.experiments[val].config
-        my_flux = gate.experiment_fluxes[val]
-        my_exp_str = ", ".join(
-            [
-                "=".join(
-                    [
-                        params_dict[key]["abbr"],
-                        params_dict[key]["format"].format(config.get(key)),
-                    ]
-                )
-                for key in label_params
-            ]
-        )
-        corr = gate.corr[val]
-        if k == 0:
-            corr_0 = corr
-            f.write(
-                "Experiment {} & {}   & {:1.2f} \\\ \n".format(val, my_exp_str, corr)
-            )
-        else:
-            pc_inc = (corr - corr_0) / corr_0 * 100
-            f.write(
-                "Experiment {} & {}  & {:1.2f} & +{:2.0f}\\\ \n".format(
-                    val, my_exp_str, corr, pc_inc
-                )
-            )
-    f.write("\\bottomrule\n")
-    f.write("\end{tabular}\n")
-    f.close()
-
-
-def export_gate_table_rmsd(filename, exp):
-    """
-    Creates a latex table of flux gates sorted by rmsd.
-
-    Parameters
-    ----------
-    filename: string
-    exp: FluxGateExperiment
-
-    """
-
-    means = {}
-    rmsds = {}
-    rmsds_rels = {}
-    for gate in flux_gates:
-        id = gate.pos_id
-        # Get uncertainty and convert units
-        i_units_cf = cf_units.Unit(gate.observed_mean_units)
-        o_units_cf = cf_units.Unit(v_o_units)
-        mean = i_units_cf.convert(gate.observed_mean, o_units_cf)
-        means[id] = mean
-        # Get RMSD and convert units
-        i_units_cf = cf_units.Unit(gate.rmsd_units)
-        o_units_cf = cf_units.Unit(v_o_units)
-        rmsd = i_units_cf.convert(gate.rmsd[exp.id], o_units_cf)
-        rmsds[id] = rmsd
-        rmsd_rel = rmsd / mean
-        rmsds_rels[id] = rmsd_rel
-
-    rmsds_rels_sorted = sorted(rmsds_rels, key=lambda x: rmsds_rels[x])
-
-    f = codecs.open(filename, "w", "utf-8")
-    tab_str = " ".join(["{l ccc }"])
-    f.write(" ".join(["\\begin{tabular}", tab_str, "\n"]))
-    f.write("\\toprule \n")
-    f.write(
-        "Glacier & $\\bar U_{\\textrm{{obs,g}}}$ & $\chi_{\\textrm{{g}}}$ & $\\tilde \chi_{\\textrm{{g}}}$ \\\ \n"
-    )
-    f.write(" & ({}) & ({}) & (-) \\\ \n".format(v_o_units_str_tex, v_o_units_str_tex))
-    f.write("\midrule \n")
-
-    for k in rmsds_rels_sorted:
-        gate = flux_gates[k]
-        line_str = " & ".join(
-            [
-                unidecode(gate.gate_name),
-                "{:1.0f}".format(np.float(means[k])),
-                "{:1.0f}".format(np.float(rmsds[k])),
-                "{:1.2f} \\\ \n".format(np.float(rmsds_rels[k])),
-            ]
-        )
-
-        f.write(line_str)
-    f.write("\\bottomrule \n")
-    f.write("\\end{tabular} \n")
-    f.close
-
-
 def export_csv_from_dict(filename, mdict, header=None, fmt=["%i", "%4.2f"]):
     """
     Creates a CSV file from a dictionary.
@@ -1456,33 +1132,6 @@ def export_csv_from_dict(filename, mdict, header=None, fmt=["%i", "%4.2f"]):
     np.savetxt(
         filename, np.transpose(data), fmt=["%i", "%4.2f"], delimiter=",", header=header
     )
-
-
-def write_experiment_table(outname):
-    """
-    Export a table with all experiments
-    """
-
-    f = codecs.open(outname, "w", "utf-8")
-    r_str = "r" * ne
-    tab_str = " ".join(["{l  c", r_str, "}"])
-    f.write(" ".join(["\\begin{tabular}", tab_str, "\n"]))
-    f.write("\\toprule \n")
-    exp_str = " & ".join([params_dict[key]["abbr"] for key in label_params])
-    line_str = " & ".join(["Experiment", exp_str])
-    f.write(" ".join([line_str, r"\\", "\n"]))
-    f.write("\midrule \n")
-    for exp in flux_gates[0].experiments:
-        config = exp.config
-        id = exp.id
-        param_str = " & ".join(
-            [params_dict[key]["format"].format(config.get(key)) for key in label_params]
-        )
-        line_str = " ".join([" & ".join(["{:1.0f}".format(id), param_str]), "\\\ \n"])
-        f.write(line_str)
-    f.write("\\bottomrule \n")
-    f.write("\\end{tabular} \n")
-    f.close()
 
 
 def make_correlation_figure(filename, exp):
@@ -1550,13 +1199,13 @@ def make_correlation_figure(filename, exp):
     ax.yaxis.set_ticks_position("left")
     ax.xaxis.set_ticks_position("bottom")
     fig.tight_layout()
-    print(("Saving {0}".format(filename)))
+    print(f"Saving {filename}")
     fig.savefig(filename)
     plt.close("all")
     return corrs_dict
 
 
-def make_regression():
+def make_regression(gate):
     grid_dx_meters = [x.config["grid_dx_meters"] for x in gate.experiments]
     for gate in flux_gates:
 
@@ -1595,7 +1244,7 @@ def make_regression():
         fig.tight_layout()
         gate_name = "_".join([unidecode(gate.gate_name), varname, "rmsd", "regress"])
         outname = ".".join([gate_name, "pdf"]).replace(" ", "_")
-        print(("Saving {0}".format(outname)))
+        print(f"Saving {outname}")
         fig.savefig(outname)
         plt.close("all")
 
@@ -1627,8 +1276,7 @@ def make_regression():
         # r-squared value
         r2 = model.rsquared
         # p-value
-        p = model.fpvalue
-        f = model.fvalue
+        p = model.f_pvalue
 
         gate.linear_trend = trend
         gate.linear_bias = bias
@@ -1833,103 +1481,6 @@ def make_regression():
     )
     legend_handles.append(line_l)
 
-    print(("Global regression r2 = {:2.2f}".format(r2_global)))
-
-    legend_labels = ["JIB", "good", "median", "poor", "isbr\u00E6", "ice-stream", "all"]
-    ax.set_xticks(grid_dx_meters)
-    ax.set_xlabel("grid resolution (m)")
-    ax.set_ylabel("$\chi$ ({})".format(v_o_units_str))
-    ax.set_xlim(xmin, xmax)
-
-    ticklabels = ax.get_xticklabels()
-    for tick in ticklabels:
-        tick.set_rotation(40)
-
-    fig.tight_layout()
-    outname = ".".join(["rmsd_regression", "pdf"]).replace(" ", "_")
-    print(("Saving {0}".format(outname)))
-    fig.savefig(outname)
-    plt.close("all")
-
-    # Create R2 figures
-    fig = plt.figure()
-    # make x lims from 0 to 5000 m
-    xmin, xmax = 0, 5000
-    ax = fig.add_subplot(111)
-
-    for n, gate in enumerate(flux_gates):
-        # R2
-        r2_data = list(gate.r2.values())
-        r2S = pa.Series(data=r2_data, index=list(gate.r2.keys()))
-        gridS = pa.Series(data=grid_dx_meters, index=list(gate.r2.keys()))
-        d = {"grid_resolution": gridS, "R2": r2S}
-        df = pa.DataFrame(d)
-        model = sm.OLS(r2S, sm.add_constant(gridS)).fit()
-        # Calculate PISM trends and biases (intercepts)
-        bis, trend = model.params
-        # Calculate r-squared value
-        r2 = model.rsquared
-
-        ax.plot(
-            [grid_dx_meters[0], grid_dx_meters[-1]],
-            bias + np.array([grid_dx_meters[0], grid_dx_meters[-1]]) * trend,
-            color="#a6cee3",
-            linewidth=0.35,
-        )
-        ax.plot(
-            grid_dx_meters,
-            r2_data,
-            dash_style,
-            color="#a6cee3",
-            markeredgewidth=markeredgewidth,
-            markeredgecolor="#1f78b4",
-            markersize=1.75,
-        )
-
-    # global R2
-    r2_data = list(r2_cum_dict.values())
-    r2S = pa.Series(data=r2_data, index=list(r2_cum_dict.keys()))
-    gridS = pa.Series(data=grid_dx_meters, index=list(gate.r2.keys()))
-    d = {"grid_resolution": gridS, "R2": r2S}
-    df = pa.DataFrame(d)
-    model = sm.OLS(gridS, sm.add_constant(r2S)).fit()
-    # Calculate PISM trends and biases (intercepts)
-    bias, trend = model.params
-    # Calculate r-squared value
-    r2 = model.rsquared
-    # plot trend line
-    ax.plot(
-        [grid_dx_meters[0], grid_dx_meters[-1]],
-        bias + np.array([grid_dx_meters[0], grid_dx_meters[-1]]) * trend,
-        color="0.2",
-    )
-    # plot errors
-    ax.plot(
-        grid_dx_meters,
-        r2_data,
-        dash_style,
-        color="0.4",
-        markeredgewidth=markeredgewidth,
-    )
-    # print statistics
-    ax.text(
-        0.05, 0.7, "r$^\mathregular{{2}}$={:1.2f}".format(r2), transform=ax.transAxes
-    )
-    ax.set_xticks(grid_dx_meters)
-    ax.set_xlabel("grid resolution (m)")
-    ax.set_ylabel("r$^\mathregular{{2}}$ (-)")
-    ax.set_xlim(xmin, xmax)
-
-    ticklabels = ax.get_xticklabels()
-    for tick in ticklabels:
-        tick.set_rotation(40)
-
-    fig.tight_layout()
-    outname = ".".join(["r2_regression", "pdf"]).replace(" ", "_")
-    print(("Saving {0}".format(outname)))
-    fig.savefig(outname)
-    plt.close("all")
-
     # Create correlation figures
     fig = plt.figure()
     # make x lims from 0 to 5000 m
@@ -1977,7 +1528,7 @@ def make_regression():
 
     fig.tight_layout()
     outname = ".".join(["pearson_r_regression", "pdf"]).replace(" ", "_")
-    print(("Saving {0}".format(outname)))
+    print("Saving {outname}")
     fig.savefig(outname)
     plt.close("all")
 
@@ -2110,103 +1661,6 @@ def write_shapefile(filename, flux_gates):
     ds = None
 
 
-def export_rmsd_latex_table():
-    """
-    Used for "Complex Greenland Outlet Glacier Flow Captured
-    """
-
-    # RMSD LaTeX table
-    outname = ".".join(["rmsd_cum_table", "tex"])
-    print(("Saving {0}".format(outname)))
-    with codecs.open(outname, "w", "utf-8") as f:
-        f.write("\\begin{tabular} {l l ccccccccc }\n")
-        f.write("\\toprule \n")
-        f.write(
-            "Exp.  & Parameters  & $\\tilde r_{\\textrm{ib}}$ & $\\tilde r_{\\textrm{is}}$  & $\\tilde r$ & $\chi_{\\textrm{ib}}$ & inc. & $\chi_{\\textrm{is}}$ & inc. & $\chi$ & inc.\\\ \n"
-        )
-        f.write(
-            "  & & (-) & (-) & (-)  & ({}) & (\%) & ({}) & (\%) & ({}) & (\%)\\\ \n".format(
-                v_o_units_str_tex, v_o_units_str_tex, v_o_units_str_tex
-            )
-        )
-        f.write("\midrule\n")
-        for k, exp in enumerate(rmsd_cum_dict_sorted):
-            id = exp[0]
-            rmsd_cum = exp[1]
-            rmsd_isbrae_cum = rmsd_isbrae_cum_dict[id]
-            rmsd_ice_stream_cum = rmsd_ice_stream_cum_dict[id]
-            my_exp = flux_gates[0].experiments[id]
-            config = my_exp.config
-            corr = []
-            corr_isbrae = []
-            corr_ice_stream = []
-            for gate in flux_gates:
-                corr.append(gate.corr[id])
-                if gate.flowtype == 0:
-                    corr_isbrae.append(gate.corr[id])
-                if gate.flowtype == 1:
-                    corr_ice_stream.append(gate.corr[id])
-            corr_median = np.nanmedian(corr)
-            corr_isbrae_median = np.nanmedian(corr_isbrae)
-            corr_ice_stream_median = np.nanmedian(corr_ice_stream)
-            my_exp_str = ", ".join(
-                [
-                    "=".join(
-                        [
-                            params_dict[key]["abbr"],
-                            params_dict[key]["format"].format(config.get(key)),
-                        ]
-                    )
-                    for key in label_params
-                ]
-            )
-            if k == 0:
-                rmsd_cum_0 = rmsd_cum
-                rmsd_isbrae_cum_0 = rmsd_isbrae_cum
-                rmsd_ice_stream_cum_0 = rmsd_ice_stream_cum
-            if k == 0:
-                f.write(
-                    " {:2.0f} & {} & {:2.2f} & {:2.2f} & {:2.2f} & {:1.0f} & & {:1.0f} & & {:1.0f} & \\\ \n".format(
-                        id,
-                        my_exp_str,
-                        corr_isbrae_median,
-                        corr_ice_stream_median,
-                        corr_median,
-                        rmsd_isbrae_cum,
-                        rmsd_ice_stream_cum,
-                        rmsd_cum,
-                    )
-                )
-            else:
-                pc_inc = (rmsd_cum - rmsd_cum_0) / rmsd_cum_0 * 100
-                pc_isbrae_inc = (
-                    (rmsd_isbrae_cum - rmsd_isbrae_cum_0) / rmsd_isbrae_cum_0 * 100
-                )
-                pc_ice_stream_inc = (
-                    (rmsd_ice_stream_cum - rmsd_ice_stream_cum_0)
-                    / rmsd_ice_stream_cum_0
-                    * 100
-                )
-                f.write(
-                    " {:2.0f} & {} & {:2.2f}  & {:2.2f} & {:2.2f} & {:1.0f} & +{:2.0f} & {:1.0f} & +{:2.0f}  & {:1.0f} & +{:2.0f} \\\ \n".format(
-                        id,
-                        my_exp_str,
-                        corr_isbrae_median,
-                        corr_ice_stream_median,
-                        corr_median,
-                        rmsd_isbrae_cum,
-                        pc_isbrae_inc,
-                        rmsd_ice_stream_cum,
-                        pc_ice_stream_inc,
-                        rmsd_cum,
-                        pc_inc,
-                    )
-                )
-        f.write("\\bottomrule\n")
-        f.write("\end{tabular}\n")
-        f.close()
-
-
 # ##############################################################################
 # MAIN
 # ##############################################################################
@@ -2217,9 +1671,7 @@ if __name__ == "__main__":
 
     # Set up the option parser
     parser = ArgumentParser()
-    parser.description = (
-        "Analyze flux gates. Used for 'Complex Greenland Outlet Glacier Flow Captured'."
-    )
+    parser.description = "Analyze flux gates."
     parser.add_argument("FILE", nargs="*")
     parser.add_argument(
         "--aspect_ratio",
@@ -2253,12 +1705,6 @@ if __name__ == "__main__":
         "--obs_file",
         dest="obs_file",
         help="""Profile file with observations. Default is None""",
-        default=None,
-    )
-    parser.add_argument(
-        "--export_table_file",
-        dest="table_file",
-        help="""If given, fluxes are exported to latex table. Default is None""",
         default=None,
     )
     parser.add_argument(
@@ -2360,7 +1806,6 @@ if __name__ == "__main__":
     obs_file = options.obs_file
     out_res = int(options.out_res)
     varname = options.varname
-    table_file = options.table_file
     label_params = list(options.label_params.split(","))
     plot_title = options.plot_title
     legend = options.legend
@@ -2597,8 +2042,6 @@ if __name__ == "__main__":
 
     # Add experiments to flux gates
     for k, filename in enumerate(args):
-        # id = re.search("id_(\b0*([1-9][0-9]*|0)\b)", filename).group(1)
-        # pid = int(filename.split("id_")[1].split("_")[0])
         id = k
         experiment = ExperimentDataset(id, filename, varname)
         for flux_gate in flux_gates:
@@ -2609,9 +2052,6 @@ if __name__ == "__main__":
 
     ne = len(flux_gates[0].experiments)
     ng = len(flux_gates)
-
-    if table_file and obs_file:
-        export_latex_table_flux(table_file, flux_gates, label_params)
 
     # make figure for each flux gate
     for gate in flux_gates:
@@ -2628,7 +2068,6 @@ if __name__ == "__main__":
         for gate in flux_gates:
             gate_name = "_".join([unidecode(gate.gate_name), "rmsd", varname])
             outname = ".".join([gate_name, "tex"]).replace(" ", "_")
-            # export_latex_table_rmsd(outname, gate)
             gate_name = "_".join([unidecode(gate.gate_name), "pearson_r", varname])
             outname = ".".join([gate_name, "csv"]).replace(" ", "_")
             ids = sorted(gate.p_ols, key=lambda x: gate.corr[x], reverse=True)
@@ -2636,7 +2075,6 @@ if __name__ == "__main__":
             corrs_dict = dict(zip(ids, corrs))
             export_csv_from_dict(outname, corrs_dict, header="id,correlation")
             # outname = ".".join([gate_name, "tex"]).replace(" ", "_")
-            # export_latex_table_corr(outname, gate)
         # write rmsd and person r figure per experiment
         for exp in flux_gates[0].experiments:
             exp_str = "_".join(["pearson_r_experiment", str(exp.id), varname])
@@ -2647,7 +2085,6 @@ if __name__ == "__main__":
             export_csv_from_dict(outname, corrs, header="id,correlation")
             exp_str = "_".join(["rmsd_experiment", str(exp.id), varname])
             outname = ".".join([exp_str, "tex"])
-            export_gate_table_rmsd(outname, exp)
 
         experiments_df = []
         experiments_isbrae_df = []
@@ -2801,12 +2238,8 @@ if __name__ == "__main__":
     gate = flux_gates[0]
     # make a global regression figure
     if do_regress:
-        make_regression()
+        make_regression(gate)
 
     # Write results to shape file
     outname = "statistics.shp"
     write_shapefile(outname, flux_gates)
-
-    # Write a table with all experiments
-    outname = ".".join(["experiment_table", "tex"])
-    write_experiment_table(outname)
