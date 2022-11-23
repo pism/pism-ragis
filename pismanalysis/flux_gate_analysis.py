@@ -4,6 +4,7 @@
 import operator
 import os
 from argparse import ArgumentParser
+from typing import Any, Dict, List, Optional, Union
 
 import cf_units
 import matplotlib.cm as cmx
@@ -14,8 +15,6 @@ import pylab as plt
 import statsmodels.api as sm
 from netCDF4 import Dataset as NC
 from unidecode import unidecode
-
-from typing import List, Union
 
 
 def reverse_enumerate(iterable):
@@ -74,7 +73,7 @@ class FluxGate(object):
         self,
         pos_id,
         gate_name: str,
-        gate_id: str,
+        gate_id: float,
         profile_axis,
         profile_axis_units: str,
         profile_axis_name: str,
@@ -87,40 +86,38 @@ class FluxGate(object):
         self.profile_axis = profile_axis
         self.profile_axis_units = profile_axis_units
         self.profile_axis_name = profile_axis_name
-        self.best_rmsd_exp_id: Union[str, None] = None
-        self.best_rmsd: Union[float, None] = None
-        self.best_corr_exp_id: Union[int, None] = None
-        self.best_corr: Union[float, None] = None
-        self.corr: Union[float, None] = None
-        self.corr_units: Union[str, None] = None
-        self.experiments: List[object] = []
+        self.best_rmsd_exp_id: str
+        self.best_rmsd: float
+        self.best_corr_exp_id: int
+        self.best_corr: float
+        self.corr: Dict[Any, Any]
+        self.corr_units: str
+        self.experiments: List[Any] = []
         self.exp_counter: int = 0
         self.has_observations: bool = False
         self.has_fluxes: bool = False
         self.has_stats: bool = False
-        self.linear_trend: Union[float, None] = None
-        self.linear_bias: Union[float, None] = None
-        self.linear_r2: Union[float, None] = None
-        self.linear_p: Union[float, None] = None
-        self.N_corr: Union[float, None] = None
-        self.N_rmsd: Union[float, None] = None
-        self.observed_flux: Union[float, None] = None
-        self.observed_flux_units: Union[str, None] = None
-        self.observed_flux_error: Union[float, None] = None
-        self.observed_mean: Union[float, None] = None
-        self.observed_mean_units: Union[str, None] = None
-        self.p_ols = None
-        self.r2 = None
-        self.r2_units = None
-        self.rmsd = None
-        self.rmsd_units = None
-        self.S = None
-        self.S_units = None
-        self.sigma_obs = None
-        self.sigma_obs_N = None
-        self.sigma_obs_units = None
-        self.varname = None
-        self.varname_units = None
+        self.linear_trend: float
+        self.linear_bias: float
+        self.linear_r2: float
+        self.linear_p: float
+        self.N_corr: Dict[Any, Any]
+        self.N_rmsd: Dict[Any, Any]
+        self.observed_flux: float
+        self.observed_flux_units: str
+        self.observed_flux_error: float
+        self.observed_mean: float
+        self.observed_mean_units: Optional[str]
+        self.p_ols: Dict[Any, Any]
+        self.r2: Dict[Any, Any]
+        self.r2_units: str
+        self.rmsd: Dict[Any, Any]
+        self.rmsd_units: str
+        self.sigma_obs: Dict[Any, Any]
+        self.sigma_obs_N: int
+        self.sigma_obs_units: Optional[str]
+        self.varname: Union[str, None] = None
+        self.varname_units: Union[str, None] = None
 
     def __repr__(self):
         return "FluxGate"
@@ -152,8 +149,8 @@ class FluxGate(object):
         fg_obs = FluxGateObservations(data, pos_id)
         self.observations = fg_obs
         if self.has_observations is not None:
-            gate_name = self.gate_name.encode("utf-8")
-            print((f"Flux gate {gate_name} already has observations, overriding"))
+            gate_name = self.gate_name
+            print(f"Flux gate {gate_name} already has observations, overriding")
         self.has_observations = True
 
     def calculate_fluxes(self):
@@ -174,34 +171,33 @@ class FluxGate(object):
 
         if not self.has_fluxes:
             self.calculate_fluxes()
-        corr = {}
-        N_rmsd = {}
-        p_ols = {}
-        r2 = {}
-        rmsd = {}
-        S = {}
+        corr: Dict[Any, Any] = {}
+        N_rmsd: Dict[Any, Any] = {}
+        p_ols: Dict[Any, Any] = {}
+        r2: Dict[Any, Any] = {}
+        rmsd: Dict[Any, Any] = {}
         for exp in self.experiments:
-            id = exp.id
+            m_id = exp.m_id
             x = np.squeeze(self.profile_axis)
             obs_vals = np.squeeze(self.observations.values)
             # mask values where obs is zero
             obs_vals = np.ma.masked_where(obs_vals == 0, obs_vals)
             if isinstance(obs_vals, np.ma.MaskedArray):
                 obs_vals = obs_vals.filled(0)
-            exp_vals = np.squeeze(self.experiments[id].values)
+            exp_vals = np.squeeze(self.experiments[m_id].values)
             # Calculate root mean square difference (RMSD), convert units
             my_rmsd, my_N_rmsd = get_rmsd(exp_vals, obs_vals)
             i_units = self.varname_units
             o_units = var_dict[varname]["v_o_units"]
             i_units_cf = cf_units.Unit(i_units)
             o_units_cf = cf_units.Unit(o_units)
-            rmsd[id] = i_units_cf.convert(my_rmsd, o_units_cf)
-            N_rmsd[id] = my_N_rmsd
+            rmsd[m_id] = i_units_cf.convert(my_rmsd, o_units_cf)
+            N_rmsd[m_id] = my_N_rmsd
             obsS = pa.Series(data=obs_vals, index=x)
             expS = pa.Series(data=exp_vals, index=x)
-            p_ols[id] = sm.OLS(expS, sm.add_constant(obsS), missing="drop").fit()
-            r2[id] = p_ols[id].rsquared
-            corr[id] = obsS.corr(expS)
+            p_ols[m_id] = sm.OLS(expS, sm.add_constant(obsS), missing="drop").fit()
+            r2[m_id] = p_ols[m_id].rsquared
+            corr[m_id] = obsS.corr(expS)
         best_rmsd_exp_id = sorted(p_ols, key=lambda x: rmsd[x], reverse=False)[0]
         best_corr_exp_id = sorted(p_ols, key=lambda x: corr[x], reverse=True)[0]
         self.p_ols = p_ols
@@ -212,8 +208,6 @@ class FluxGate(object):
         self.rmsd = rmsd
         self.rmsd_units = var_dict[varname]["v_o_units"]
         self.N_rmsd = N_rmsd
-        self.S = S
-        self.S_units = "1"
         self.r2 = r2
         self.r2_units = "1"
         self.corr = corr
@@ -275,7 +269,7 @@ class FluxGate(object):
         experiment_fluxes = {}
         experiment_fluxes_units = {}
         for exp in self.experiments:
-            id = exp.id
+            m_id = exp.m_id
             x = self.profile_axis
             y = exp.values
             x_units = self.profile_axis_units
@@ -294,20 +288,8 @@ class FluxGate(object):
             o_units = cf_units.Unit(var_dict[varname]["v_flux_o_units"])
             o_units_str = var_dict[varname]["v_flux_o_units_str"]
             o_val = i_units.convert(int_val, o_units)
-            experiment_fluxes[id] = o_val
-            experiment_fluxes_units[id] = o_units_str
-            if label_params:
-                my_exp_str = ", ".join(
-                    [
-                        "=".join(
-                            [
-                                params_dict[key]["abbr"],
-                                params_dict[key]["format"],
-                            ]
-                        )
-                        for key in label_params
-                    ]
-                )
+            experiment_fluxes[m_id] = o_val
+            experiment_fluxes_units[m_id] = o_units_str
         self.experiment_fluxes = experiment_fluxes
         self.experiment_fluxes_units = experiment_fluxes_units
 
@@ -348,6 +330,75 @@ class FluxGate(object):
 
         return y_int
 
+    def make_obs_label(self, label_type, **kwargs):
+        obs = self.observations
+        if label_type == "long":
+            label = f"obs: {self.observed_flux:6.1f}"
+            if obs.has_error:
+                label += f"$\pm${self.observed_flux_error:4.1f}"
+        elif label_type in ("short", "regress", "exp"):
+            label = "observed"
+        elif label_type in ("attr"):
+            label = "AERODEM"
+        else:
+            label = f"obs: {self.observed_flux:6.1f}"
+            if obs.has_error:
+                label += f"$\pm${self.observed_flux_error:4.1f}"
+        return label
+
+    def make_exp_label(self, exp, label_type, params, **kwargs):
+
+        exp_str = self.make_exp_str(exp, params)
+        config = exp.config
+        if self.has_observations:
+            if label_type == "long":
+                label = " ".join(
+                    [
+                        ": ".join(
+                            [
+                                exp_str,
+                                f"{self.experiment_fluxes[exp.m_id]:6.1f}",
+                            ]
+                        ),
+                        f"(r={self.corr[exp.m_id]:1.2f})",
+                    ]
+                )
+            elif label_type == "attr":
+                [key for key in params]
+            elif label_type == "exp":
+                exp_str = ", ".join(
+                    [
+                        "=".join(
+                            [
+                                params_dict[key]["abbr"],
+                                params_dict[key]["format"].format(config.get(key)),
+                            ]
+                        )
+                        for key in params
+                    ]
+                )
+                label = exp_str
+            else:
+                label = f"r={self.corr[m_id]:1.2f}"
+            if label_type == "regress":
+                label = (
+                    f"{config['grm_id_dx_meters']:4.0f}m, r={self.corr[exp.m_id]:1.2f}"
+                )
+            elif label_type == "short":
+                label = f"r={self.corr[m_id]:1.2f}"
+            else:
+                pass
+        else:
+            label = config.get("grid_dx_meters")
+        return label
+
+    def make_exp_str(self, exp, params, **kwargs):
+        config = exp.config
+        exp_str = ", ".join(
+            ["=".join([params_dict[key]["abbr"], config.get(key)]) for key in params]
+        )
+        return exp_str
+
     def make_line_plot(self, **kwargs):
         """
         Make a plot.
@@ -376,20 +427,7 @@ class FluxGate(object):
         ax = fig.add_subplot(111)
         if has_observations:
             obs = self.observations
-            if legend == "long":
-                if obs.has_error:
-                    label = f"obs: {self.observed_flux:6.1f}$\pm${self.observed_flux_error:4.1f}"
-                else:
-                    label = f"obs: {self.observed_flux:6.1f}"
-            elif legend in ("short", "regress", "exp"):
-                label = "observed"
-            elif legend in ("attr"):
-                label = "AERODEM"
-            else:
-                if obs.has_error:
-                    label = f"obs: {self.observed_flux:6.1f}$\pm${self.observed_flux_error:4.1f}"
-                else:
-                    label = f"obs: {self.observed_flux:6.1f}"
+            label = self.make_obs_label("long")
             has_error = obs.has_error
             i_vals = obs.values
             i_units_cf = cf_units.Unit(v_units)
@@ -406,10 +444,8 @@ class FluxGate(object):
                     color="0.85",
                 )
 
-            if simple_plot:
-                ax.plot(profile_axis_out, obs_o_vals, "-", color="0.35", label=label)
-            else:
-                ax.plot(profile_axis_out, obs_o_vals, "-", color="0.5")
+            ax.plot(profile_axis_out, obs_o_vals, "-", color="0.5")
+            if not simple_plot:
                 ax.plot(
                     profile_axis_out,
                     obs_o_vals,
@@ -434,85 +470,14 @@ class FluxGate(object):
                 exp_o_vals *= obs_max / exp_max
             if "label_param_list" in list(kwargs.keys()):
                 params = kwargs["label_param_list"]
-                config = exp.config
-                id = exp.id
-                exp_str = ", ".join(
-                    [
-                        "=".join(
-                            [
-                                params_dict[key]["abbr"],
-                                params_dict[key]["format"],
-                            ]
-                        )
-                        for key in params
-                    ]
-                )
-                if has_observations:
-                    if legend == "long":
-                        label = ", ".join(
-                            [
-                                ": ".join(
-                                    [
-                                        exp_str,
-                                        f"{self.experiment_fluxes[id]:6.1f}",
-                                    ]
-                                ),
-                                "=".join(["r", f"{self.corr[id]:1.2f}"]),
-                            ]
-                        )
-                        # label = ', '.join(['{:6.1f}'.format(self.experiment_fluxes[id]), '='.join(['r', '{:1.2f}'.format(self.corr[id])])])
-                    elif legend == "attr":
-                        [key for key in params]
-                    elif legend == "exp":
-                        # # Use this
-                        # exp_str = ", ".join(
-                        #     [
-                        #         "=".join(
-                        #             [
-                        #                 params_dict[key]["abbr"],
-                        #                 params_dict[key]["format"].format(config.get(key) * ice_density),
-                        #             ]
-                        #         )
-                        #         for key in params
-                        #     ]
-                        # )
-                        exp_str = ", ".join(
-                            [
-                                "=".join(
-                                    [
-                                        params_dict[key]["abbr"],
-                                        params_dict[key]["format"].format(
-                                            config.get(key)
-                                        ),
-                                    ]
-                                )
-                                for key in params
-                            ]
-                        )
-                        label = exp_str
-                    else:
-                        label = f"r={self.corr[id]:1.2f}"
-                    if legend == "regress":
-                        label = (
-                            f"{config['grid_dx_meters']:4.0f}m, r={self.corr[id]:1.2f}"
-                        )
-                    elif legend == "short":
-                        label = f"r={self.corr[id]:1.2f}"
-                    else:
-                        pass
-                else:
-                    label = config.get("grid_dx_meters")
+                label = self.make_exp_label(exp, "long", params)
                 labels.append(label)
             my_color = my_colors[k]
-            if simple_plot:
-                (line_c,) = ax.plot(
-                    profile_axis_out, exp_o_vals, color=my_color, label=label
-                )
-                (line_d,) = ax.plot(profile_axis_out, exp_o_vals, color=my_color)
-            else:
-                (line_c,) = ax.plot(
-                    profile_axis_out, exp_o_vals, "-", color=my_color, alpha=0.5
-                )
+
+            (line_c,) = ax.plot(
+                profile_axis_out, exp_o_vals, "-", color=my_color, alpha=0.5
+            )
+            if not simple_plot:
                 (line_d,) = ax.plot(
                     profile_axis_out,
                     exp_o_vals,
@@ -529,6 +494,7 @@ class FluxGate(object):
         ax.set_xlim(0, np.max(profile_axis_out))
         xlabel = f"{profile_axis_name} ({profile_axis_out_units})"
         ax.set_xlabel(xlabel)
+        v_name: Optional[str]
         if varname in list(var_name_dict.keys()):
             v_name = var_name_dict[varname]
         else:
@@ -600,7 +566,7 @@ class FluxGateExperiment(object):
         super(FluxGateExperiment, self).__init__(*args, **kwargs)
         self.values = data.values[pos_id, Ellipsis]
         self.config = data.config
-        self.id = data.id
+        self.m_id = data.m_id
 
     def __repr__(self):
         return "FluxGateExperiment"
@@ -675,11 +641,11 @@ class ExperimentDataset(Dataset):
 
     """
 
-    def __init__(self, id, *args, **kwargs):
+    def __init__(self, m_id, *args, **kwargs):
         super(ExperimentDataset, self).__init__(*args, **kwargs)
 
-        print(f"Experiment {id}")
-        self.id = id
+        print(f"Experiment {m_id}")
+        self.m_id = m_id
         self.config = dict()
         for v in ["pism_config", "run_stats", "config"]:
             if v in self.nc.variables:
@@ -750,10 +716,10 @@ def make_correlation_figure(filename, exp):
     """
     corrs = {}
     for gate in flux_gates:
-        id = gate.pos_id
-        r = gate.corr[exp.id]
+        m_id = gate.pos_id
+        r = gate.corr[exp.m_id]
         if not np.isnan(r):
-            corrs[id] = r
+            corrs[m_id] = r
     sort_order = sorted(corrs, key=lambda x: corrs[x])
     corrs_sorted = [corrs[x] for x in sort_order]
     gate_id_sorted = [flux_gates[x].gate_id for x in sort_order]
@@ -808,7 +774,6 @@ def make_regression(gate):
         rmsd_data = list(gate.rmsd.values())
         rmsdS = pa.Series(data=rmsd_data, index=list(gate.rmsd.keys()))
         gridS = pa.Series(data=grid_dx_meters, index=list(gate.rmsd.keys()))
-        d = {"grid_resolution": gridS, "RMSD": rmsdS}
         model = sm.OLS(rmsdS, sm.add_constant(gridS)).fit()
         # Calculate PISM trends and biases (intercepts)
         bias, trend = model.params
@@ -819,7 +784,6 @@ def make_regression(gate):
         # Create figures
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        # ax.plot([grid_dx_meters[0], grid_dx_meters[-1]], bias + np.array([grid_dx_meters[0], grid_dx_meters[-1]])*trend, color='0.2')
         ax.plot(
             grid_dx_meters,
             rmsd_data,
@@ -851,13 +815,12 @@ def make_regression(gate):
     ax = fig.add_subplot(111)
     legend_handles = []
     for n, gate in enumerate(flux_gates):
-        id = gate.pos_id
+        m_id = gate.pos_id
 
         # RMSD
         rmsd_data = list(gate.rmsd.values())
         rmsdS = pa.Series(data=rmsd_data, index=list(gate.rmsd.keys()))
         gridS = pa.Series(data=grid_dx_meters, index=list(gate.rmsd.keys()))
-        d = {"grid_resolution": gridS, "RMSD": rmsdS}
         model = sm.OLS(rmsdS, sm.add_constant(gridS)).fit()
         # trend and bias (intercept)
         bias, trend = model.params
@@ -898,27 +861,26 @@ def make_regression(gate):
             markersize=1.75,
         )
 
-    for id in (1, 11, 19, 23):
+    for m_id in (1, 11, 19, 23):
 
-        gate = flux_gates[id]
+        gate = flux_gates[m_id]
 
         # RMSD
         rmsd_data = list(gate.rmsd.values())
         rmsdS = pa.Series(data=rmsd_data, index=list(gate.rmsd.keys()))
         gridS = pa.Series(data=grid_dx_meters, index=list(gate.rmsd.keys()))
-        d = {"grid_resolution": gridS, "RMSD": rmsdS}
         model = sm.OLS(rmsdS, sm.add_constant(gridS)).fit()
         # trend and bias (intercept)
         bias_selected, trend_selected = model.params
         p_selected = model.f_pvalue
 
-        if id == 1:  # Jakobshavn
+        if m_id == 1:  # Jakobshavn
             colorVal = "#54278f"
-        elif id == 11:  # Kong Oscar
+        elif m_id == 11:  # Kong Oscar
             colorVal = "#006d2c"
-        elif id == 19:  # Kangerdlugssuaq
+        elif m_id == 19:  # Kangerdlugssuaq
             colorVal = "#08519c"
-        elif id == 23:  # Koge Bugt S
+        elif m_id == 23:  # Koge Bugt S
             colorVal = "#a50f15"
         else:
             print("How did I get here?")
@@ -955,7 +917,6 @@ def make_regression(gate):
     rmsd_data = list(rmsd_cum_dict.values())
     rmsdS = pa.Series(data=rmsd_data, index=list(rmsd_cum_dict.keys()))
     gridS = pa.Series(data=grid_dx_meters, index=list(gate.rmsd.keys()))
-    d = {"grid_resolution": gridS, "RMSD": rmsdS}
     model = sm.OLS(rmsdS, sm.add_constant(gridS)).fit()
     # Calculate PISM trends and biases (intercepts)
     bias_global, trend_global = model.params
@@ -1037,6 +998,179 @@ def make_regression(gate):
     fig.savefig(outname)
     plt.close("all")
 
+
+def setup_flux_gates():
+    # Open first file
+    filename = args[0]
+    print(("  opening NetCDF file %s ..." % filename))
+    try:
+        nc0 = NC(filename, "r")
+    except FileNotFoundError:
+        print(
+            (
+                "ERROR:  file '%s' not found or not NetCDF format ... ending ..."
+                % filename
+            )
+        )
+        import sys
+
+        sys.exit(1)
+
+    # Get profiles from first file
+    # All experiments have to contain the same profiles
+    # Create flux gates
+    profile_names = nc0.variables["profile_name"][:]
+    flux_gates = []
+    for pos_id, profile_name in enumerate(profile_names):
+        profile_axis = nc0.variables["profile_axis"][pos_id]
+        profile_axis_units = nc0.variables["profile_axis"].units
+        profile_axis_name = nc0.variables["profile_axis"].long_name
+        profile_id = int(nc0.variables["profile_id"][pos_id])
+        flux_gate = FluxGate(
+            pos_id,
+            profile_name,
+            profile_id,
+            profile_axis,
+            profile_axis_units,
+            profile_axis_name,
+        )
+        flux_gates.append(flux_gate)
+    nc0.close()
+    return flux_gates
+
+
+var_dict: Dict[Optional[str], Dict] = {
+    "velsurf_mag": {
+        "flux_type": "flux",
+        "v_o_units": "m yr-1",
+        "v_o_units_str": "m yr$^\mathregular{{-1}}$",
+        "v_o_units_str_tex": "m\,yr$^{-1}$",
+        "v_flux_o_units": "km2 yr-1",
+        "v_flux_o_units_str": "km$^\mathregular{2}$ yr$^\mathregular{{-1}}$",
+        "v_flux_o_units_str_tex": "km$^2$\,yr$^{-1}$",
+    },
+    "velbase_mag": {
+        "flux_type": "flux",
+        "v_o_units": "m yr-1",
+        "v_o_units_str": "m yr$^\mathregular{{-1}}$",
+        "v_o_units_str_tex": "m\,yr$^{-1}$",
+        "v_flux_o_units": "km2 yr-1",
+        "v_flux_o_units_str": "km$^\mathregular{2}$ yr$^\mathregular{{-1}}$",
+        "v_flux_o_units_str_tex": "km$^2$\,yr$^{-1}$",
+    },
+    "velsurf_normal": {
+        "flux_type": "flux",
+        "v_o_units": "m yr-1",
+        "v_o_units_str": "m yr$^\mathregular{{-1}}$",
+        "v_o_units_str_tex": "m\,yr$^{-1}$",
+        "v_flux_o_units": "km2 yr-1",
+        "v_flux_o_units_str": "km$^\mathregular{2}$ yr$^\mathregular{{-1}}$",
+        "v_flux_o_units_str_tex": "km$^2$\,yr$^{-1}$",
+    },
+    "v": {
+        "flux_type": "flux",
+        "v_o_units": "m yr-1",
+        "v_o_units_str": "m yr$^\mathregular{{-1}}$",
+        "v_o_units_str_tex": "m\,yr$^{-1}$",
+        "v_flux_o_units": "km2 yr-1",
+        "v_flux_o_units_str": "km$^\mathregular{2}$ yr$^\mathregular{{-1}}$",
+        "v_flux_o_units_str_tex": "km$^2$\,yr$^{-1}$",
+    },
+    "flux_mag": {
+        "flux_type": "flux",
+        "v_o_units": "km2 yr-1",
+        "v_o_units_str": "km$^\mathregular{2}$ yr$^\mathregular{{-1}}$",
+        "v_o_units_str_tex": "km$^2$\,yr$^{-1}$",
+        "v_flux_o_units": "Gt yr-1",
+        "v_flux_o_units_str": "Gt yr$^\mathregular{{-1}}$",
+        "v_flux_o_units_str_tex": "Gt\,yr$^{-1}$",
+        "vol_to_mass": True,
+    },
+}
+
+params_dict: Dict[Optional[str], Dict] = {
+    "dataset": {"abbr": "Dataset", "format": "{}"},
+    "dem": {"abbr": "DEM", "format": "{}"},
+    "bed": {"abbr": "bed", "format": "{}"},
+    "init": {"abbr": "INIT", "format": "{}"},
+    "surface.pdd.factor_ice": {
+        "abbr": "$f_{\mathregular{i}}$",
+        "format": "{:1.0f}",
+    },
+    "surface.pdd.factor_snow": {
+        "abbr": "$f_{\mathregular{s}}$",
+        "format": "{:1.0f}",
+    },
+    "basal_resistance.pseudo_plastic.q": {"abbr": "$q$", "format": "{:1.2f}"},
+    "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden": {
+        "abbr": "$\\delta$",
+        "format": "{:1.4f}",
+    },
+    "stress_balance.sia.enhancement_factor": {
+        "abbr": "$E_{\mathregular{SIA}}$",
+        "format": "{:1.2f}",
+    },
+    "stress_balance.ssa.enhancement_factor": {
+        "abbr": "$E_{\mathregular{SSA}}$",
+        "format": "{:1.2f}",
+    },
+    "stress_balance.ssa.Glen_exponent": {
+        "abbr": "$n_{\mathregular{SSA}}$",
+        "format": "{:1.2f}",
+    },
+    "stress_balance.sia.Glen_exponent": {
+        "abbr": "$n_{\mathregular{SIA}}$",
+        "format": "{:1.2f}",
+    },
+    "grid_dx_meters": {"abbr": "ds", "format": "{:.0f}"},
+    "flow_law.gpbld.water_frac_observed_limit": {
+        "abbr": "$\omega$",
+        "format": "{:1.2}",
+    },
+    "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min": {
+        "abbr": "$\phi_{\mathregular{min}}$",
+        "format": "{:4.2f}",
+    },
+    "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max": {
+        "abbr": "$\phi_{\mathregular{max}}$",
+        "format": "{:4.2f}",
+    },
+    "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min": {
+        "abbr": "$z_{\mathregular{min}}$",
+        "format": "{:1.0f}",
+    },
+    "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max": {
+        "abbr": "$z_{\mathregular{max}}$",
+        "format": "{:1.0f}",
+    },
+}
+
+var_long = (
+    "velsurf_mag",
+    "velbase_mag",
+    "velsurf_normal",
+    "flux_mag",
+    "flux_normal",
+    "surface",
+    "usurf",
+    "surface_altitude" "thk",
+    "thickness",
+    "land_ice_thickness",
+)
+var_short = (
+    "speed",
+    "sliding speed",
+    "speed",
+    "flux",
+    "flux",
+    "altitude",
+    "altitude",
+    "altitude",
+    "ice thickness",
+    "ice thickness",
+    "ice thickness",
+)
+var_name_dict = dict(list(zip(var_long, var_short)))
 
 # ##############################################################################
 # MAIN
@@ -1185,58 +1319,9 @@ if __name__ == "__main__":
     pearson_r_threshold_low = 0.50
 
     if y_lim_min is not None:
-        y_lim_min = np.float(y_lim_min)
+        y_lim_min = float(y_lim_min)
     if y_lim_max is not None:
-        y_lim_max = np.float(y_lim_max)
-
-    var_dict = {
-        "velsurf_mag": {
-            "flux_type": "flux",
-            "v_o_units": "m yr-1",
-            "v_o_units_str": "m yr$^\mathregular{{-1}}$",
-            "v_o_units_str_tex": "m\,yr$^{-1}$",
-            "v_flux_o_units": "km2 yr-1",
-            "v_flux_o_units_str": "km$^\mathregular{2}$ yr$^\mathregular{{-1}}$",
-            "v_flux_o_units_str_tex": "km$^2$\,yr$^{-1}$",
-        },
-        "velbase_mag": {
-            "flux_type": "flux",
-            "v_o_units": "m yr-1",
-            "v_o_units_str": "m yr$^\mathregular{{-1}}$",
-            "v_o_units_str_tex": "m\,yr$^{-1}$",
-            "v_flux_o_units": "km2 yr-1",
-            "v_flux_o_units_str": "km$^\mathregular{2}$ yr$^\mathregular{{-1}}$",
-            "v_flux_o_units_str_tex": "km$^2$\,yr$^{-1}$",
-        },
-        "velsurf_normal": {
-            "flux_type": "flux",
-            "v_o_units": "m yr-1",
-            "v_o_units_str": "m yr$^\mathregular{{-1}}$",
-            "v_o_units_str_tex": "m\,yr$^{-1}$",
-            "v_flux_o_units": "km2 yr-1",
-            "v_flux_o_units_str": "km$^\mathregular{2}$ yr$^\mathregular{{-1}}$",
-            "v_flux_o_units_str_tex": "km$^2$\,yr$^{-1}$",
-        },
-        "v": {
-            "flux_type": "flux",
-            "v_o_units": "m yr-1",
-            "v_o_units_str": "m yr$^\mathregular{{-1}}$",
-            "v_o_units_str_tex": "m\,yr$^{-1}$",
-            "v_flux_o_units": "km2 yr-1",
-            "v_flux_o_units_str": "km$^\mathregular{2}$ yr$^\mathregular{{-1}}$",
-            "v_flux_o_units_str_tex": "km$^2$\,yr$^{-1}$",
-        },
-        "flux_mag": {
-            "flux_type": "flux",
-            "v_o_units": "km2 yr-1",
-            "v_o_units_str": "km$^\mathregular{2}$ yr$^\mathregular{{-1}}$",
-            "v_o_units_str_tex": "km$^2$\,yr$^{-1}$",
-            "v_flux_o_units": "Gt yr-1",
-            "v_flux_o_units_str": "Gt yr$^\mathregular{{-1}}$",
-            "v_flux_o_units_str_tex": "Gt\,yr$^{-1}$",
-            "vol_to_mass": True,
-        },
-    }
+        y_lim_max = float(y_lim_max)
 
     if varname not in var_dict.keys():
         print(f"variable {varname} not supported")
@@ -1256,129 +1341,10 @@ if __name__ == "__main__":
     markeredgecolor = "k"
     obscolor = "0.4"
 
-    params_dict = {
-        "dataset": {"abbr": "Dataset", "format": "{}"},
-        "dem": {"abbr": "DEM", "format": "{}"},
-        "bed": {"abbr": "bed", "format": "{}"},
-        "init": {"abbr": "INIT", "format": "{}"},
-        "surface.pdd.factor_ice": {
-            "abbr": "$f_{\mathregular{i}}$",
-            "format": "{:1.0f}",
-        },
-        "surface.pdd.factor_snow": {
-            "abbr": "$f_{\mathregular{s}}$",
-            "format": "{:1.0f}",
-        },
-        "basal_resistance.pseudo_plastic.q": {"abbr": "$q$", "format": "{:1.2f}"},
-        "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden": {
-            "abbr": "$\\delta$",
-            "format": "{:1.4f}",
-        },
-        "stress_balance.sia.enhancement_factor": {
-            "abbr": "$E_{\mathregular{SIA}}$",
-            "format": "{:1.2f}",
-        },
-        "stress_balance.ssa.enhancement_factor": {
-            "abbr": "$E_{\mathregular{SSA}}$",
-            "format": "{:1.2f}",
-        },
-        "stress_balance.ssa.Glen_exponent": {
-            "abbr": "$n_{\mathregular{SSA}}$",
-            "format": "{:1.2f}",
-        },
-        "stress_balance.sia.Glen_exponent": {
-            "abbr": "$n_{\mathregular{SIA}}$",
-            "format": "{:1.2f}",
-        },
-        "grid_dx_meters": {"abbr": "ds", "format": "{:.0f}"},
-        "flow_law.gpbld.water_frac_observed_limit": {
-            "abbr": "$\omega$",
-            "format": "{:1.2}",
-        },
-        "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min": {
-            "abbr": "$\phi_{\mathregular{min}}$",
-            "format": "{:4.2f}",
-        },
-        "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max": {
-            "abbr": "$\phi_{\mathregular{max}}$",
-            "format": "{:4.2f}",
-        },
-        "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min": {
-            "abbr": "$z_{\mathregular{min}}$",
-            "format": "{:1.0f}",
-        },
-        "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max": {
-            "abbr": "$z_{\mathregular{max}}$",
-            "format": "{:1.0f}",
-        },
-    }
-
-    var_long = (
-        "velsurf_mag",
-        "velbase_mag",
-        "velsurf_normal",
-        "flux_mag",
-        "flux_normal",
-        "surface",
-        "usurf",
-        "surface_altitude" "thk",
-        "thickness",
-        "land_ice_thickness",
-    )
-    var_short = (
-        "speed",
-        "sliding speed",
-        "speed",
-        "flux",
-        "flux",
-        "altitude",
-        "altitude",
-        "altitude",
-        "ice thickness",
-        "ice thickness",
-        "ice thickness",
-    )
-    var_name_dict = dict(list(zip(var_long, var_short)))
-
     flow_types = {0: "isbr{\\ae}", 1: "ice-stream", 2: "undefined"}
     glacier_types = {0: "ffmt", 1: "lvmt", 2: "ist", 3: "lt"}
 
-    # Open first file
-    filename = args[0]
-    print(("  opening NetCDF file %s ..." % filename))
-    try:
-        nc0 = NC(filename, "r")
-    except FileNotFoundError:
-        print(
-            (
-                "ERROR:  file '%s' not found or not NetCDF format ... ending ..."
-                % filename
-            )
-        )
-        import sys
-
-        sys.exit(1)
-
-    # Get profiles from first file
-    # All experiments have to contain the same profiles
-    # Create flux gates
-    profile_names = nc0.variables["profile_name"][:]
-    flux_gates = []
-    for pos_id, profile_name in enumerate(profile_names):
-        profile_axis = nc0.variables["profile_axis"][pos_id]
-        profile_axis_units = nc0.variables["profile_axis"].units
-        profile_axis_name = nc0.variables["profile_axis"].long_name
-        profile_id = int(nc0.variables["profile_id"][pos_id])
-        flux_gate = FluxGate(
-            pos_id,
-            profile_name,
-            profile_id,
-            profile_axis,
-            profile_axis_units,
-            profile_axis_name,
-        )
-        flux_gates.append(flux_gate)
-    nc0.close()
+    flux_gates = setup_flux_gates()
 
     # If observations are provided, load observations
     if obs_file:
@@ -1388,8 +1354,8 @@ if __name__ == "__main__":
 
     # Add experiments to flux gates
     for k, filename in enumerate(args):
-        id = k
-        experiment = ExperimentDataset(id, filename, varname)
+        m_id = k
+        experiment = ExperimentDataset(m_id, filename, varname)
         for flux_gate in flux_gates:
             flux_gate.add_experiment(experiment)
 
@@ -1417,10 +1383,10 @@ if __name__ == "__main__":
             export_csv_from_dict(outname, corrs_dict, header="id,correlation")
         # write rmsd and person r figure per experiment
         for exp in flux_gates[0].experiments:
-            exp_str = "_".join(["pearson_r_experiment", str(exp.id), varname])
+            exp_str = "_".join(["pearson_r_experiment", str(exp.m_id), varname])
             outname = ".".join([exp_str, "pdf"])
             corrs = make_correlation_figure(outname, exp)
-            exp_str = "_".join(["coors_experiment", str(exp.id), varname])
+            exp_str = "_".join(["coors_experiment", str(exp.m_id), varname])
             outname = ".".join([exp_str, "csv"])
             export_csv_from_dict(outname, corrs, header="id,correlation")
 
