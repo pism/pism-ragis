@@ -85,12 +85,10 @@ def get_projection_from_file(nc):
     p : Proj projection instance
     """
 
-    from pyproj import Proj
-
     # First, check if we have a global attribute 'proj4'
-    # which contains a Proj4 string:
+    # which contains a Proj string:
     try:
-        p = Proj(str(nc.proj4))
+        p = Proj(str(nc.proj))
         print("Found projection information in global attribute proj4, using it")
     except:
         try:
@@ -702,7 +700,7 @@ def create_dummy_input_file(filename, F):
     for name, data in [["x", x], ["y", y], ["z", z], ["time", time]]:
         nc.variables[name][:] = data
 
-    nc.proj4 = "epsg:3413"
+    nc.proj = "epsg:3413"
 
     xx, yy = np.meshgrid(x, y)
 
@@ -841,7 +839,7 @@ def load_profiles(filename, projection, flip):
     -----------
     filename: filename of ESRI shape file
 
-    projection: proj4 projection object. (lon,lat) coordinates of
+    projection: proj projection object. (lon,lat) coordinates of
                 points along a profile are converted to (x,y)
                 coordinates in this projection. This should be the
                 projection used by the dataset we're extracting
