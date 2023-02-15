@@ -15,7 +15,7 @@ PKG_NAME = "pismanalysis"
 packages = [PKG_NAME]
 
 # Dependencies of pism-analysis
-requirements = ["pyproj", "configobj", "jinja2"]
+requirements = ["pyproj", "configobj", "jinja2", "py310-statsmodels", "unidecode"]
 
 setup(
     name="pismanalysis",
@@ -51,7 +51,7 @@ setup(
         "Operating System :: MacOS :: MacOS X",
         "Operating System :: Microsoft :: Windows",
         "Operating System :: POSIX :: Linux",
-        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.10",
         "Topic :: Scientific/Engineering :: Postprocessing",
     ],
 )

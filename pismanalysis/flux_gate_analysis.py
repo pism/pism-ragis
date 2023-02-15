@@ -6,6 +6,16 @@ import os
 from argparse import ArgumentParser
 from typing import Any, Dict, List, Optional, Union
 
+from collections.abc import (
+    Collection,
+    Hashable,
+    Iterable,
+    Iterator,
+    Mapping,
+    MutableMapping,
+    Sequence,
+)
+
 import cf_units
 import matplotlib.cm as cmx
 import matplotlib.colors as mplcolors
@@ -120,7 +130,10 @@ class FluxGate(object):
         self.varname_units: Union[str, None] = None
 
     def __repr__(self):
-        return "FluxGate"
+        return f"{self.gate_id}: {self.gate_name}"
+
+    def __iter__(self) -> Iterator[Hashable]:
+        return (key for key in self.experiments)
 
     def add_experiment(self, data):
         """
@@ -569,7 +582,7 @@ class FluxGateExperiment(object):
         self.m_id = data.m_id
 
     def __repr__(self):
-        return "FluxGateExperiment"
+        return f"{self.m_id}"
 
 
 class FluxGateObservations(object):
@@ -701,7 +714,69 @@ def export_csv_from_dict(filename, mdict, header=None, fmt=["%i", "%4.2f"]):
     )
 
 
-def make_correlation_figure(filename, exp):
+def make_correlation_figure(filename):
+    """
+    Create a Pearson R correlation plot.
+
+    Create a correlation plot for a given experiment, sorted by
+    decreasing correlation
+
+    Parameters
+    ----------
+    filename: string
+    exp: FluxGateExperiment
+
+    """
+    corrs = {}
+    for gate in flux_gates:
+        m_id = gate.pos_id
+        r = gate.corr[exp.m_id]
+        if not np.isnan(r):
+            corrs[m_id] = r
+    fig = plt.figure(figsize=[6.4, 12])
+    ax = fig.add_subplot(111)
+    y = np.arange(len(list(corrs.keys()))) + 1.25
+    for k, corr in enumerate(corrs_sorted):
+        if corr < 0.5:
+            colorVal = "#d7191c"
+        elif (corr >= pearson_r_threshold_low) and (corr < pearson_r_threshold_high):
+            colorVal = "#ff7f00"
+        else:
+            colorVal = "#33a02c"
+        ax.hlines(y[k], -1, corr, colors=colorVal, linestyle="dotted")
+        ax.plot(corr, y[k], "o", markersize=5, color=colorVal)
+
+    corr_median = np.nanmedian(list(corrs.values()))
+    ax.vlines(corr_median, 0, y[-1], linestyle="dotted", color="0.5")
+    print(f"median correlation: {corr_median:1.2f}")
+    plt.yticks(
+        y,
+        [f"{flux_gates[x].gate_name} ({flux_gates[x].gate_id})" for x in sort_order],
+    )
+    ax.set_xlabel("r (-)", labelpad=0.2)
+    ax.set_xlim(-1, 1.1)
+    ax.set_ylim(0, y[-1] + 1)
+    ticks = [-1, -0.5, 0, 0.5, 1]
+    ax.set_xticks(ticks)
+    ax.set_xticklabels(ticks)
+    # Only draw spine between the y-ticks
+    ax.spines["left"].set_bounds(y[0], y[-1])
+    ax.spines["bottom"].set_bounds(-1, 1)
+    # Hide the right and top spines
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+    # Only show ticks on the left and bottom spines
+    ax.yaxis.set_ticks_position("left")
+    ax.xaxis.set_ticks_position("bottom")
+    fig.tight_layout()
+    outname = os.path.join(odir, filename)
+    print(f"Saving {outname}")
+    fig.savefig(outname)
+    plt.close("all")
+    return corrs_dict
+
+
+def make_correlation_figure_sorted(filename, exp):
     """
     Create a Pearson R correlation plot.
 
@@ -760,8 +835,9 @@ def make_correlation_figure(filename, exp):
     ax.yaxis.set_ticks_position("left")
     ax.xaxis.set_ticks_position("bottom")
     fig.tight_layout()
-    print(f"Saving {filename}")
-    fig.savefig(filename)
+    outname = os.path.join(odir, filename)
+    print(f"Saving {outname}")
+    fig.savefig(outname)
     plt.close("all")
     return corrs_dict
 
@@ -1351,6 +1427,7 @@ if __name__ == "__main__":
         obs = ObservationsDataset(obs_file, varname)
         for flux_gate in flux_gates:
             flux_gate.add_observations(obs)
+        del obs
 
     # Add experiments to flux gates
     for k, filename in enumerate(args):
@@ -1358,6 +1435,8 @@ if __name__ == "__main__":
         experiment = ExperimentDataset(m_id, filename, varname)
         for flux_gate in flux_gates:
             flux_gate.add_experiment(experiment)
+
+        del experiment
 
     ne = len(flux_gates[0].experiments)
     ng = len(flux_gates)
@@ -1385,11 +1464,12 @@ if __name__ == "__main__":
         for exp in flux_gates[0].experiments:
             exp_str = "_".join(["pearson_r_experiment", str(exp.m_id), varname])
             outname = ".".join([exp_str, "pdf"])
-            corrs = make_correlation_figure(outname, exp)
+            corrs = make_correlation_figure_sorted(outname, exp)
             exp_str = "_".join(["coors_experiment", str(exp.m_id), varname])
-            outname = ".".join([exp_str, "csv"])
+            outname = os.path.join(odir, ".".join([exp_str, "csv"]))
             export_csv_from_dict(outname, corrs, header="id,correlation")
-
+        # outname = os.path.join(odir, "corrs.pdf")
+        # make_correlation_figure()
         experiments_df = []
         glaciers_above_threshold = []
         lengths = [gate.length() for gate in flux_gates]
