@@ -113,11 +113,15 @@ def compute_sensitivity_indices(
     problem,
     calc_variables,
     sensitivity_indices=["delta", "S1"],
+    verbose: bool = False,
 ):
     print(f"Processing {m_date}")
     missing_ids = list(set(id_df["id"]).difference(s_df["id"]))
     if missing_ids:
-        print("The following simulation ids are missing:\n   {}".format(missing_ids))
+        if verbose:
+            print(
+                "The following simulation ids are missing:\n   {}".format(missing_ids)
+            )
 
         id_df_missing_removed = id_df[~id_df["id"].isin(missing_ids)]
         params = np.array(
