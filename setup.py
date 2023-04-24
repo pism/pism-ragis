@@ -10,26 +10,26 @@ from setuptools import setup
 with open(str(Path(".", "VERSION").absolute())) as version_file:
     version = version_file.read().strip()
 
-PKG_NAME = "pismanalysis"
+PKG_NAME = "pismragis"
 
 packages = [PKG_NAME]
 
-# Dependencies of pism-analysis
-requirements = ["pyproj", "configobj", "jinja2", "py310-statsmodels", "unidecode"]
+# Dependencies of pism-ragis
+requirements = ["pandas"]
 
 setup(
-    name="pismanalysis",
+    name="pismragis",
     version=version,
     author="Andy Aschwanden",
     author_email="andy.aschwanden@gmail.com",
     description=("Postprocessing for PISM"),
     license="GPL 3.0",
     keywords="PISM",
-    url="https://github.com/pism/pism-analysis",
+    url="https://github.com/pism/pism-ragis",
     project_urls={
-        "Bug Tracker": "https://github.com/pism/pism-analysis/issues",
-        "Documentation": "https://github.com/pism/pism-analysis",
-        "Source Code": "https://github.com/pism/pism-analysis",
+        "Bug Tracker": "https://github.com/pism/pism-ragis/issues",
+        "Documentation": "https://github.com/pism/pism-ragis",
+        "Source Code": "https://github.com/pism/pism-ragis",
     },
     packages=[PKG_NAME],
     package_dir={PKG_NAME: PKG_NAME},
