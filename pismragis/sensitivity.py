@@ -103,7 +103,7 @@ def sensitivity_analysis(
 
     Sobol_df = pd.concat(Sobol_dfs)
     Sobol_df.reset_index(inplace=True, drop=True)
-    return Sobol_df, sensitivity_indices
+    return Sobol_df
 
 
 def compute_sensitivity_indices(
