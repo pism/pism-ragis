@@ -169,6 +169,7 @@ def compute_sensitivity_indices(
 def resample_ensemble_by_data(
     observed: pd.DataFrame,
     simulated: pd.DataFrame,
+    id_var: str = "id",
     calibration_start: float = 1992.0,
     calibration_end: float = 2017.0,
     fudge_factor: float = 3,
@@ -215,10 +216,10 @@ def resample_ensemble_by_data(
 
     resampled_list = []
     log_likes = []
-    experiments = sorted(simulated_calib_period["Experiment"].unique())
+    experiments = sorted(simulated_calib_period[id_var].unique())
     evals = []
     for i in experiments:
-        exp_ = simulated_calib_period[(simulated_calib_period["Experiment"] == i)]
+        exp_ = simulated_calib_period[(simulated_calib_period[id_var] == i)]
         exp_interp = interp1d(exp_["Year"], exp_[m_var])
         log_like = 0.0
         for year, observed_mean, observed_std in zip(
@@ -249,7 +250,7 @@ def resample_ensemble_by_data(
     resampled_experiments = np.random.choice(experiments, n_samples, p=weights)
     new_frame = []
     for i in resampled_experiments:
-        new_frame.append(simulated[(simulated["Experiment"] == i)])
+        new_frame.append(simulated[(simulated[id_var] == i)])
     simulated_resampled = pd.concat(new_frame)
     resampled_list.append(simulated_resampled)
 
