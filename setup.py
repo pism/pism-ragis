@@ -15,7 +15,7 @@ PKG_NAME = "pismragis"
 packages = [PKG_NAME]
 
 # Dependencies of pism-ragis
-requirements = ["pandas"]
+requirements = ["pandas", "xarray", "rioxarray", "SALib"]
 
 setup(
     name="pismragis",

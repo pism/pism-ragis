@@ -167,16 +167,16 @@ def compute_sensitivity_indices(
 
 
 def resample_ensemble_by_data(
-    observed,
-    simulated,
-    calibration_start=1992,
-    calibration_end=2017,
-    fudge_factor=3,
-    n_samples=100,
-    verbose=False,
-    m_var="Mass (Gt)",
-    m_var_std="Mass uncertainty (Gt)",
-):
+    observed: pd.DataFrame,
+    simulated: pd.DataFrame,
+    calibration_start: float = 1992.0,
+    calibration_end: float = 2017.0,
+    fudge_factor: float = 3,
+    n_samples: int = 100,
+    verbose: bool = False,
+    m_var: str = "Mass (Gt)",
+    m_var_std: str = "Mass uncertainty (Gt)",
+) -> pd.DataFrame:
     """
     Resampling algorithm by Douglas C. Brinkerhoff
 
