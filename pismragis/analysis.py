@@ -23,6 +23,7 @@ import pandas as pd
 from joblib import Parallel, delayed
 from pandas.api.types import is_string_dtype
 from SALib.analyze import delta
+from scipy.interpolate import interp1d
 from tqdm import tqdm
 
 from pismragis.processing import tqdm_joblib
@@ -163,3 +164,95 @@ def compute_sensitivity_indices(
         a_df = pd.concat(s_dfs)
         Sobol_dfs.append(a_df)
     return pd.concat(Sobol_dfs)
+
+
+def resample_ensemble_by_data(
+    observed,
+    simulated,
+    calibration_start=1992,
+    calibration_end=2017,
+    fudge_factor=3,
+    n_samples=100,
+    verbose=False,
+    m_var="Mass (Gt)",
+    m_var_std="Mass uncertainty (Gt)",
+):
+    """
+    Resampling algorithm by Douglas C. Brinkerhoff
+
+
+    Parameters
+    ----------
+    observed : pandas.DataFrame
+        A dataframe with observations
+    simulated : pandas.DataFrame
+        A dataframe with simulations
+    calibration_start : float
+        Start year for calibration
+    calibration_end : float
+        End year for calibration
+    fudge_factor : float
+        Tolerance for simulations. Calculated as fudge_factor * standard deviation of observed
+    n_samples : int
+        Number of samples to draw.
+
+    """
+
+    observed_calib_time = (observed["Year"] >= calibration_start) & (
+        observed["Year"] <= calibration_end
+    )
+    observed_calib_period = observed[observed_calib_time]
+    observed_interp_mean = interp1d(
+        observed_calib_period["Year"], observed_calib_period[m_var]
+    )
+    observed_interp_std = interp1d(
+        observed_calib_period["Year"], observed_calib_period[m_var_std]
+    )
+    simulated_calib_time = (simulated["Year"] >= calibration_start) & (
+        simulated["Year"] <= calibration_end
+    )
+    simulated_calib_period = simulated[simulated_calib_time]
+
+    resampled_list = []
+    log_likes = []
+    experiments = sorted(simulated_calib_period["Experiment"].unique())
+    evals = []
+    for i in experiments:
+        exp_ = simulated_calib_period[(simulated_calib_period["Experiment"] == i)]
+        exp_interp = interp1d(exp_["Year"], exp_[m_var])
+        log_like = 0.0
+        for year, observed_mean, observed_std in zip(
+            observed_calib_period["Year"],
+            observed_calib_period[m_var],
+            observed_calib_period[m_var_std],
+        ):
+            try:
+                observed_std *= fudge_factor
+                exp = exp_interp(year)
+
+                log_like -= 0.5 * (
+                    (exp - observed_mean) / observed_std
+                ) ** 2 + 0.5 * np.log(2 * np.pi * observed_std**2)
+                # print(i, year, f"{observed_mean:.3f}", f"{exp:.3f}")
+            except ValueError:
+                pass
+        if log_like != 0:
+            evals.append(i)
+            log_likes.append(log_like)
+            if verbose:
+                print(f"Experiment {i:.0f}: {log_like:.2f}")
+    experiments = np.array(evals)
+    w = np.array(log_likes)
+    w -= w.mean()
+    weights = np.exp(w)
+    weights /= weights.sum()
+    resampled_experiments = np.random.choice(experiments, n_samples, p=weights)
+    new_frame = []
+    for i in resampled_experiments:
+        new_frame.append(simulated[(simulated["Experiment"] == i)])
+    simulated_resampled = pd.concat(new_frame)
+    resampled_list.append(simulated_resampled)
+
+    simulated_resampled = pd.concat(resampled_list)
+
+    return simulated_resampled
