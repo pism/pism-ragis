@@ -18,7 +18,9 @@
 
 import contextlib
 import os
+import pathlib
 import re
+import shutil
 import time
 from datetime import datetime
 from typing import Union
@@ -29,6 +31,9 @@ import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
 from tqdm import tqdm
+
+kg2cmsle = 1 / 1e12 * 1.0 / 362.5 / 10.0
+gt2cmsle = 1 / 362.5 / 10.0
 
 
 @contextlib.contextmanager
@@ -49,9 +54,17 @@ def tqdm_joblib(tqdm_object):
         tqdm_object.close()
 
 
-def ncfile2dataframe(infile, resample: Union[str, None] = None) -> pd.DataFrame:
+def ncfile2dataframe(
+    infile,
+    resample: Union[str, None] = None,
+    add_vars: bool = True,
+    norm_year: float = 1992.0,
+    verbose: bool = False,
+) -> pd.DataFrame:
 
     if os.path.isfile(infile):
+        if verbose:
+            print(f"Opening {infile}")
         with xr.open_dataset(infile) as ds:
             if resample == "monthly":
                 ds = ds.resample(time="1MS").mean()
@@ -67,6 +80,7 @@ def ncfile2dataframe(infile, resample: Union[str, None] = None) -> pd.DataFrame:
             m_dx = int(m_dx_re.group(1))
             datetimeindex = ds.indexes["time"]
             years = [to_decimal_year(x.to_pydatetime()) for x in datetimeindex]
+            norm_year_idx = np.nonzero(np.array(years) == norm_year)
             nt = len(datetimeindex)
             id_S = pd.Series(data=np.repeat(m_id, nt), index=datetimeindex, name="id")
             S = [id_S]
@@ -91,21 +105,41 @@ def ncfile2dataframe(infile, resample: Union[str, None] = None) -> pd.DataFrame:
             S.append(m_Y)
             df = pd.concat(S, axis=1).reset_index()
             df["resolution_m"] = m_dx
-
-        return pd.concat(S, axis=1).reset_index()
+            if add_vars:
+                if "limnsw (kg)" in df.columns:
+                    df["Mass (Gt)"] = (
+                        df["limnsw (kg)"] - df["limnsw (kg)"][norm_year_idx[0][0]]
+                    ) / 1e12
+                    df[f"Contribution to sea-level since {norm_year:.0f} (cm SLE)"] = (
+                        df["Mass (Gt)"] * gt2cmsle
+                    )
+                if "grounding_line_flux (Gt year-1)" in df.columns:
+                    df["D (Gt/yr)"] = df["grounding_line_flux (Gt year-1)"]
+        return df
 
 
 def convert_netcdf_to_dataframe(
-    infiles,
+    infiles: list,
     resample: Union[str, None] = None,
     n_jobs: int = 4,
+    add_vars: bool = True,
+    norm_year: float = 1992.0,
+    verbose: bool = False,
 ) -> pd.DataFrame:
-    n_files = len(infiles)
 
+    """
+    Convert list of netCDF files to Pandas DataFrame.
+
+
+    """
+    n_files = len(infiles)
+    print("Converting netcdf files to pandas.DataFrame")
+    print("-------------------------------------------\n")
     start_time = time.perf_counter()
     with tqdm_joblib(tqdm(desc="Processing files", total=n_files)) as progress_bar:
         result = Parallel(n_jobs=n_jobs)(
-            delayed(ncfile2dataframe)(infile, resample) for infile in infiles
+            delayed(ncfile2dataframe)(infile, resample, add_vars, norm_year, verbose)
+            for infile in infiles
         )
         del progress_bar
     finish_time = time.perf_counter()
@@ -113,6 +147,7 @@ def convert_netcdf_to_dataframe(
     print(f"Program finished in {time_elapsed:.0f} seconds")
 
     df = pd.concat(result)
+
     return df
 
 
@@ -126,3 +161,35 @@ def to_decimal_year(date):
     fraction = year_elapsed / year_duration
 
     return date.year + fraction
+
+
+def check_file(infile: Union[str, pathlib.Path], norm_year: float = 1992.0) -> bool:
+    with xr.open_dataset(infile) as ds:
+        datetimeindex = ds.indexes["time"]
+        years = np.array([to_decimal_year(x.to_pydatetime()) for x in datetimeindex])
+        monotonically_increasing = np.all(
+            years.reshape(1, -1)[:, 1:] >= years.reshape(1, -1)[:, :-1], axis=1
+        )[0]
+        if (years[-1] >= norm_year) and monotonically_increasing:
+            return True
+        else:
+            return False
+
+
+def copy_file(
+    infile: Union[str, pathlib.Path], outdir: Union[str, pathlib.Path]
+) -> None:
+    """
+    Copy infile to outdir
+    """
+    if infile is not pathlib.Path:
+        in_path = pathlib.Path(infile)
+    else:
+        in_path = infile  # type: ignore
+    file_name = in_path.name
+    if outdir is not pathlib.Path:
+        out_path = pathlib.Path(outdir)
+    else:
+        out_path = outdir  # type: ignore
+    outfile = out_path / file_name
+    shutil.copy(in_path, out_path)

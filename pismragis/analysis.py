@@ -49,6 +49,9 @@ def sensitivity_analysis(
     sensitivity_indices: list = ["delta", "S1"],
 ):
 
+    print("Running sensitivity analysis")
+    print("-------------------------------------------\n")
+
     # remove True/False
     id_df = (pd.read_csv(ensemble_file) * 1).replace(np.nan, 0)
 
