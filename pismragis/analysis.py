@@ -17,6 +17,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 import pathlib
+import time
 
 import numpy as np
 import pandas as pd
@@ -51,6 +52,7 @@ def sensitivity_analysis(
 
     print("Running sensitivity analysis")
     print("-------------------------------------------\n")
+    start_time = time.perf_counter()
 
     # remove True/False
     id_df = (pd.read_csv(ensemble_file) * 1).replace(np.nan, 0)
@@ -107,6 +109,11 @@ def sensitivity_analysis(
 
     Sobol_df = pd.concat(Sobol_dfs)
     Sobol_df.reset_index(inplace=True, drop=True)
+
+    finish_time = time.perf_counter()
+    time_elapsed = finish_time - start_time
+    print(f"Program finished in {time_elapsed:.0f} seconds")
+
     return Sobol_df
 
 
