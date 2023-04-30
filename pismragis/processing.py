@@ -134,7 +134,7 @@ def convert_netcdf_to_dataframe(
     """
     n_files = len(infiles)
     print("Converting netcdf files to pandas.DataFrame")
-    print("-------------------------------------------\n")
+    print("-------------------------------------------")
     start_time = time.perf_counter()
     with tqdm_joblib(tqdm(desc="Processing files", total=n_files)) as progress_bar:
         result = Parallel(n_jobs=n_jobs)(
@@ -144,7 +144,8 @@ def convert_netcdf_to_dataframe(
         del progress_bar
     finish_time = time.perf_counter()
     time_elapsed = finish_time - start_time
-    print(f"Program finished in {time_elapsed:.0f} seconds")
+    print(f"Conversion finished in {time_elapsed:.0f} seconds")
+    print("-------------------------------------------")
 
     df = pd.concat(result)
 

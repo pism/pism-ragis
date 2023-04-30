@@ -48,7 +48,7 @@ def sensitivity_analysis(
     calc_variables: list = ["grounding_line_flux (Gt year-1)", "limnsw (kg)"],
     n_jobs: int = 4,
     sensitivity_indices: list = ["delta", "S1"],
-):
+) -> pd.DataFrame:
 
     print("Running sensitivity analysis")
     print("-------------------------------------------\n")
@@ -80,9 +80,9 @@ def sensitivity_analysis(
     df = pd.concat([x for _, x in df.groupby(by="time") if len(x) > 1])
     n_dates = len(df["time"].unique())
     if n_jobs == 1:
-        Sobol_dfs = []
+        sensitivity_dfs = []
         for m_date, s_df in df.groupby(by="time"):
-            Sobol_dfs.append(
+            sensitivity_dfs.append(
                 compute_sensitivity_indices(
                     m_date,
                     s_df,
@@ -93,8 +93,8 @@ def sensitivity_analysis(
                 )
             )
     else:
-        with tqdm_joblib(tqdm(desc="Processing file", total=n_dates)) as progress_bar:
-            Sobol_dfs = Parallel(n_jobs=n_jobs)(
+        with tqdm_joblib(tqdm(desc="Processing date", total=n_dates)) as progress_bar:
+            sensitivity_dfs = Parallel(n_jobs=n_jobs)(
                 delayed(compute_sensitivity_indices)(
                     m_date,
                     s_df,
@@ -107,14 +107,14 @@ def sensitivity_analysis(
             )
             del progress_bar
 
-    Sobol_df = pd.concat(Sobol_dfs)
-    Sobol_df.reset_index(inplace=True, drop=True)
+    sensitivity_df = pd.concat(sensitivity_dfs)
+    sensitivity_df.reset_index(inplace=True, drop=True)
 
     finish_time = time.perf_counter()
     time_elapsed = finish_time - start_time
     print(f"Program finished in {time_elapsed:.0f} seconds")
 
-    return Sobol_df
+    return sensitivity_df
 
 
 def compute_sensitivity_indices(
@@ -126,7 +126,6 @@ def compute_sensitivity_indices(
     sensitivity_indices=["delta", "S1"],
     verbose: bool = False,
 ):
-    print(f"Processing {m_date}")
     missing_ids = list(set(id_df["id"]).difference(s_df["id"]))
     if missing_ids:
         if verbose:
@@ -140,7 +139,7 @@ def compute_sensitivity_indices(
         )
     else:
         params = np.array(id_df.drop(columns="id").values, dtype=np.float32)
-    Sobol_dfs = []
+    sensitivity_dfs = []
     for calc_variable in calc_variables:
         response_matrix = s_df[calc_variable].values
         Si = delta.analyze(
@@ -172,8 +171,8 @@ def compute_sensitivity_indices(
             s_dfs.append(pd.concat([m_df, m_conf_df]))
 
         a_df = pd.concat(s_dfs)
-        Sobol_dfs.append(a_df)
-    return pd.concat(Sobol_dfs)
+        sensitivity_dfs.append(a_df)
+    return pd.concat(sensitivity_dfs)
 
 
 def resample_ensemble_by_data(

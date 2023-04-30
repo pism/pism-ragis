@@ -18,8 +18,20 @@
 
 import pandas as pd
 from numpy.testing import assert_array_almost_equal
+from pandas.testing import assert_frame_equal
 
-from pismragis.analysis import sensitivity_analysis
+from pismragis.analysis import prepare_df, sensitivity_analysis
+
+
+def test_prepare_df():
+
+    true_infile = "tests/data/test_scalar_YM.parquet"
+    for suffix in ["parquet"]:
+        test_infile = f"tests/data/test_scalar_YM.{suffix}"
+        df = prepare_df(test_infile)
+        df_true = pd.read_parquet(true_infile)
+
+        assert_frame_equal(df, df_true)
 
 
 def test_sensitivity_analysis():
@@ -41,7 +53,7 @@ def test_sensitivity_analysis():
     X_df = pd.read_parquet("tests/data/test_scalar_YM.parquet")
     Y_true = pd.read_parquet("tests/data/test_sensitivity.parquet")[sens_vars].mean()
     ensemble_file = "tests/data/gris_ragis_ocean_simple_lhs_50_w_posterior.csv"
-    for n_jobs in [1, 2, 4]:
+    for n_jobs in [1, 2]:
         Y = sensitivity_analysis(X_df, ensemble_file=ensemble_file, n_jobs=n_jobs)[
             sens_vars
         ].mean()

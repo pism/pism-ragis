@@ -24,6 +24,32 @@ gt2cmsle = 1 / 362.5 / 10.0
 sigma = 2
 
 
+def load_imbie_csv(url: str = "imbie_greenland_2021_Gt.csv", proj_start=1992):
+
+    df = pd.read_csv(url)
+
+    df = df.rename(
+        columns={
+            "Mass balance (Gt/yr)": "Mass change (Gt/yr)",
+            "Mass balance uncertainty (Gt/yr)": "Mass change uncertainty (Gt/yr)",
+            "Cumulative mass balance (Gt)": "Mass (Gt)",
+            "Cumulative mass balance uncertainty (Gt)": "Mass uncertainty (Gt)",
+        }
+    )
+    for v in [
+        "Mass (Gt)",
+    ]:
+        df[v] -= df[df["Year"] == proj_start][v].values
+
+    cmSLE = 1.0 / 362.5 / 10.0
+    df["SLE (cm)"] = -df["Mass (Gt)"] * cmSLE
+    df["SLE uncertainty (cm)"] = df["Mass uncertainty (Gt)"] * cmSLE
+    df["SLE change uncertainty (cm/yr)"] = (
+        df["Mass change uncertainty (Gt/yr)"] * gt2cmsle
+    )
+    return df
+
+
 def load_imbie(
     url: str = "http://imbie.org/wp-content/uploads/2012/11/imbie_dataset_greenland_dynamics-2020_02_28.xlsx",
 ):
