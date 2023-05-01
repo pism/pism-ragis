@@ -18,6 +18,7 @@
 
 import pathlib
 import time
+from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -30,12 +31,25 @@ from tqdm import tqdm
 from pismragis.processing import tqdm_joblib
 
 
-def prepare_df(ifile: str):
-    suffix = pathlib.Path(ifile).suffix
+def prepare_df(url: str):
+    """
+    Helper function to read csv or parquet file and return pd.DataFrame
+
+    Parameters
+    ----------
+    url : str
+        The file location
+
+    Returns
+    -------
+    pd.DataFrame
+        a Pandas DataFrame
+    """
+    suffix = pathlib.Path(url).suffix
     if suffix in (".csv", ".gz"):
-        df = pd.read_csv(ifile, parse_dates=["time"])
+        df = pd.read_csv(str, parse_dates=["time"])
     elif suffix in (".parquet"):
-        df = pd.read_parquet(ifile)
+        df = pd.read_parquet(url)
     else:
         print(f"{suffix} not recognized")
 
@@ -45,12 +59,43 @@ def prepare_df(ifile: str):
 def sensitivity_analysis(
     df: pd.DataFrame,
     ensemble_file: str,
-    calc_variables: list = ["grounding_line_flux (Gt year-1)", "limnsw (kg)"],
+    calc_variables: Union[str, list] = [
+        "grounding_line_flux (Gt year-1)",
+        "limnsw (kg)",
+    ],
     n_jobs: int = 4,
-    sensitivity_indices: list = ["delta", "S1"],
+    sensitivity_indices: Union[str, list] = ["delta", "S1"],
 ) -> pd.DataFrame:
 
-    print("Running sensitivity analysis")
+    """
+    Calculate sensitivity indices using SALIB and return pd.DataFrame
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        A DataFrame procduced with processing.convert_netcdf_to_dataframe
+    ensemble_file: str
+        A csv file that maps ensemble member id's to parameters
+    calc_variables: list
+        A list of variables for which sensitivity indices are calculated
+    n_jobs: int
+        Number of parallel workers
+    sensitivity_indices: str or list
+        A list of sensitivity indices
+
+    Returns
+    -------
+    pd.DataFrame
+        A Pandas DataFrame with sensitivity indices
+    """
+
+    if isinstance(calc_variables, str):
+        calc_variables = [calc_variables]
+
+    if isinstance(sensitivity_indices, str):
+        sensitivity_indices = [sensitivity_indices]
+
+        print("Running sensitivity analysis")
     print("-------------------------------------------\n")
     start_time = time.perf_counter()
 
@@ -119,13 +164,48 @@ def sensitivity_analysis(
 
 def compute_sensitivity_indices(
     m_date,
-    s_df,
-    id_df,
-    problem,
-    calc_variables,
-    sensitivity_indices=["delta", "S1"],
+    s_df: pd.DataFrame,
+    id_df: pd.DataFrame,
+    problem: dict,
+    calc_variables: list,
+    sensitivity_indices: list,
     verbose: bool = False,
-):
+) -> pd.DataFrame:
+
+    """
+    Calculate sensitivity indices using SALIB and return pd.DataFrame
+
+    Parameters
+    ----------
+    m_date: datetime64[ns]
+        The date stamp of the time to be processed
+    s_df : pd.DataFrame
+        A DataFrame procduced with processing.convert_netcdf_to_dataframe
+    id_df : pd.DataFrame
+        A DataFrame with parameters for all ensemble members
+    problem: dict
+        A SALib-like problem description, see https://salib.readthedocs.io/en/latest/user_guide/basics.html#an-example
+        e.g.:
+        problem = {
+                   'num_vars': 3,
+                    'names': ['x1', 'x2', 'x3'],
+                    'bounds': [[-3.14159265359, 3.14159265359],
+                               [-3.14159265359, 3.14159265359],
+                               [-3.14159265359, 3.14159265359]]
+                   }
+     calc_variables: list
+        A list of variables for which sensitivity indices are calculated
+     n_jobs: int
+         Number of parallel workers
+     sensitivity_indices: str or list
+         A list of sensitivity indices
+
+    Returns
+    -------
+    pd.DataFrame
+        A Pandas DataFrame with sensitivity indices
+    """
+
     missing_ids = list(set(id_df["id"]).difference(s_df["id"]))
     if missing_ids:
         if verbose:
