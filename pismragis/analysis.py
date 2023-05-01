@@ -33,7 +33,7 @@ from pismragis.processing import tqdm_joblib
 
 def prepare_df(url: str):
     """
-    Helper function to read csv or parquet file and return pd.DataFrame
+    Helper function to read csv or parquet file and return pd.DataFrame.
 
     Parameters
     ----------
@@ -68,7 +68,7 @@ def sensitivity_analysis(
     sensitivity_indices: Union[str, list] = ["delta", "S1"],
 ) -> pd.DataFrame:
     """
-    Calculate sensitivity indices using SALIB and return pd.DataFrame
+    Calculate sensitivity indices using SALIB and return pd.DataFrame.
 
     Parameters
     ----------
@@ -172,7 +172,7 @@ def compute_sensitivity_indices(
     verbose: bool = False,
 ) -> pd.DataFrame:
     """
-    Calculate sensitivity indices using SALIB and return pd.DataFrame
+    Calculate sensitivity indices using SALIB and return pd.DataFrame.
 
     Parameters
     ----------
