@@ -45,6 +45,7 @@ def prepare_df(url: str):
     pd.DataFrame
         a Pandas DataFrame
     """
+
     suffix = pathlib.Path(url).suffix
     if suffix in (".csv", ".gz"):
         df = pd.read_csv(str, parse_dates=["time"])
@@ -66,7 +67,6 @@ def sensitivity_analysis(
     n_jobs: int = 4,
     sensitivity_indices: Union[str, list] = ["delta", "S1"],
 ) -> pd.DataFrame:
-
     """
     Calculate sensitivity indices using SALIB and return pd.DataFrame
 
@@ -171,7 +171,6 @@ def compute_sensitivity_indices(
     sensitivity_indices: list,
     verbose: bool = False,
 ) -> pd.DataFrame:
-
     """
     Calculate sensitivity indices using SALIB and return pd.DataFrame
 
