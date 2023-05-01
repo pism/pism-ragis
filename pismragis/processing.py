@@ -115,6 +115,13 @@ def ncfile2dataframe(
                     )
                 if "grounding_line_flux (Gt year-1)" in df.columns:
                     df["D (Gt/yr)"] = df["grounding_line_flux (Gt year-1)"]
+                if (
+                    "tendency_of_ice_mass_due_to_surface_mass_flux (Gt year-1)"
+                    in df.columns
+                ):
+                    df["SMB (Gt/yr)"] = df[
+                        "tendency_of_ice_mass_due_to_surface_mass_flux (Gt year-1)"
+                    ]
         return df
 
 
