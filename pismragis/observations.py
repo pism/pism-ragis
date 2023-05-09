@@ -43,7 +43,7 @@ def load_imbie_csv(url: str = "imbie_greenland_2021_Gt.csv", proj_start=1992):
 
     cmSLE = 1.0 / 362.5 / 10.0
     df["SLE (cm)"] = -df["Mass (Gt)"] * cmSLE
-    df["SLE uncertainty (cm)"] = df["Mass uncertainty (Gt)"] * cmSLE
+    df["SLE uncertainty (cm)"] = -df["Mass uncertainty (Gt)"] * cmSLE
     df["SLE change uncertainty (cm/yr)"] = (
         df["Mass change uncertainty (Gt/yr)"] * gt2cmsle
     )
@@ -55,7 +55,7 @@ def load_imbie(
 ):
     """
     Loading the IMBIE Greenland data set downloaded from
-    http://imbie.org/wp-content/uploads/2012/11/imbie_dataset_greenland_dynamics-2020_02_28.xlsx
+    http://imbie.org/wp-content/uploads/2012/11/imbie_dataset_greenland_dynamics-2020_02_28.xlsx.
 
     """
     df_df = pd.read_excel(

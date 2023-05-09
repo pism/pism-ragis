@@ -110,9 +110,7 @@ def ncfile2dataframe(
                     df["Mass (Gt)"] = (
                         df["limnsw (kg)"] - df["limnsw (kg)"][norm_year_idx[0][0]]
                     ) / 1e12
-                    df[f"Contribution to sea-level since {norm_year:.0f} (cm SLE)"] = (
-                        df["Mass (Gt)"] * gt2cmsle
-                    )
+                    df["SLE (cm)"] = -df["Mass (Gt)"] * gt2cmsle
                 if "grounding_line_flux (Gt year-1)" in df.columns:
                     df["D (Gt/yr)"] = df["grounding_line_flux (Gt year-1)"]
                 if (
