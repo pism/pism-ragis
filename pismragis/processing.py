@@ -198,4 +198,6 @@ def copy_file(
     else:
         out_path = outdir  # type: ignore
     outfile = out_path / file_name
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
     shutil.copy(in_path, out_path)

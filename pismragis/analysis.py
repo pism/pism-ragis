@@ -322,7 +322,6 @@ def resample_ensemble_by_data(
                 log_like -= 0.5 * (
                     (exp - observed_mean) / observed_std
                 ) ** 2 + 0.5 * np.log(2 * np.pi * observed_std**2)
-                # print(i, year, f"{observed_mean:.3f}", f"{exp:.3f}")
             except ValueError:
                 pass
         if log_like != 0:
