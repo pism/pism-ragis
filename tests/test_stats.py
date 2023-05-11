@@ -25,7 +25,6 @@ from pismragis.stats import run_stats
 
 
 def test_run_stats():
-
     infiles = glob("tests/data/ts_gris_g1200m_v2023_RAGIS_id_*_1980-1-1_2020-1-1.nc")
     df = run_stats(infiles)
     df_true = pd.read_csv("tests/data/test_run_stats.csv")
