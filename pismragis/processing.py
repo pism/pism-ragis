@@ -61,7 +61,6 @@ def ncfile2dataframe(
     norm_year: float = 1992.0,
     verbose: bool = False,
 ) -> pd.DataFrame:
-
     if os.path.isfile(infile):
         if verbose:
             print(f"Opening {infile}")
@@ -131,7 +130,6 @@ def convert_netcdf_to_dataframe(
     norm_year: float = 1992.0,
     verbose: bool = False,
 ) -> pd.DataFrame:
-
     """
     Convert list of netCDF files to Pandas DataFrame.
 
@@ -158,7 +156,6 @@ def convert_netcdf_to_dataframe(
 
 
 def to_decimal_year(date):
-
     year = date.year
     start_of_this_year = datetime(year=year, month=1, day=1)
     start_of_next_year = datetime(year=year + 1, month=1, day=1)
