@@ -24,7 +24,6 @@ from pismragis.analysis import prepare_df, sensitivity_analysis
 
 
 def test_prepare_df():
-
     true_infile = "tests/data/test_scalar_YM.parquet"
     for suffix in ["parquet"]:
         test_infile = f"tests/data/test_scalar_YM.{suffix}"
@@ -35,7 +34,6 @@ def test_prepare_df():
 
 
 def test_sensitivity_analysis():
-
     sens_vars = [
         "vcm",
         "gamma_T",

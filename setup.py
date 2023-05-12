@@ -15,14 +15,27 @@ PKG_NAME = "pismragis"
 packages = [PKG_NAME]
 
 # Dependencies of pism-ragis
-requirements = ["pandas", "xarray", "rioxarray", "SALib"]
+requirements = [
+    "pandas",
+    "xarray",
+    "rioxarray",
+    "SALib",
+    "joblib",
+    "seaborn",
+    "glob",
+    "openpyxl",
+    "pyarrow",
+    "fastparquet",
+]
 
 setup(
     name="pismragis",
     version=version,
     author="Andy Aschwanden",
     author_email="andy.aschwanden@gmail.com",
-    description=("Postprocessing for PISM"),
+    description=(
+        """Home of NASA ROSES project "A Reanalysis of the Greenland Ice Sheet" """
+    ),
     license="GPL 3.0",
     keywords="PISM",
     url="https://github.com/pism/pism-ragis",

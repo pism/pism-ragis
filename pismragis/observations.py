@@ -25,7 +25,6 @@ sigma = 2
 
 
 def load_imbie_csv(url: str = "imbie_greenland_2021_Gt.csv", proj_start=1992):
-
     df = pd.read_csv(url)
 
     df = df.rename(
@@ -114,7 +113,6 @@ def plot_imbie(
     d_color: str = "#648fff",
     smb_color: str = "#dc267f",
 ):
-
     fig, axs = plt.subplots(nrows=2, ncols=1, sharex="col", figsize=(6.2, 4))
     fig.subplots_adjust(wspace=0.0, hspace=0.0)
 
