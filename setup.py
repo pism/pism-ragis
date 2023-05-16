@@ -18,11 +18,9 @@ packages = [PKG_NAME]
 requirements = [
     "pandas",
     "xarray",
-    "rioxarray",
     "SALib",
     "joblib",
     "seaborn",
-    "glob",
     "openpyxl",
     "pyarrow",
     "fastparquet",

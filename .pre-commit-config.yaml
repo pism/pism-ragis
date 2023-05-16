@@ -42,9 +42,9 @@ repos:
 
   # - repo: local
   #   hooks:
-  #     - id: pytest # pytest is a pre-commit hook
-  #       name: pytest
-  #       entry: pytest
-  #       language: system
-  #       types: [python]
-  #       exclude: ^venv/ ^.git/ ^.vscode/ ^.DS_Store
+  #    - id: pytest # pytest is a pre-commit hook
+  #      name: pytest
+  #      entry: pytest
+  #      language: system
+  #      types: [python]
+  #      exclude: ^venv/ ^.git/ ^.vscode/ ^.DS_Store
