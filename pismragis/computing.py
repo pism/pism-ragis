@@ -8,9 +8,12 @@ Provides:
 
 """
 
+import inspect
 import math
 import os
 import os.path
+import shlex
+import subprocess
 import sys
 from collections import OrderedDict
 from typing import Dict, Union
@@ -80,7 +83,6 @@ def generate_domain(domain):
         )
     else:
         print(("Domain {} not recognized, exiting".format(domain)))
-        import sys
 
         sys.exit(0)
 
@@ -407,214 +409,48 @@ def generate_grid_description(grid_resolution, domain, restart=False):
     Lz = 4000
     Lbz = 2000
 
-    if domain.lower() in ("greenland_ext", "gris_ext", "greenland", "gris"):
-        if domain.lower() in ("greenland_ext", "gris_ext"):
-            mx_max = 14400
-            my_max = 24080
-        else:
-            mx_max = 10560
-            my_max = 18240
+    if domain.lower() in ("greenland_ext", "gris_ext"):
+        mx_max = 14400
+        my_max = 24080
+    else:
+        mx_max = 10560
+        my_max = 18240
 
-        resolution_max = 150
+    resolution_max = 150
 
-        accepted_resolutions = [
-            150,
-            300,
-            450,
-            600,
-            900,
-            1200,
-            1500,
-            1800,
-            2400,
-            3000,
-            3600,
-            4500,
-            6000,
-            9000,
-            18000,
-            36000,
-        ]
+    accepted_resolutions = [
+        150,
+        300,
+        450,
+        600,
+        900,
+        1200,
+        1500,
+        1800,
+        2400,
+        3000,
+        3600,
+        4500,
+        6000,
+        9000,
+        18000,
+        36000,
+    ]
 
-        try:
-            grid_resolution in accepted_resolutions
-            pass
-        except:
-            print(("grid resolution {}m not recognized".format(grid_resolution)))
+    assert grid_resolution in accepted_resolutions
 
-        if grid_resolution < 1200:
-            skip_max = 200
-            mz = 201
-            mzb = 21
-        elif (grid_resolution >= 1200) and (grid_resolution < 4500):
-            skip_max = 100
-            mz = 201
-            mzb = 21
-        elif (grid_resolution >= 4500) and (grid_resolution < 18000):
-            skip_max = 50
-            mz = 201
-            mzb = 21
-        else:
-            skip_max = 20
-            mz = 101
-            mzb = 11
-
-    elif domain.lower() in ("jakobshavn", "jib"):
-        mx_max = 3840
-        my_max = 2640
-
-        resolution_max = 150
-
-        accepted_resolutions = [
-            150,
-            300,
-            450,
-            600,
-            900,
-            1200,
-            1500,
-            1800,
-            2400,
-            3000,
-            3600,
-            4500,
-            9000,
-        ]
-
-        try:
-            grid_resolution in accepted_resolutions
-            pass
-        except:
-            print(("grid resolution {}m not recognized".format(grid_resolution)))
-
-        if grid_resolution < 1200:
-            skip_max = 200
-            mz = 201
-            mzb = 21
-        elif (grid_resolution >= 1200) and (grid_resolution < 4500):
-            skip_max = 100
-            mz = 201
-            mzb = 21
-        elif (grid_resolution >= 4500) and (grid_resolution < 18000):
-            skip_max = 50
-            mz = 201
-            mzb = 21
-        else:
-            skip_max = 20
-            mz = 101
-            mzb = 11
-
-    elif domain.lower() in ["qaanaaq"]:
-        mx_max = 960
-        my_max = 1020
-
-        resolution_max = 150
-
-        accepted_resolutions = [
-            150,
-            300,
-            450,
-            600,
-            900,
-            1200,
-            1500,
-            1800,
-            2400,
-            3000,
-            3600,
-            4500,
-            9000,
-        ]
-
-        try:
-            grid_resolution in accepted_resolutions
-            pass
-        except:
-            print(("grid resolution {}m not recognized".format(grid_resolution)))
-
-        if grid_resolution < 1200:
-            skip_max = 200
-            mz = 201
-            mzb = 21
-        elif (grid_resolution >= 1200) and (grid_resolution < 4500):
-            skip_max = 100
-            mz = 201
-            mzb = 21
-        elif (grid_resolution >= 4500) and (grid_resolution < 18000):
-            skip_max = 50
-            mz = 201
-            mzb = 21
-        else:
-            skip_max = 20
-            mz = 101
-            mzb = 11
-
-    elif domain.lower() in ["qaamerujup"]:
-        mx_max = 520
-        my_max = 240
-
-        resolution_max = 150
-
-        accepted_resolutions = [150, 300, 450, 600, 900, 1200]
-
-        try:
-            grid_resolution in accepted_resolutions
-            pass
-        except:
-            print(("grid resolution {}m not recognized".format(grid_resolution)))
-
-        if grid_resolution >= 900:
-            skip_max = 200
-            mz = 201
-            mzb = 21
-        else:
-            skip_max = 200
-            mz = 201
-            mzb = 11
-
-    elif domain.lower() in ("nw"):
-        mx_max = 4000
-        my_max = 2600
-
-        resolution_max = 150
-
-        accepted_resolutions = [
-            150,
-            300,
-            450,
-            600,
-            900,
-            1200,
-            1500,
-            1800,
-            2400,
-            3000,
-            3600,
-            4500,
-        ]
-
-        try:
-            grid_resolution in accepted_resolutions
-            pass
-        except:
-            print(("grid resolution {}m not recognized".format(grid_resolution)))
-
-        if grid_resolution < 1200:
-            skip_max = 200
-            mz = 401
-            mzb = 21
-        elif (grid_resolution >= 1200) and (grid_resolution < 4500):
-            skip_max = 100
-            mz = 201
-            mzb = 21
-        elif (grid_resolution >= 4500) and (grid_resolution < 18000):
-            skip_max = 50
-            mz = 201
-            mzb = 21
-        else:
-            skip_max = 20
-            mz = 201
-            mzb = 11
+    if grid_resolution < 1200:
+        skip_max = 200
+        mz = 201
+        mzb = 21
+    elif 1200 <= grid_resolution < 4500:
+        skip_max = 100
+        mz = 201
+        mzb = 21
+    else:
+        skip_max = 50
+        mz = 201
+        mzb = 21
 
     grid_div = grid_resolution / resolution_max
 
@@ -638,10 +474,12 @@ def generate_grid_description(grid_resolution, domain, restart=False):
 
     grid_dict = merge_dicts(horizontal_grid, vertical_grid, grid_options)
 
-    if restart is True:
-        return grid_options
+    if restart:
+        g_dict = grid_options
     else:
-        return grid_dict
+        g_dict = grid_dict
+
+    return g_dict
 
 
 def merge_dicts(*dict_args):
@@ -689,10 +527,8 @@ def generate_stress_balance(stress_balance, additional_params_dict):
     accepted_stress_balances = ("sia", "ssa+sia", "blatter")
 
     if stress_balance not in accepted_stress_balances:
-        print(("{} not in {}".format(stress_balance, accepted_stress_balances)))
-        print(
-            ("available stress balance solvers are {}".format(accepted_stress_balances))
-        )
+        print(f"{stress_balance} not in {accepted_stress_balances}")
+        print(f"available stress balance solvers are {accepted_stress_balances}")
 
     params_dict = OrderedDict()
     params_dict["stress_balance"] = stress_balance
@@ -751,7 +587,6 @@ def generate_hydrology(hydro, **kwargs):
         params_dict["basal_yield_stress.add_transportable_water"] = "true"
     else:
         print((f"hydrology {hydro} not recognized, exiting"))
-        import sys
 
         sys.exit(0)
 
@@ -780,7 +615,6 @@ def generate_calving(calving, **kwargs):
         params_dict["calving"] = calving
     else:
         print((f"calving {calving} not recognized, exiting"))
-        import sys
 
         sys.exit(0)
     if "frontal_melt" in kwargs and kwargs["frontal_melt"] is True:
@@ -797,82 +631,13 @@ def generate_climate(climate, **kwargs):
     Returns: OrderedDict
     """
 
-    params_dict: Dict[str, Union[str, int, float]] = OrderedDict()
-    if climate in ("paleo"):
-        params_dict["atmosphere"] = "searise_greenland,delta_T,paleo_precip"
-        if "atmosphere_paleo_precip_file" not in kwargs:
-            params_dict["atmosphere_paleo_precip_file"] = "pism_dT.nc"
-        if "atmosphere_delta_T_file" not in kwargs:
-            params_dict["atmosphere_delta_T_file"] = "pism_dT.nc"
-        params_dict["surface"] = "pdd"
-        params_dict["pdd_std_dev_method"] = "quadratic"  # Wake and Marshall (2015)
-    elif climate in ("abrupt_glacial"):
-        params_dict["atmosphere"] = "searise_greenland,delta_T,paleo_precip"
-        if "atmosphere_paleo_precip_file" not in kwargs:
-            params_dict[
-                "atmosphere_paleo_precip_file"
-            ] = "pism_abrupt_glacial_climate_forcing.nc"
-        if "atmosphere_delta_T_file" not in kwargs:
-            params_dict[
-                "atmosphere_delta_T_file"
-            ] = "pism_abrupt_glacial_climate_forcing.nc"
-        params_dict["surface"] = "pdd"
-        params_dict["pdd_std_dev_method"] = "quadratic"  # Wake and Marshall (2015)
-    elif climate in ("lgm"):
-        params_dict["atmosphere"] = "given,delta_T,frac_P"
-        params_dict["surface"] = "pdd"
-        params_dict["pdd_std_dev_method"] = "quadratic"  # Wake and Marshall (2015)
-    elif climate in ("warming"):
-        params_dict["atmosphere"] = "given,lapse_rate,delta_T,paleo_precip"
-        if "atmosphere_delta_T_file" not in kwargs:
-            params_dict["atmosphere_delta_T_file"] = "pism_warming_climate_forcing.nc"
-        params_dict["surface"] = "pdd"
-    elif climate in ("given_pdd"):
-        params_dict["atmosphere"] = "given"
-        params_dict["surface"] = "pdd"
-    elif climate in ("warming_precip"):
-        params_dict["atmosphere"] = "given,lapse_rate,delta_T,paleo_precip"
-        if "atmosphere_paleo_precip_file" not in kwargs:
-            params_dict[
-                "atmosphere_paleo_precip_file"
-            ] = "pism_warming_climate_forcing.nc"
-        if "atmosphere_delta_T_file" not in kwargs:
-            params_dict["atmosphere_delta_T_file"] = "pism_warming_climate_forcing.nc"
-        params_dict["surface"] = "pdd"
-    elif climate in ("surface_given"):
-        params_dict["surface"] = "given"
-    elif climate in ("paleo_const"):
-        params_dict["atmosphere"] = "searise_greenland"
-        params_dict["surface"] = "given"
-    elif climate in ("pdd"):
-        params_dict["atmosphere"] = "given"
-        if "atmosphere_given_file" not in kwargs:
-            params_dict["atmosphere_given_file"] = "foo.nc"
-        params_dict["surface"] = "pdd"
-    elif climate in ("pdd_lapse"):
-        params_dict["atmosphere"] = "given,lapse_rate"
-        if "atmosphere_given_file" not in kwargs:
-            params_dict["atmosphere_given_file"] = "foo.nc"
-        if "temp_lapse_rate" not in kwargs:
-            params_dict["temp_lapse_rate"] = 0.0
-        params_dict["surface"] = "pdd"
-    elif climate in ("const"):
-        params_dict["surface"] = "given"
-    elif climate in ("anomaly"):
-        params_dict["surface"] = "given,anomaly"
-    elif climate in ("relax", "given"):
-        params_dict["surface"] = "given"
-    elif climate in ("flux"):
-        params_dict["surface"] = "given,forcing"
-    elif climate in ("elevation"):
-        params_dict["surface"] = "elevation"
-    elif climate in ("elevation_forcing"):
-        params_dict["surface"] = "elevation,forcing"
-    else:
-        print((f"climate {climate} not recognized, exiting"))
-        import sys
+    climate_dict = {
+        "given_pdd": {"atmosphere": "given", "surface": "pdd"},
+        "given_smb": {"atmosphere": "given", "surface": "given"},
+    }
 
-        sys.exit(0)
+    if climate in climate_dict:
+        params_dict = climate_dict.get(climate)
 
     return merge_dicts(params_dict, kwargs)
 
@@ -884,50 +649,9 @@ def generate_ocean(ocean, **kwargs):
     Returns: OrderedDict
     """
 
-    params_dict = OrderedDict()
-    if ocean == "paleo":
-        params_dict["ocean"] = "given,delta_SL,frac_SMB"
-        if "ocean_delta_SL_file" not in kwargs:
-            params_dict["ocean_delta_SL_file"] = "pism_dSL.nc"
-    elif ocean == "abrupt_glacial":
-        params_dict["ocean"] = "given,delta_SL,frac_SMB"
-        if "ocean_delta_SL_file" not in kwargs:
-            params_dict[
-                "ocean_delta_SL_file"
-            ] = "pism_abrupt_glacial_climate_forcing.nc"
-    elif ocean == "abrupt_glacial_mbp":
-        params_dict["ocean"] = "given,delta_SL,frac_SMB,delta_MBP"
-        if "ocean_delta_SL_file" not in kwargs:
-            params_dict[
-                "ocean_delta_SL_file"
-            ] = "pism_abrupt_glacial_climate_forcing.nc"
-    elif ocean == "paleo_mbp":
-        params_dict["ocean"] = "given,delta_SL,frac_SMB,delta_MBP"
-        if "ocean_delta_SL_file" not in kwargs:
-            params_dict["ocean_delta_SL_file"] = "pism_dSL.nc"
-    elif ocean == "warming":
-        params_dict["ocean"] = "given,runoff_SMB"
-    elif ocean == "warming_3eqn":
-        params_dict["ocean"] = "th,delta_T"
-    elif ocean == "paleo_const":
-        params_dict["ocean"] = "given,delta_SL"
-    elif ocean == "paleo_const_mbp":
-        params_dict["ocean"] = "given,delta_SL,frac_MBP"
-    elif ocean in ("given", "relax"):
-        params_dict["ocean"] = "given"
-    elif ocean in ("given_mbp"):
-        params_dict["ocean"] = "given,frac_MBP"
-    elif ocean == "const":
-        params_dict["ocean"] = "constant"
-    elif ocean == "th":
-        params_dict["ocean"] = "th"
-    elif ocean == "th_mbp":
-        params_dict["ocean"] = "th,frac_MBP"
-    else:
-        print((f"ocean {ocean} not recognized, exiting"))
-        import sys
-
-        sys.exit(0)
+    ocean_dict = {"th": {"ocean": "th"}}
+    if ocean in ocean_dict:
+        params_dict = ocean_dict.get(ocean)
 
     return merge_dicts(params_dict, kwargs)
 
@@ -956,7 +680,7 @@ def list_bed_types():
     Return a list of supported bed types.
     """
 
-    list = [
+    bed_types = [
         "ctrl",
         "cresis",
         "cresisp",
@@ -970,7 +694,7 @@ def list_bed_types():
         "rm",
     ]
 
-    return list
+    return bed_types
 
 
 # information about systems
@@ -1338,21 +1062,16 @@ def make_batch_header(system_name, n_cores, walltime, queue, gid="s2457"):
         try:
             ppn = system["queue"][queue]
         except:
+            queues = list(system["queue"].keys())
             raise ValueError(
-                "There is no queue {} on {}. Pick one of {}.".format(
-                    queue, system_name, list(system["queue"].keys())
-                )
+                f"There is no queue {queue} on {system_name}. Pick one of {queues}."
             )
         # round up when computing the number of nodes needed to run on 'n_cores' cores
         nodes = int(math.ceil(float(n_cores) / ppn))
 
         if nodes * ppn != n_cores:
             print(
-                (
-                    "Warning! Running {n_cores} tasks on {nodes} {ppn}-processor nodes, wasting {N} processors!".format(
-                        nodes=nodes, ppn=ppn, n_cores=n_cores, N=ppn * nodes - n_cores
-                    )
-                )
+                f"Warning! Running {n_cores} tasks on {nodes} {ppn}-processor nodes, wasting {ppn * nodes - n_cores} processors!"
             )
 
     system["mpido"] = system["mpido"].format(cores=n_cores)
@@ -1364,13 +1083,16 @@ def make_batch_header(system_name, n_cores, walltime, queue, gid="s2457"):
         cores=n_cores,
         gid=gid,
     )
-    system["header"] += version_header()
+    system["header"] += git_version_header()
 
     return system["header"], system
 
 
 def make_batch_post_header(system):
-    v = version_header()
+    """
+    Make a post header
+    """
+    v = git_version_header()
 
     if system in (
         "electra_broadwell",
@@ -1379,27 +1101,26 @@ def make_batch_post_header(system):
         "pleiades_broadwell",
         "pleiades_haswell",
     ):
-        return post_headers["pbs"] + v
-    elif system in ("chinook"):
-        return post_headers["slurm"] + v
+        post_header = post_headers["pbs"] + v
+
+    elif system in ("chinook", "stampede2"):
+        post_header = post_headers["slurm"] + v
     else:
-        return post_headers["default"] + v
+        post_header = post_headers["default"] + v
+    return post_header
 
 
 def make_batch_header_test():
     "print headers of all supported systems and queues (for testing)"
     for s in list(systems.keys()):
         for q in list(systems[s]["queue"].keys()):
-            print("# system: {system}, queue: {queue}".format(system=s, queue=q))
+            print(f"# system: {s}, queue: {q}")
             print(make_batch_header(s, 100, "1:00:00", q)[0])
 
 
-def version():
+def git_version():
     """Return the path to the top directory of the Git repository
     containing this script, the URL of the "origin" remote and the version."""
-    import inspect
-    import shlex
-    import subprocess
 
     def output(command):
         path = os.path.realpath(os.path.dirname(inspect.stack(0)[0][1]))
@@ -1412,20 +1133,20 @@ def version():
     )
 
 
-def version_header():
+def git_version_header():
     "Return shell comments containing version info."
-    version_info = version()
-    return """
+    version_info = git_version()
+    script = (os.path.realpath(sys.argv[0]),)
+    command = (" ".join(sys.argv),)
+    path = (version_info[0],)
+    url = (version_info[1],)
+    version = (version_info[2],)
+
+    return f"""
 # Generated by {script}
 # Command: {command}
 # Git top level: {path}
 # URL: {url}
 # Version: {version}
 
-""".format(
-        script=os.path.realpath(sys.argv[0]),
-        command=" ".join(sys.argv),
-        path=version_info[0],
-        url=version_info[1],
-        version=version_info[2],
-    )
+"""

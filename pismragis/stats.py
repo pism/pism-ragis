@@ -16,6 +16,10 @@
 # along with PISM; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
+"""
+Module for ensemble performance statistics
+"""
+
 from typing import Union
 
 import numpy as np
