@@ -25,10 +25,10 @@ import pylab as plt
 
 kg2cmsle = 1 / 1e12 * 1.0 / 362.5 / 10.0
 gt2cmsle = 1 / 362.5 / 10.0
-sigma = 2
 
 
 def load_imbie_csv(url: str = "imbie_greenland_2021_Gt.csv", proj_start=1992):
+    """Loading the IMBIE Greenland data set from a CSV file and return pd.DataFrame"""
     df = pd.read_csv(url)
 
     df = df.rename(
@@ -58,7 +58,8 @@ def load_imbie(
 ):
     """
     Loading the IMBIE Greenland data set downloaded from
-    http://imbie.org/wp-content/uploads/2012/11/imbie_dataset_greenland_dynamics-2020_02_28.xlsx.
+    http://imbie.org/wp-content/uploads/2012/11/imbie_dataset_greenland_dynamics-2020_02_28.xlsx
+    and return pd.DataFrame.
 
     """
     df_df = pd.read_excel(
@@ -116,7 +117,8 @@ def plot_imbie(
     mass_color: str = "k",
     d_color: str = "#648fff",
     smb_color: str = "#dc267f",
-):
+) -> None:
+    """Plot IMBIE time series"""
     fig, axs = plt.subplots(nrows=2, ncols=1, sharex="col", figsize=(6.2, 4))
     fig.subplots_adjust(wspace=0.0, hspace=0.0)
 
@@ -128,7 +130,7 @@ def plot_imbie(
         lw=0,
         alpha=0.5,
         color=mass_color,
-        label=f"{sigma}-$\sigma$ DF",
+        label=f"{sigma}-$\\sigma$ DF",
     )
     axs[0].plot(df["Date"], df["Mass (Gt)"] * gt2cmsle, color=mass_color)
 

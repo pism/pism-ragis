@@ -4,27 +4,35 @@
 # Historical simulations for
 # "A reanalyis of the Greenland Ice Sheet"
 
+"""
+Perform hindcasts of the Greenland Ice Sheet
+"""
+
 import os
 import shlex
 import subprocess as sub
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from os.path import abspath, dirname, join, realpath
 from typing import Any, Dict, List, Union
-
+import inspect
+import sys
 import pandas as pd
-
-from pismragis import computing
+import xarray as xr
 
 
 def current_script_directory():
-    import inspect
+    """
+    Return the current directory
+    """
 
-    filename = inspect.stack(0)[0][1]
-    return realpath(dirname(filename))
+    m_filename = inspect.stack(0)[0][1]
+    return realpath(dirname(m_filename))
 
 
 script_directory = current_script_directory()
 
+sys.path.append(join(script_directory, "../pismragis"))
+import computing
 
 grid_choices = [
     18000,
@@ -228,13 +236,6 @@ if __name__ == "__main__":
         help="input data set version",
         default="2023_RAGIS",
     )
-    parser.add_argument(
-        "--vertical_velocity_approximation",
-        dest="vertical_velocity_approximation",
-        choices=["centered", "upstream"],
-        help="How to approximate vertical velocities",
-        default="upstream",
-    )
     parser.add_argument("--start", help="Simulation start year", default="2008-1-1")
     parser.add_argument("--end", help="Simulation end year", default="2015-1-1")
     parser.add_argument(
@@ -278,7 +279,6 @@ if __name__ == "__main__":
         grid_resolution = grid
 
     stress_balance = options.stress_balance
-    vertical_velocity_approximation = options.vertical_velocity_approximation
     version = options.version
 
     ensemble_file = options.ensemble_file
@@ -292,6 +292,9 @@ if __name__ == "__main__":
         input_file = abspath(options.FILE[0])
 
     pism_dataname = f"$input_dir/data_sets/bed_dem/pism_Greenland_ext_{grid}m_mcb_jpl_v{version}_{bed_type}.nc"
+
+    master_config_file = computing.get_path_to_config()
+    print(master_config_file)
 
     # Removed "thk" from regrid vars
     # regridvars = "litho_temp,enthalpy,age,tillwat,bmelt,ice_area_specific_volume"
@@ -325,19 +328,18 @@ if __name__ == "__main__":
     pism_config = "pism"
     pism_config_nc = join(output_dir, pism_config + ".nc")
 
-    nc_cmd = "ncgen -o {output} {input_dir}/config/{config}.cdl".format(
-        output=pism_config_nc, input_dir=input_dir, config=pism_config
-    )
+    nc_cmd = f"ncgen -o {pism_config_nc} {input_dir}/config/{pism_config}.cdl"
     sub.call(shlex.split(nc_cmd))
 
+    m_dirs = " ".join(list(dirs.values()))
     # these Bash commands are added to the beginning of the run scrips
-    run_header = """# stop if a variable is not defined
+    run_header = f"""# stop if a variable is not defined
     set -u
     # stop on errors
     set -e
 
     # path to the config file
-    config="{config}"
+    config="{pism_config}"
     # path to the input directory (input data sets are contained in this directory)
     input_dir="{input_dir}"
     # output directory
@@ -346,19 +348,12 @@ if __name__ == "__main__":
     spatial_tmp_dir="{spatial_tmp_dir}"
 
     # create required output directories
-    for each in {dirs};
+    for each in {m_dirs};
     do
       mkdir -p $each
     done
 
-    """.format(
-        input_dir=input_dir,
-        output_dir=output_dir,
-        spatial_tmp_dir=spatial_tmp_dir,
-        config=pism_config_nc,
-        dirs=" ".join(list(dirs.values())),
-    )
-
+    """
     if system != "debug":
         cmd = f"""lfs setstripe -c -1 {dirs["output"]}"""
         sub.call(shlex.split(cmd))
@@ -377,9 +372,7 @@ if __name__ == "__main__":
     cmd = f"cp {ensemble_file} {ensemble_outfile}"
     sub.call(shlex.split(cmd))
 
-    pism_timefile = join(
-        time_dir, "timefile_{start}_{end}.nc".format(start=start_date, end=end_date)
-    )
+    pism_timefile = join(time_dir, f"timefile_{start_date}_{end_date}.nc")
     try:
         os.remove(pism_timefile)
     except OSError:
@@ -423,17 +416,9 @@ if __name__ == "__main__":
     for n, row in enumerate(uq_df.iterrows()):
         combination = row[1]
         print(combination)
-        phi_min = combination["phi_min"]
-        phi_max = combination["phi_max"]
-        z_min = combination["z_min"]
-        z_max = combination["z_max"]
-        ttphi = "{},{},{},{}".format(phi_min, phi_max, z_min, z_max)
 
         name_options = {}
-        try:
-            name_options["id"] = int(combination["id"])
-        except:
-            name_options["id"] = combination["id"]
+        name_options["id"] = combination["id"]
 
         vversion = "v" + str(version)
         full_exp_name = "_".join(
@@ -454,8 +439,8 @@ if __name__ == "__main__":
                 "_".join(
                     ["_".join([k, str(v)]) for k, v in list(name_options.items())]
                 ),
-                "{}".format(start_date),
-                "{}".format(end_date),
+                f"{start_date}",
+                f"{end_date}",
             ]
         )
 
@@ -468,7 +453,7 @@ if __name__ == "__main__":
             except OSError:
                 pass
 
-        with open(script, "w") as f:
+        with open(script, "w", encoding="utf-8") as f:
             f.write(batch_header)
             f.write(run_header)
 
@@ -478,8 +463,8 @@ if __name__ == "__main__":
                 "profile": join(
                     dirs["performance"], "profile_${job_id}.py".format(**batch_system)
                 ),
-                "time_file": pism_timefile,
-                "o_format": oformat,
+                "time.file": pism_timefile,
+                "output.format": oformat,
                 "output.compression_level": compression_level,
                 "config_override": "$config",
                 "stress_balance.ice_free_thickness_standard": 5,
@@ -491,16 +476,16 @@ if __name__ == "__main__":
 
             outfile = f"{domain}_g{grid_resolution}m_{experiment}.nc"
 
-            general_params_dict["o"] = join(dirs["state"], outfile)
+            general_params_dict["output.file_name"] = join(dirs["state"], outfile)
             general_params_dict["bootstrap"] = ""
-            general_params_dict["i"] = pism_dataname
-            general_params_dict["regrid_file"] = input_file
-            general_params_dict["regrid_vars"] = regridvars
+            general_params_dict["input.file"] = pism_dataname
+            general_params_dict["input.regrid.file"] = input_file
+            general_params_dict["input.regrid.vars"] = regridvars
             if test_climate_models:
                 general_params_dict["test_climate_models"] = ""
 
             if osize != "custom":
-                general_params_dict["o_size"] = osize
+                general_params_dict["output.size"] = osize
             else:
                 general_params_dict[
                     "output.sizes.medium"
@@ -509,17 +494,32 @@ if __name__ == "__main__":
             grid_params_dict = computing.generate_grid_description(grid, domain)
 
             sb_params_dict: Dict[str, Union[str, int, float]] = {
-                "sia_e": combination["sia_e"],
-                "ssa_e": ssa_e,
-                "ssa_n": ssa_n,
-                "pseudo_plastic_q": combination["pseudo_plastic_q"],
-                "till_effective_fraction_overburden": combination[
+                "stress_balance.sia.enhancement_factor": combination["sia_e"],
+                "stress_balance.ssa.enhancement_factor": ssa_e,
+                "stress_balance.ssa.Glen_exponen": ssa_n,
+                "basal_resistance.pseudo_plastic.q": combination["pseudo_plastic_q"],
+                "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden": combination[
                     "till_effective_fraction_overburden"
                 ],
-                "vertical_velocity_approximation": vertical_velocity_approximation,
                 "stress_balance.blatter.enhancement_factor": combination["sia_e"],
             }
-            sb_params_dict["topg_to_phi"] = ttphi
+            phi_min = combination["phi_min"]
+            phi_max = combination["phi_max"]
+            z_min = combination["z_min"]
+            z_max = combination["z_max"]
+
+            sb_params_dict[
+                "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max"
+            ] = phi_max
+            sb_params_dict[
+                "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min"
+            ] = phi_min
+            sb_params_dict[
+                "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max"
+            ] = z_max
+            sb_params_dict[
+                "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min"
+            ] = z_min
 
             if (hasattr(combination, "fractures")) and (
                 combination["fractures"] is True
@@ -553,8 +553,8 @@ if __name__ == "__main__":
             )
             climate_parameters: Dict[str, Union[str, int, float]] = {
                 "climate_forcing.buffer_size": 367,
-                "atmosphere_given_file": climate_file_p,
-                "surface_given_file": climate_file_p,
+                "atmosphere.given.file": climate_file_p,
+                "surface.given.file": climate_file_p,
             }
 
             if combination["climate"] == "given_pdd":
@@ -580,7 +580,6 @@ if __name__ == "__main__":
             hydrology_parameters: Dict[str, Union[str, int, float]] = {
                 "hydrology.routing.include_floating_ice": True,
                 "hydrology.surface_input_file": runoff_file_p,
-                "hydrology.routing.add_water_input_to_till_storage": False,
                 "hydrology.add_water_input_to_till_storage": False,
             }
 
@@ -594,7 +593,7 @@ if __name__ == "__main__":
                 hydrology_parameters["hydrology.surface_input.file"] = ocean_file_p
 
                 frontalmelt_parameters = {
-                    "frontal_melt": "routing",
+                    "frontal_melt.models": "routing",
                     "frontal_melt.routing.file": ocean_file_p,
                 }
             elif frontal_melt == "off":
@@ -602,7 +601,7 @@ if __name__ == "__main__":
 
             else:
                 frontalmelt_parameters = {
-                    "frontal_melt": "discharge_given",
+                    "frontal_melt.models": "discharge_given",
                     "frontal_melt.discharge_given.file": ocean_file_p,
                 }
 
@@ -622,7 +621,7 @@ if __name__ == "__main__":
             ocean_params_dict = computing.generate_ocean("th", **ocean_parameters)
 
             calving_parameters: Dict[str, Union[str, int, float]] = {
-                "float_kill_calve_near_grounding_line": float_kill_calve_near_grounding_line,
+                "calving.float_kill.calve_near_grounding_line": float_kill_calve_near_grounding_line,
                 "calving.vonmises_calving.use_custom_flow_law": True,
                 "calving.vonmises_calving.Glen_exponent": 3.0,
                 "geometry.front_retreat.use_cfl": True,
@@ -683,7 +682,7 @@ if __name__ == "__main__":
             if not spatial_ts == "none":
                 exvars = computing.spatial_ts_vars[spatial_ts]
                 spatial_ts_dict = computing.generate_spatial_ts(
-                    outfile, exvars, exstep, odir=dirs["spatial_tmp"], split=False
+                    outfile, exvars, exstep, odir=dirs["spatial_tmp"]
                 )
 
                 all_params_dict = computing.merge_dicts(
@@ -693,6 +692,10 @@ if __name__ == "__main__":
             if stress_balance == "blatter":
                 del all_params_dict["skip"]
                 all_params_dict["time_stepping.adaptive_ratio"] = 25
+
+            with xr.open_dataset(master_config_file) as ds:
+                for key in all_params_dict:
+                    print(key, hasattr(ds["pism_config"], key))
 
             all_params = " \\\n  ".join(
                 ["-{} {}".format(k, v) for k, v in list(all_params_dict.items())]
@@ -739,13 +742,16 @@ if __name__ == "__main__":
             f.write("\n")
             run_id = combination["id"]
             id_cmd = f"ncatted -a id,global,a,c,{run_id}"
-            for m_file in [scalar_ts_dict["ts_file"], join(dirs["state"], outfile)]:
+            for m_file in [
+                scalar_ts_dict["output.timeseries.filename"],
+                join(dirs["state"], outfile),
+            ]:
                 cmd = f"{id_cmd} {m_file}\n"
                 f.write(cmd)
             f.write("\n")
             f.write("\n")
             if not spatial_ts == "none":
-                tmpfile = spatial_ts_dict["extra_file"]
+                tmpfile = spatial_ts_dict["output.extra.file"]
                 ofile = join(dirs["spatial"], "ex_" + outfile)
                 f.write(f"{id_cmd} {tmpfile}\n")
                 f.write(

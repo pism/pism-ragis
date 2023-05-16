@@ -1,0 +1,33 @@
+netcdf pism_overrides {
+    variables:
+    byte pism_overrides;
+
+    pism_overrides:time.calendar = "standard";
+
+    pism_overrides:input.forcing.buffer_size = 400;
+
+    pism_overrides:output.extra.stop_missing = "no";
+
+    pism_overrides:grid.allow_extrapolation = "yes";
+
+    pism_overrides:energy.minimum_allowed_temperature = 0.0;
+
+    pism_overrides:stress_balance.sia.max_diffusivity = 100000.0;
+
+    pism_overrides:surface.pdd.air_temp_all_precip_as_snow = 272.15;
+
+    pism_overrides:surface.pdd.air_temp_all_precip_as_rain = 274.15;
+
+    pism_overrides:surface.pdd.refreeze = 0.47;
+
+    pism_overrides:surface.pdd.refreeze_ice_melt = "no";
+
+    pism_overrides:run_info.institution = "University of Alaska Fairbanks";
+
+    pism_overrides:surface.force_to_thickness.alpha = 0.1;
+
+    pism_overrides:surface.force_to_thickness.ice_free_alpha_factor = 5.0;
+
+    pism_overrides:ocean.sub_shelf_heat_flux_into_ice = 50.0;
+
+}

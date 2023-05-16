@@ -45,6 +45,8 @@ def tqdm_joblib(tqdm_object):
     """Context manager to patch joblib to report into tqdm progress bar given as argument"""
 
     class TqdmBatchCompletionCallback(joblib.parallel.BatchCompletionCallBack):
+        """TQDM Callback"""
+
         def __call__(self, *args, **kwargs):
             tqdm_object.update(n=self.batch_size)
             return super().__call__(*args, **kwargs)
@@ -65,65 +67,72 @@ def ncfile2dataframe(
     norm_year: float = 1992.0,
     verbose: bool = False,
 ) -> pd.DataFrame:
-    if os.path.isfile(infile):
-        if verbose:
-            print(f"Opening {infile}")
-        with xr.open_dataset(infile) as ds:
-            if resample == "monthly":
-                ds = ds.resample(time="1MS").mean()
-            elif resample == "yearly":
-                ds = ds.resample(time="1YS").mean()
-            else:
-                pass
-            m_id_re = re.search("id_(.+?)_", infile)
-            assert m_id_re is not None
-            m_id = int(m_id_re.group(1))
-            m_dx_re = re.search("gris_g(.+?)m", infile)
-            assert m_dx_re is not None
-            m_dx = int(m_dx_re.group(1))
-            datetimeindex = ds.indexes["time"]
-            years = [to_decimal_year(x.to_pydatetime()) for x in datetimeindex]
-            norm_year_idx = np.nonzero(np.array(years) == norm_year)
-            nt = len(datetimeindex)
-            id_S = pd.Series(data=np.repeat(m_id, nt), index=datetimeindex, name="id")
-            S = [id_S]
-            for m_var in ds.data_vars:
-                if m_var not in (
-                    "time_bounds",
-                    "time_bnds",
-                    "timestamp",
-                    "run_stats",
-                    "pism_config",
-                ):
-                    if hasattr(ds[m_var], "units"):
-                        m_units = ds[m_var].units
-                        m_S_name = f"{m_var} ({m_units})"
-                    else:
-                        m_units = ""
-                        m_S_name = f"{m_var}"
-                    data = np.squeeze(ds[m_var].values)
-                    m_S = pd.Series(data=data, index=datetimeindex, name=m_S_name)
-                    S.append(m_S)
-            m_Y = pd.Series(data=years, index=datetimeindex, name="Year")
-            S.append(m_Y)
-            df = pd.concat(S, axis=1).reset_index()
-            df["resolution_m"] = m_dx
-            if add_vars:
-                if "limnsw (kg)" in df.columns:
-                    df["Mass (Gt)"] = (
-                        df["limnsw (kg)"] - df["limnsw (kg)"][norm_year_idx[0][0]]
-                    ) / 1e12
-                    df["SLE (cm)"] = -df["Mass (Gt)"] * gt2cmsle
-                if "grounding_line_flux (Gt year-1)" in df.columns:
-                    df["D (Gt/yr)"] = df["grounding_line_flux (Gt year-1)"]
-                if (
-                    "tendency_of_ice_mass_due_to_surface_mass_flux (Gt year-1)"
-                    in df.columns
-                ):
-                    df["SMB (Gt/yr)"] = df[
-                        "tendency_of_ice_mass_due_to_surface_mass_flux (Gt year-1)"
-                    ]
-        return df
+
+    """Convert netCDF file to pandas.DataFrame"""
+
+    assert os.path.isfile(infile)
+    if verbose:
+        print(f"Opening {infile}")
+    with xr.open_dataset(infile) as ds:
+        if resample == "monthly":
+            ds = ds.resample(time="1MS").mean()
+        elif resample == "yearly":
+            ds = ds.resample(time="1YS").mean()
+        else:
+            pass
+        m_id_re = re.search("id_(.+?)_", infile)
+        assert m_id_re is not None
+        m_id = int(m_id_re.group(1))
+        m_dx_re = re.search("gris_g(.+?)m", infile)
+        assert m_dx_re is not None
+        m_dx = int(m_dx_re.group(1))
+        datetimeindex = ds.indexes["time"]
+        years = [to_decimal_year(x.to_pydatetime()) for x in datetimeindex]
+        norm_year_idx = np.nonzero(np.array(years) == norm_year)
+        nt = len(datetimeindex)
+        id_S = pd.Series(data=np.repeat(m_id, nt), index=datetimeindex, name="id")
+        S = [id_S]
+        for m_var in ds.data_vars:
+            if m_var not in (
+                "time_bounds",
+                "time_bnds",
+                "timestamp",
+                "run_stats",
+                "pism_config",
+            ):
+                if hasattr(ds[m_var], "units"):
+                    m_units = ds[m_var].units
+                    m_S_name = f"{m_var} ({m_units})"
+                else:
+                    m_units = ""
+                    m_S_name = f"{m_var}"
+                data = np.squeeze(ds[m_var].values)
+                m_S = pd.Series(data=data, index=datetimeindex, name=m_S_name)
+                S.append(m_S)
+        m_Y = pd.Series(data=years, index=datetimeindex, name="Year")
+        S.append(m_Y)
+        df = pd.concat(S, axis=1).reset_index()
+        df["resolution_m"] = m_dx
+        if add_vars:
+            df = add_vars_to_dataframe(df, norm_year_idx)
+    return df
+
+
+def add_vars_to_dataframe(df: pd.DataFrame, norm_year_idx: int):
+    """Add additional variables to DataFrame"""
+
+    if "limnsw (kg)" in df.columns:
+        df["Mass (Gt)"] = (
+            df["limnsw (kg)"] - df["limnsw (kg)"][norm_year_idx[0][0]]
+        ) / 1e12
+        df["SLE (cm)"] = -df["Mass (Gt)"] * gt2cmsle
+        if "grounding_line_flux (Gt year-1)" in df.columns:
+            df["D (Gt/yr)"] = df["grounding_line_flux (Gt year-1)"]
+        if "tendency_of_ice_mass_due_to_surface_mass_flux (Gt year-1)" in df.columns:
+            df["SMB (Gt/yr)"] = df[
+                "tendency_of_ice_mass_due_to_surface_mass_flux (Gt year-1)"
+            ]
+    return df
 
 
 def convert_netcdf_to_dataframe(
@@ -160,6 +169,7 @@ def convert_netcdf_to_dataframe(
 
 
 def to_decimal_year(date):
+    """Convert datetime date to decimal year"""
     year = date.year
     start_of_this_year = datetime(year=year, month=1, day=1)
     start_of_next_year = datetime(year=year + 1, month=1, day=1)
@@ -171,16 +181,17 @@ def to_decimal_year(date):
 
 
 def check_file(infile: Union[str, pathlib.Path], norm_year: float = 1992.0) -> bool:
+    """Check netCDF file"""
     with xr.open_dataset(infile) as ds:
         datetimeindex = ds.indexes["time"]
         years = np.array([to_decimal_year(x.to_pydatetime()) for x in datetimeindex])
         monotonically_increasing = np.all(
             years.reshape(1, -1)[:, 1:] >= years.reshape(1, -1)[:, :-1], axis=1
         )[0]
+        is_ok: bool = False
         if (years[-1] >= norm_year) and monotonically_increasing:
-            return True
-        else:
-            return False
+            is_ok = True
+        return is_ok
 
 
 def copy_file(
@@ -193,12 +204,10 @@ def copy_file(
         in_path = pathlib.Path(infile)
     else:
         in_path = infile  # type: ignore
-    file_name = in_path.name
     if outdir is not pathlib.Path:
         out_path = pathlib.Path(outdir)
     else:
         out_path = outdir  # type: ignore
-    outfile = out_path / file_name
     if not os.path.exists(outdir):
         os.makedirs(outdir)
     shutil.copy(in_path, out_path)

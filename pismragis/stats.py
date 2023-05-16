@@ -39,6 +39,7 @@ def run_stats(
     """
     Collect PISM run_stats for a list of files and returns a DataFrame
     """
+
     dfs = []
     for m_file in infiles:
         with xr.open_dataset(m_file) as ds:

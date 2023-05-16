@@ -212,9 +212,7 @@ def compute_sensitivity_indices(
     missing_ids = list(set(id_df["id"]).difference(s_df["id"]))
     if missing_ids:
         if verbose:
-            print(
-                "The following simulation ids are missing:\n   {}".format(missing_ids)
-            )
+            print(f"The following simulation ids are missing:\n   {missing_ids}")
 
         id_df_missing_removed = id_df[~id_df["id"].isin(missing_ids)]
         params = np.array(
@@ -295,12 +293,6 @@ def resample_ensemble_by_data(
         observed["Year"] <= calibration_end
     )
     observed_calib_period = observed[observed_calib_time]
-    observed_interp_mean = interp1d(
-        observed_calib_period["Year"], observed_calib_period[m_var]
-    )
-    observed_interp_std = interp1d(
-        observed_calib_period["Year"], observed_calib_period[m_var_std]
-    )
     simulated_calib_time = (simulated["Year"] >= calibration_start) & (
         simulated["Year"] <= calibration_end
     )

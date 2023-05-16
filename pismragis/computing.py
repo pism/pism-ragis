@@ -19,6 +19,16 @@ from collections import OrderedDict
 from typing import Dict, Union
 
 
+def get_path_to_config():
+    """
+    Get path to pism_config
+
+    Returns: string
+    """
+
+    return os.path.join(os.environ.get("PISM_PREFIX", ""), "share/pism/pism_config.nc")
+
+
 def generate_prefix_str(pism_exec):
     """
     Generate prefix string.
@@ -38,51 +48,8 @@ def generate_domain(domain):
 
     if domain.lower() in ("greenland", "gris", "gris_ext", "ismip6"):
         pism_exec = "pismr"
-    elif domain.lower() in ("synth_jib", "synth_ellps"):
-        pism_exec = "pismr -regional -calving_wrap_around -ssa_dirichelt_bc"
-    elif domain.lower() in ("hia"):
-        x_min = -652200.0
-        x_max = -232600.0
-        y_min = -1263900.0
-        y_max = -943500.0
-        pism_exec = """pismr -x_range {x_min},{x_max} -y_range {y_min},{y_max} -bootstrap""".format(
-            x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max
-        )
-
-    elif domain.lower() in ("jakobshavn", "jib"):
-        x_min = -282650.0
-        x_max = 293350.0
-        y_min = -2417600.0
-        y_max = -2021600.0
-        pism_exec = """pismr -regional -x_range {x_min},{x_max} -y_range {y_min},{y_max}  -bootstrap -regional.zero_gradient true -regional.no_model_strip 4.5""".format(
-            x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max
-        )
-    elif domain.lower() in ("qaanaaq"):
-        x_min = -507650.0
-        x_max = -363650.0
-        y_min = -1310600.0
-        y_max = -1157600.0
-        pism_exec = """pismr -regional -x_range {x_min},{x_max} -y_range {y_min},{y_max}  -bootstrap -regional.zero_gradient true -regional.no_model_strip 4.5""".format(
-            x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max
-        )
-    elif domain.lower() in ("qaamerujup"):
-        x_min = -250000.0
-        x_max = -153000.0
-        y_min = -2075000.0
-        y_max = -2021000.0
-        pism_exec = """pismr -regional -x_range {x_min},{x_max} -y_range {y_min},{y_max}  -bootstrap -regional.zero_gradient true -regional.no_model_strip 4.5""".format(
-            x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max
-        )
-    elif domain.lower() in ("nw"):
-        x_min = -400000.0
-        x_max = 320000.0
-        y_min = -2022000.0
-        y_max = -1500000.0
-        pism_exec = """pismr -regional -x_range {x_min},{x_max} -y_range {y_min},{y_max}  -bootstrap -regional.zero_gradient true -regional.no_model_strip 4.5""".format(
-            x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max
-        )
     else:
-        print(("Domain {} not recognized, exiting".format(domain)))
+        print(f"Domain {domain} not recognized, exiting")
 
         sys.exit(0)
 
@@ -213,114 +180,12 @@ spatial_ts_vars["standard"] = [
     "vonmises_stress",
 ]
 
-spatial_ts_vars["fractures"] = [
-    "bmelt",
-    "dHdt",
-    "fracture_density",
-    "fracture_growth_rate",
-    "fracture_healing_rate",
-    "fracture_flow_enhancement",
-    "fracture_toughness",
-    "height_above_flotation",
-    "grounding_line_flux",
-    "frontal_melt_rate",
-    "frontal_melt_retreat_rate",
-    "ice_mass",
-    "mask",
-    "mass_fluxes",
-    "sftgif",
-    "strain_rates",
-    "thk",
-    "topg",
-    "usurf",
-    "velbase_mag",
-    "velsurf_mag",
-    "vonmises_calving_rate",
-    "vonmises_stress",
-]
-
-spatial_ts_vars["hydro"] = [
-    "basal_melt_rate_grounded",
-    "bwat",
-    "bwp",
-    "bwatvel",
-    "beta",
-    "dHdt",
-    "frontal_melt_rate",
-    "frontal_melt_retreat_rate",
-    "grounding_line_flux",
-    "hydraulic_potential",
-    "ice_mass",
-    "mask",
-    "mass_fluxes",
-    "sftgif",
-    "temppabase",
-    "tillwat",
-    "thk",
-    "topg",
-    "usurf",
-    "velbase_mag",
-    "velsurf_mag",
-    "vonmises_calving_rate",
-]
-
-spatial_ts_vars["outlet"] = [
-    "beta",
-    "bmelt",
-    "bwatvel",
-    "dHdt",
-    "climatic_mass_balance",
-    "diffusivity",
-    "diffusivity_staggered",
-    "frontal_melt_rate",
-    "frontal_melt_retreat_rate",
-    "grounding_line_flux",
-    "height_above_flotation",
-    "hydraulic_potential",
-    "hydraulic_potential_adjustment",
-    "ice_mass",
-    "mask",
-    "mass_fluxes",
-    "nuH",
-    "subglacial_water_flux",
-    "sftgif",
-    "tauc",
-    "tillphi",
-    "taud",
-    "tendency_of_subglacial_water_mass",
-    "thk",
-    "topg",
-    "usurf",
-    "velbase",
-    "velbase_mag",
-    "velsurf_mag",
-    "vonmises_calving_rate",
-]
-
-spatial_ts_vars["strain"] = [
-    "beta",
-    "dHdt",
-    "deviatoric_stresses",
-    "diffusivity",
-    "effective_viscosity",
-    "frontal_melt_rate",
-    "frontal_melt_retreat_rate",
-    "ice_mass",
-    "mask",
-    "mass_fluxes",
-    "sftgif",
-    "strain_rates",
-    "thk",
-    "tillwat",
-    "topg",
-    "usurf",
-    "velbase_mag",
-    "velsurf_mag",
-]
-
 
 def generate_spatial_ts(
-    outfile, exvars, step, start=None, end=None, split=None, odir=None
+    outfile: str,
+    exvars: str,
+    step: str = "yearly",
+    odir: str = ".",
 ):
     """
     Return dict to generate spatial time series
@@ -329,35 +194,21 @@ def generate_spatial_ts(
     """
 
     # check if list or comma-separated string is given.
-    try:
-        exvars = ",".join(exvars)
-    except:
-        pass
+    exvars = ",".join(exvars)
 
     params_dict = OrderedDict()
-    if split is True:
-        outfile, ext = os.path.splitext(outfile)
-        params_dict["extra_split"] = ""
-    if odir is None:
-        params_dict["extra_file"] = "ex_" + outfile
-    else:
-        params_dict["extra_file"] = os.path.join(odir, "ex_" + outfile)
-    params_dict["extra_vars"] = exvars
-
-    if step is None:
-        step = "yearly"
-
-    if start is not None and end is not None:
-        times = "{start}:{step}:{end}".format(start=start, step=step, end=end)
-    else:
-        times = step
-
-    params_dict["extra_times"] = times
+    params_dict["output.extra.file"] = os.path.join(odir, "ex_" + outfile)
+    params_dict["output.extra.vars"] = exvars
+    params_dict["output.extra.times"] = step
 
     return params_dict
 
 
-def generate_scalar_ts(outfile, step, odir=None, **kwargs):
+def generate_scalar_ts(
+    outfile,
+    step: str = "yearly",
+    odir: str = ".",
+):
     """
     Return dict to create scalar time series
 
@@ -365,36 +216,8 @@ def generate_scalar_ts(outfile, step, odir=None, **kwargs):
     """
 
     params_dict = OrderedDict()
-    if odir is None:
-        params_dict["ts_file"] = "ts_" + outfile
-    else:
-        params_dict["ts_file"] = os.path.join(odir, "ts_" + outfile)
-
-    if step is None:
-        step = "yearly"
-    else:
-        times = step
-    params_dict["ts_times"] = times
-
-    return params_dict
-
-
-def generate_snap_shots(outfile, times, odir=None):
-    """
-    Return dict to generate snap shots
-
-    Returns: OrderedDict
-    """
-
-    params_dict = OrderedDict()
-    if odir is None:
-        params_dict["save_file"] = "save_" + outfile.split(".nc")[0]
-    else:
-        params_dict["save_file"] = os.path.join(odir, "save_" + outfile.split(".nc")[0])
-
-    params_dict["save_times"] = ",".join(str(e) for e in times)
-    params_dict["save_split"] = ""
-    params_dict["save_force_output_times"] = ""
+    params_dict["output.timeseries.filename"] = os.path.join(odir, "ts_" + outfile)
+    params_dict["output.timeseries.times"] = step
 
     return params_dict
 
@@ -405,9 +228,6 @@ def generate_grid_description(grid_resolution, domain, restart=False):
 
     Returns: OrderedDict
     """
-
-    Lz = 4000
-    Lbz = 2000
 
     if domain.lower() in ("greenland_ext", "gris_ext"):
         mx_max = 14400
@@ -441,43 +261,31 @@ def generate_grid_description(grid_resolution, domain, restart=False):
 
     if grid_resolution < 1200:
         skip_max = 200
-        mz = 201
-        mzb = 21
     elif 1200 <= grid_resolution < 4500:
         skip_max = 100
-        mz = 201
-        mzb = 21
     else:
         skip_max = 50
-        mz = 201
-        mzb = 21
 
     grid_div = grid_resolution / resolution_max
 
-    mx = int(mx_max / grid_div)
-    my = int(my_max / grid_div)
+    grid: Dict[str, Union[str, int, float]] = OrderedDict()
+    grid["grid.Mx"] = int(mx_max / grid_div)
+    grid["grid.My"] = int(my_max / grid_div)
 
-    horizontal_grid: Dict[str, Union[str, int, float]] = OrderedDict()
-    horizontal_grid["Mx"] = mx
-    horizontal_grid["My"] = my
-
-    vertical_grid: Dict[str, Union[str, int, float]] = OrderedDict()
-    vertical_grid["Lz"] = Lz
-    vertical_grid["Lbz"] = Lbz
-    vertical_grid["z_spacing"] = "equal"
-    vertical_grid["Mz"] = mz
-    vertical_grid["Mbz"] = mzb
+    grid["grid.Lz"] = 4000
+    grid["grid.Lbz"] = 2000
+    grid["grid.ice_vertical_spacing"] = "equal"
+    grid["grid.Mz"] = 201
+    grid["grid.Mbz"] = 21
 
     grid_options: Dict[str, Union[str, int, float]] = {}
-    grid_options["skip"] = ""
-    grid_options["skip_max"] = skip_max
-
-    grid_dict = merge_dicts(horizontal_grid, vertical_grid, grid_options)
+    grid_options["time_stepping.skip"] = ""
+    grid_options["time_stepping.skip.skip_max"] = skip_max
 
     if restart:
         g_dict = grid_options
     else:
-        g_dict = grid_dict
+        g_dict = grid
 
     return g_dict
 
@@ -534,12 +342,11 @@ def generate_stress_balance(stress_balance, additional_params_dict):
     params_dict["stress_balance"] = stress_balance
     if stress_balance in ("ssa+sia", "blatter"):
         params_dict["options_left"] = ""
-        params_dict["cfbc"] = ""
-        params_dict["kill_icebergs"] = ""
-        params_dict["part_grid"] = ""
-        params_dict["part_redist"] = ""
-        params_dict["sia_flow_law"] = "gpbld"
-        params_dict["tauc_slippery_grounding_lines"] = ""
+        params_dict["stress_balance.calving_front_stress_bc"] = ""
+        params_dict["geometry.remove_icebergs"] = ""
+        params_dict["geometry.part_grid.enabled"] = ""
+        params_dict["stress_balance.sia.flow_law"] = "gpbld"
+        params_dict["basal_yield_stress.slippery_grounding_lines_option"] = ""
 
     if stress_balance == "blatter":
         params_dict["stress_balance.blatter.coarsening_factor"] = 4
@@ -569,21 +376,21 @@ def generate_hydrology(hydro, **kwargs):
 
     params_dict = OrderedDict()
     if hydro in ("null"):
-        params_dict["hydrology"] = "null"
+        params_dict["hydrology.model"] = "null"
     elif hydro in ("diffuse"):
-        params_dict["hydrology"] = "null"
-        params_dict["hydrology_null_diffuse_till_water"] = ""
+        params_dict["hydrology.model"] = "null"
+        params_dict["hydrology.null_diffuse_till_water"] = ""
     elif hydro in ("routing"):
-        params_dict["hydrology"] = "routing"
+        params_dict["hydrology.model"] = "routing"
     elif hydro in ("steady"):
-        params_dict["hydrology"] = "steady"
+        params_dict["hydrology.model"] = "steady"
     elif hydro in ("routing_coupled"):
-        params_dict["hydrology"] = "routing"
+        params_dict["hydrology.model"] = "routing"
     elif hydro in ("distributed"):
-        params_dict["hydrology"] = "distributed"
+        params_dict["hydrology.model"] = "distributed"
         params_dict["basal_yield_stress.add_transportable_water"] = "true"
     elif hydro in ("distributed_coupled"):
-        params_dict["hydrology"] = "distributed"
+        params_dict["hydrology.model"] = "distributed"
         params_dict["basal_yield_stress.add_transportable_water"] = "true"
     else:
         print((f"hydrology {hydro} not recognized, exiting"))
@@ -602,25 +409,27 @@ def generate_calving(calving, **kwargs):
 
     params_dict = OrderedDict()
     if calving in ("thickness_calving"):
-        params_dict["calving"] = calving
+        params_dict["calving.methods"] = calving
     elif calving in (
         "eigen_calving",
         "vonmises_calving",
         "hayhurst_calving",
     ):
-        params_dict["calving"] = f"{calving},thickness_calving"
+        params_dict["calving.models"] = f"{calving},thickness_calving"
     elif calving in ("hybrid_calving"):
-        params_dict["calving"] = "eigen_calving,vonmises_calving,thickness_calving"
+        params_dict[
+            "calving.models"
+        ] = "eigen_calving,vonmises_calving,thickness_calving"
     elif calving in ("float_kill",):
-        params_dict["calving"] = calving
+        params_dict["calving.models"] = calving
     else:
         print((f"calving {calving} not recognized, exiting"))
 
         sys.exit(0)
-    if "frontal_melt" in kwargs and kwargs["frontal_melt"] is True:
+    if "frontal_melt.models" in kwargs and kwargs["frontal_melt"] is True:
         params_dict["calving"] += ",frontal_melt"
         # need to delete the entry
-        del kwargs["frontal_melt"]
+        del kwargs["frontal_melt.models"]
     return merge_dicts(params_dict, kwargs)
 
 
@@ -632,8 +441,8 @@ def generate_climate(climate, **kwargs):
     """
 
     climate_dict = {
-        "given_pdd": {"atmosphere": "given", "surface": "pdd"},
-        "given_smb": {"atmosphere": "given", "surface": "given"},
+        "given_pdd": {"atmosphere.models": "given", "surface.models": "pdd"},
+        "given_smb": {"atmosphere.models": "given", "surface.models": "given"},
     }
 
     if climate in climate_dict:
@@ -649,7 +458,7 @@ def generate_ocean(ocean, **kwargs):
     Returns: OrderedDict
     """
 
-    ocean_dict = {"th": {"ocean": "th"}}
+    ocean_dict = {"th": {"ocean.models": "th"}}
     if ocean in ocean_dict:
         params_dict = ocean_dict.get(ocean)
 
@@ -771,16 +580,6 @@ systems["electra_broadwell"] = systems["pleiades_broadwell"].copy()
 systems["electra_skylake"] = systems["pleiades"].copy()
 systems["electra_skylake"]["queue"] = {"long": 40, "normal": 40, "debug": 40}
 
-
-# headers for batch jobs
-#
-# Available keywords:
-#
-# cores    - number of cores (MPI tasks)
-# queue    - queue (partition) name
-# nodes    - number of nodes
-# ppn      - number of tasks per node
-# walltime - wall time limit
 
 systems["debug"]["header"] = ""
 
@@ -1061,11 +860,11 @@ def make_batch_header(system_name, n_cores, walltime, queue, gid="s2457"):
     else:
         try:
             ppn = system["queue"][queue]
-        except:
+        except Exception as exc:
             queues = list(system["queue"].keys())
             raise ValueError(
                 f"There is no queue {queue} on {system_name}. Pick one of {queues}."
-            )
+            ) from exc
         # round up when computing the number of nodes needed to run on 'n_cores' cores
         nodes = int(math.ceil(float(n_cores) / ppn))
 
