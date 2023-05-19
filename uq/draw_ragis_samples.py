@@ -1,15 +1,19 @@
 #!/usr/bin/env python
 
+"""
+Uncertainty quantification using Latin Hypercube Sampling or Sobol Sequences
+"""
 
 from argparse import ArgumentParser
+from typing import Any, Dict
+
 import numpy as np
 import pandas as pd
-from scipy.stats.distributions import uniform, randint, truncnorm, gamma
-
-from SALib.sample import saltelli
 from pyDOE import lhs
+from SALib.sample import saltelli
+from scipy.stats.distributions import randint, uniform
 
-short2long = {
+short2long: Dict[str, str] = {
     "SIAE": "sia_e",
     "SSAN": "ssa_n",
     "PPQ": "pseudo_plastic_q",
@@ -20,7 +24,7 @@ short2long = {
     "ZMAX": "z_max",
 }
 
-gcms = {
+gcms: Dict[int, str] = {
     0: "ACCESS1-3_rcp85",
     1: "CNRM-CM6_ssp126",
     2: "CNRM-CM6_ssp585",
@@ -34,7 +38,13 @@ gcms = {
     10: "UKESM1-CM6_ssp585",
 }
 
-dists = {
+tcts: Dict[int, str] = {
+    0: "tct_forcing_400myr_74n_50myr_76n.nc",
+    1: "tct_forcing_500myr_74n_100myr_76n.nc",
+    2: "tct_forcing_600myr_74n_150myr_76n.nc",
+}
+
+dists: Dict[str, Any] = {
     "init": {
         "uq": {},
         "default_values": {
@@ -218,6 +228,7 @@ dists = {
             "vcm": uniform(loc=0.25, scale=0.75),
             "gamma_T": uniform(loc=1e-4, scale=0.5e-4),
             "ocean_file": randint(0, len(gcms)),
+            "thickness_calving_threshold": randint(0, len(tcts)),
         },
         "default_values": {
             "climate": "given_smb",
@@ -237,7 +248,6 @@ dists = {
             "phi_min": 5,
             "phi_max": 40,
             "till_effective_fraction_overburden": 0.02,
-            "thickness_calving_threshold": 50,
         },
     },
     "dem": {
@@ -380,12 +390,10 @@ if posterior_file:
         columns=["Unnamed: 0", "Model"], errors="ignore"
     )
     keys_mc = list(X_posterior.keys())
-    keys = set(keys_prior + keys_mc)
+    keys = list(set(keys_prior + keys_mc))
+    print(keys_prior, keys_mc)
     if len(keys_prior) + len(keys_mc) != len(keys):
-        import sys
-
         print("Duplicate keys, exciting.")
-        sys.exit()
     keys = keys_prior + keys_mc
     mc_indices = np.random.choice(range(X_posterior.shape[0]), n_samples)
     X_sample = X_posterior.to_numpy()[mc_indices, :]

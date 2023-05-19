@@ -8,14 +8,15 @@
 Perform hindcasts of the Greenland Ice Sheet
 """
 
+import inspect
 import os
 import shlex
 import subprocess as sub
+import sys
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from os.path import abspath, dirname, join, realpath
 from typing import Any, Dict, List, Union
-import inspect
-import sys
+
 import pandas as pd
 import xarray as xr
 
@@ -177,7 +178,7 @@ if __name__ == "__main__":
         dest="system",
         choices=computing.list_systems(),
         help="computer system to use.",
-        default="pleiades_broadwell",
+        default="debug",
     )
     parser.add_argument(
         "-b",
@@ -294,7 +295,6 @@ if __name__ == "__main__":
     pism_dataname = f"$input_dir/data_sets/bed_dem/pism_Greenland_ext_{grid}m_mcb_jpl_v{version}_{bed_type}.nc"
 
     master_config_file = computing.get_path_to_config()
-    print(master_config_file)
 
     # Removed "thk" from regrid vars
     # regridvars = "litho_temp,enthalpy,age,tillwat,bmelt,ice_area_specific_volume"
@@ -334,26 +334,25 @@ if __name__ == "__main__":
     m_dirs = " ".join(list(dirs.values()))
     # these Bash commands are added to the beginning of the run scrips
     run_header = f"""# stop if a variable is not defined
-    set -u
-    # stop on errors
-    set -e
+set -u
+# stop on errors
+set -e
 
-    # path to the config file
-    config="{pism_config}"
-    # path to the input directory (input data sets are contained in this directory)
-    input_dir="{input_dir}"
-    # output directory
-    output_dir="{output_dir}"
-    # temporary directory for spatial files
-    spatial_tmp_dir="{spatial_tmp_dir}"
+# path to the config file
+config="{pism_config}"
+# path to the input directory (input data sets are contained in this directory)
+input_dir="{input_dir}"
+# output directory
+output_dir="{output_dir}"
+# temporary directory for spatial files
+spatial_tmp_dir="{spatial_tmp_dir}"
 
-    # create required output directories
-    for each in {m_dirs};
+# create required output directories
+for each in {m_dirs};
     do
       mkdir -p $each
-    done
-
-    """
+done\n\n
+"""
     if system != "debug":
         cmd = f"""lfs setstripe -c -1 {dirs["output"]}"""
         sub.call(shlex.split(cmd))
@@ -476,7 +475,7 @@ if __name__ == "__main__":
 
             outfile = f"{domain}_g{grid_resolution}m_{experiment}.nc"
 
-            general_params_dict["output.file_name"] = join(dirs["state"], outfile)
+            general_params_dict["output.file"] = join(dirs["state"], outfile)
             general_params_dict["bootstrap"] = ""
             general_params_dict["input.file"] = pism_dataname
             general_params_dict["input.regrid.file"] = input_file
@@ -496,7 +495,7 @@ if __name__ == "__main__":
             sb_params_dict: Dict[str, Union[str, int, float]] = {
                 "stress_balance.sia.enhancement_factor": combination["sia_e"],
                 "stress_balance.ssa.enhancement_factor": ssa_e,
-                "stress_balance.ssa.Glen_exponen": ssa_n,
+                "stress_balance.ssa.Glen_exponent": ssa_n,
                 "basal_resistance.pseudo_plastic.q": combination["pseudo_plastic_q"],
                 "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden": combination[
                     "till_effective_fraction_overburden"
@@ -552,7 +551,6 @@ if __name__ == "__main__":
                 f"""$input_dir/data_sets/climate/{combination["climate_file"]}"""
             )
             climate_parameters: Dict[str, Union[str, int, float]] = {
-                "climate_forcing.buffer_size": 367,
                 "atmosphere.given.file": climate_file_p,
                 "surface.given.file": climate_file_p,
             }
@@ -579,7 +577,7 @@ if __name__ == "__main__":
             )
             hydrology_parameters: Dict[str, Union[str, int, float]] = {
                 "hydrology.routing.include_floating_ice": True,
-                "hydrology.surface_input_file": runoff_file_p,
+                "hydrology.surface_input.file": runoff_file_p,
                 "hydrology.add_water_input_to_till_storage": False,
             }
 
@@ -693,9 +691,13 @@ if __name__ == "__main__":
                 del all_params_dict["skip"]
                 all_params_dict["time_stepping.adaptive_ratio"] = 25
 
+            print("\nChecking parameters")
+            print("------------------------------------------------------------")
             with xr.open_dataset(master_config_file) as ds:
                 for key in all_params_dict:
-                    print(key, hasattr(ds["pism_config"], key))
+                    if not hasattr(ds["pism_config"], key):
+                        print(f"  - {key} not found in pism_config")
+            print("------------------------------------------------------------\n")
 
             all_params = " \\\n  ".join(
                 ["-{} {}".format(k, v) for k, v in list(all_params_dict.items())]
@@ -704,26 +706,13 @@ if __name__ == "__main__":
             if commandline_options is not None:
                 all_params = f"{all_params} \\\n  {commandline_options[1:-1]}"
 
-            print("Input files:\n")
-
-            check_files = []
-            if pism_dataname:
-                check_files.append(pism_dataname)
-            if climate_file_p:
-                check_files.append(climate_file_p)
-            if runoff_file_p:
-                check_files.append(runoff_file_p)
-            if ocean_file_p:
-                check_files.append(ocean_file_p)
-            if hasattr(combination, "calving_rate_scaling_file"):
-                check_files.append(calving_rate_scaling_file_p)
-            if vonmises_calving_threshold_file_p:
-                check_files.append(vonmises_calving_threshold_file_p)
-
-            for m_f in check_files:
-                m_f_abs = m_f.replace("$input_dir", options.input_dir)
-                print(f"{m_f_abs}: {os.path.isfile(m_f_abs)}")
-            print("\n")
+            print("\nChecking input files")
+            print("------------------------------------------------------------")
+            for key, m_f in all_params_dict.items():
+                if key.split(".")[-1] == "file":
+                    m_f_abs = m_f.replace("$input_dir", options.input_dir)
+                    print(f"  - {m_f_abs}: {os.path.isfile(m_f_abs)}")
+            print("------------------------------------------------------------\n")
 
             if system == "debug":
                 redirect = " 2>&1 | tee {jobs}/job.${job_id}"
