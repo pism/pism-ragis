@@ -142,18 +142,16 @@ if __name__ == "__main__":
         default=1800,
     )
     parser.add_argument(
-        "-r",
-        "--refinement_factor",
-        dest="refinement_factor",
-        type=int,
-        help="Horizontal grid refinement factor. For regional models only",
-        default=None,
-    )
-    parser.add_argument(
         "--i_dir",
         dest="input_dir",
         help="input directory",
         default=abspath(join(script_directory, "..")),
+    )
+    parser.add_argument(
+        "--data_dir",
+        dest="data_dir",
+        help="data directory",
+        default=abspath(join(script_directory, "../data_sets/")),
     )
     parser.add_argument(
         "--o_dir", dest="output_dir", help="output directory", default="test_dir"
@@ -255,6 +253,7 @@ if __name__ == "__main__":
 
     nn = options.n
     input_dir = abspath(options.input_dir)
+    data_dir = abspath(options.data_dir)
     output_dir = abspath(options.output_dir)
     spatial_tmp_dir = abspath(options.output_dir + "_tmp")
 
@@ -273,11 +272,6 @@ if __name__ == "__main__":
     float_kill_calve_near_grounding_line = options.float_kill_calve_near_grounding_line
     grid = options.grid
     hydrology = options.hydrology
-    refinement_factor = options.refinement_factor
-    if refinement_factor is not None:
-        grid_resolution = int(grid / refinement_factor)
-    else:
-        grid_resolution = grid
 
     stress_balance = options.stress_balance
     version = options.version
@@ -292,7 +286,9 @@ if __name__ == "__main__":
     else:
         input_file = abspath(options.FILE[0])
 
-    pism_dataname = f"$input_dir/data_sets/bed_dem/pism_Greenland_ext_{grid}m_mcb_jpl_v{version}_{bed_type}.nc"
+    pism_dataname = (
+        f"$data_dir/bed_dem/pism_Greenland_ext_{grid}m_mcb_jpl_v{version}_{bed_type}.nc"
+    )
 
     master_config_file = computing.get_path_to_config()
 
@@ -342,6 +338,8 @@ set -e
 config="{pism_config}"
 # path to the input directory (input data sets are contained in this directory)
 input_dir="{input_dir}"
+# path to data directory
+data_dir="{data_dir}"
 # output directory
 output_dir="{output_dir}"
 # temporary directory for spatial files
@@ -440,7 +438,7 @@ done\n\n
             ]
         )
 
-        script = join(scripts_dir, f"{domain}_g{grid_resolution}m_{experiment}.sh")
+        script = join(scripts_dir, f"{domain}_g{grid}m_{experiment}.sh")
         scripts.append(script)
 
         for filename in script:
@@ -467,10 +465,7 @@ done\n\n
                 "input.forcing.time_extrapolation": "true",
             }
 
-            if "-regional" in pism and refinement_factor is not None:
-                general_params_dict["refinement_factor"] = refinement_factor
-
-            outfile = f"{domain}_g{grid_resolution}m_{experiment}.nc"
+            outfile = f"{domain}_g{grid}m_{experiment}.nc"
 
             general_params_dict["output.file"] = join(dirs["state"], outfile)
             general_params_dict["bootstrap"] = ""
@@ -544,9 +539,7 @@ done\n\n
                 stress_balance, sb_params_dict
             )
 
-            climate_file_p = (
-                f"""$input_dir/data_sets/climate/{combination["climate_file"]}"""
-            )
+            climate_file_p = f"""$data_dir/climate/{combination["climate_file"]}"""
             climate_parameters: Dict[str, Union[str, int, float]] = {
                 "atmosphere.given.file": climate_file_p,
                 "surface.given.file": climate_file_p,
@@ -569,9 +562,7 @@ done\n\n
                 combination["climate"], **climate_parameters
             )
 
-            runoff_file_p = (
-                f"""$input_dir/data_sets/climate/{combination["runoff_file"]}"""
-            )
+            runoff_file_p = f"""$data_dir/climate/{combination["runoff_file"]}"""
             hydrology_parameters: Dict[str, Union[str, int, float]] = {
                 "hydrology.routing.include_floating_ice": True,
                 "hydrology.surface_input.file": runoff_file_p,
@@ -582,7 +573,7 @@ done\n\n
                 combination["hydrology"], **hydrology_parameters
             )
 
-            ocean_file_p = f"""$input_dir/data_sets/ocean/{combination["ocean_file"]}"""
+            ocean_file_p = f"""$data_dir/ocean/{combination["ocean_file"]}"""
             frontal_melt = combination["frontal_melt"]
             if frontal_melt == "discharge_routing":
                 hydrology_parameters["hydrology.surface_input.file"] = ocean_file_p
@@ -626,7 +617,7 @@ done\n\n
                 vcm = float(vcm)
                 calving_parameters["calving.vonmises_calving.sigma_max"] = vcm * 1e6
             except:
-                vonmises_calving_threshold_file_p = "$input_dir/data_sets/calving/{vcm}"
+                vonmises_calving_threshold_file_p = "$data_dir/calving/{vcm}"
                 calving_parameters[
                     "calving.vonmises_calving.threshold_file"
                 ] = vonmises_calving_threshold_file_p
@@ -638,14 +629,16 @@ done\n\n
                 ] = thickness_calving_threshold
             except:
                 thickness_calving_threshold_file_p = (
-                    f"$input_dir/data_sets/calving/{thickness_calving_threshold}"
+                    f"$data_dir/calving/{thickness_calving_threshold}"
                 )
                 calving_parameters[
                     "calving.thickness_calving.file"
                 ] = thickness_calving_threshold_file_p
 
             if hasattr(combination, "calving_rate_scaling_file"):
-                calving_rate_scaling_file_p = f"""$input_dir/data_sets/calving/{combination["calving_rate_scaling_file"]}"""
+                calving_rate_scaling_file_p = (
+                    f"""$data_dir/calving/{combination["calving_rate_scaling_file"]}"""
+                )
                 calving_parameters[
                     "calving.rate_scaling.file"
                 ] = calving_rate_scaling_file_p
@@ -706,7 +699,7 @@ done\n\n
             print("------------------------------------------------------------")
             for key, m_f in all_params_dict.items():
                 if key.split(".")[-1] == "file":
-                    m_f_abs = m_f.replace("$input_dir", options.input_dir)
+                    m_f_abs = m_f.replace("$data_dir", options.data_dir)
                     print(f"  - {m_f_abs}: {os.path.isfile(m_f_abs)}")
             print("------------------------------------------------------------\n")
 
