@@ -629,7 +629,8 @@ done\n\n
                 calving_parameters["calving.thickness_calving.file"] = combination[
                     "calving.thickness_calving.file"
                 ]
-                del calving_parameters["calving.thickness_calving.threshold"]
+                if "calving.thickness_calving.threshold" in calving_parameters:
+                    del calving_parameters["calving.thickness_calving.threshold"]
 
             if hasattr(combination, "calving_rate_scaling_file"):
                 calving_rate_scaling_file_p = (
