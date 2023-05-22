@@ -623,9 +623,10 @@ done\n\n
                     "calving.vonmises_calving.threshold_file"
                 ] = vonmises_calving_threshold_file_p
             if "calving.thickness_calving.threshold" in combination:
-                calving_parameters["calving.thickness_calving.threshold"] = f"""$data_dir/calving/{combination[
-                    "calving.thickness_calving.threshold"}"""
-                ]
+                calving_parameters[
+                    "calving.thickness_calving.threshold"
+                ] = f"""$data_dir/calving/{combination[
+                    "calving.thickness_calving.threshold"]}"""
             if "calving.thickness_calving.file" in combination:
                 calving_parameters["calving.thickness_calving.file"] = combination[
                     "calving.thickness_calving.file"
