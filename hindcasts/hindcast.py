@@ -469,7 +469,8 @@ done\n\n
 
             general_params_dict["output.file"] = join(dirs["state"], outfile)
             general_params_dict["bootstrap"] = ""
-            general_params_dict["input.file"] = pism_dataname
+            #              general_params_dict["input.file"] = pism_dataname
+            general_params_dict["i"] = pism_dataname
             general_params_dict["input.regrid.file"] = input_file
             general_params_dict["input.regrid.vars"] = regridvars
             if test_climate_models:
