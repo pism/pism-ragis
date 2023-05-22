@@ -228,7 +228,7 @@ dists: Dict[str, Any] = {
             "vcm": uniform(loc=0.25, scale=0.75),
             "gamma_T": uniform(loc=1e-4, scale=0.5e-4),
             "ocean_file": randint(0, len(gcms)),
-            "thickness_calving_threshold": randint(0, len(tcts)),
+            "calving.thickness_calving.file": randint(0, len(tcts)),
         },
         "default_values": {
             "climate": "given_smb",
@@ -366,6 +366,10 @@ for i, key in enumerate(keys_prior):
         dist_sample[:, i] = [
             f"seasonal_calving_{int(id)}_1980_2020.nc"
             for id in distributions[key].ppf(unif_sample[:, i])
+        ]
+    elif key == "calving.thickness_calving.file":
+        dist_sample[:, i] = [
+            tcts[id] for id in distributions[key].ppf(unif_sample[:, i])
         ]
     elif key == "stress_balance":
         dist_sample[:, i] = [

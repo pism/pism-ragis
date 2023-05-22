@@ -621,19 +621,15 @@ done\n\n
                 calving_parameters[
                     "calving.vonmises_calving.threshold_file"
                 ] = vonmises_calving_threshold_file_p
-            thickness_calving_threshold = combination["thickness_calving_threshold"]
-            try:
-                thickness_calving_threshold = float(thickness_calving_threshold)
-                calving_parameters[
+            if "calving.thickness_calving.threshold" in combination:
+                calving_parameters["calving.thickness_calving.threshold"] = combination[
                     "calving.thickness_calving.threshold"
-                ] = thickness_calving_threshold
-            except:
-                thickness_calving_threshold_file_p = (
-                    f"$data_dir/calving/{thickness_calving_threshold}"
-                )
-                calving_parameters[
+                ]
+            if "calving.thickness_calving.file" in combination:
+                calving_parameters["calving.thickness_calving.file"] = combination[
                     "calving.thickness_calving.file"
-                ] = thickness_calving_threshold_file_p
+                ]
+                del calving_parameters["calving.thickness_calving.threshold"]
 
             if hasattr(combination, "calving_rate_scaling_file"):
                 calving_rate_scaling_file_p = (
@@ -741,5 +737,5 @@ done\n\n
         scripts.append(script)
 
     scripts = computing.uniquify_list(scripts)
-    print(list(scripts))
+    print("\n".join([script for script in scripts]))
     print("\nwritten\n")
