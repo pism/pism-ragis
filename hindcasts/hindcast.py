@@ -335,7 +335,7 @@ set -u
 set -e
 
 # path to the config file
-config="{pism_config}"
+config="{pism_config_nc}"
 # path to the input directory (input data sets are contained in this directory)
 input_dir="{input_dir}"
 # path to data directory
