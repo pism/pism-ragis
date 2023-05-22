@@ -428,9 +428,6 @@ done\n\n
                 ),
             ]
         )
-        full_outfile = "g{grid}m_{experiment}.nc".format(
-            grid=grid, experiment=full_exp_name
-        )
 
         experiment = "_".join(
             [
@@ -628,7 +625,6 @@ done\n\n
             try:
                 vcm = float(vcm)
                 calving_parameters["calving.vonmises_calving.sigma_max"] = vcm * 1e6
-                vonmises_calving_threshold_file_p = "$input_dir/data_sets/calving/{vcm}"
             except:
                 vonmises_calving_threshold_file_p = "$input_dir/data_sets/calving/{vcm}"
                 calving_parameters[
@@ -700,7 +696,7 @@ done\n\n
             print("------------------------------------------------------------\n")
 
             all_params = " \\\n  ".join(
-                ["-{} {}".format(k, v) for k, v in list(all_params_dict.items())]
+                [f"-{k} {v}" for k, v in list(all_params_dict.items())]
             )
 
             if commandline_options is not None:
@@ -752,5 +748,5 @@ done\n\n
         scripts.append(script)
 
     scripts = computing.uniquify_list(scripts)
-    print("\n".join([script for script in scripts]))
+    print(list(scripts))
     print("\nwritten\n")
