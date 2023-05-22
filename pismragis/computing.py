@@ -36,7 +36,7 @@ def generate_prefix_str(pism_exec):
     Returns: string
     """
 
-    return os.path.join(os.environ.get("PISM_PREFIX", ""), pism_exec)
+    return os.path.join(os.environ.get("PISM_PREFIX", ""), f"bin/{pism_exec}")
 
 
 def generate_domain(domain):
