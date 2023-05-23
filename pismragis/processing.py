@@ -191,6 +191,8 @@ def check_file(infile: Union[str, pathlib.Path], norm_year: float = 1992.0) -> b
         is_ok: bool = False
         if (years[-1] >= norm_year) and monotonically_increasing:
             is_ok = True
+        else:
+            print(f"{infile} time-series too short or not monotonically-increasing.")
         return is_ok
 
 
