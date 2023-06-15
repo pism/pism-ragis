@@ -25,7 +25,7 @@ repos:
         args:
           - --profile
           - black
-          
+
   # Can run individually with `pre-commit run flake8 --all-files`
   # Need to use flake8 GitHub mirror due to CentOS git issue with GitLab
   # https://github.com/pre-commit/pre-commit/issues/1206

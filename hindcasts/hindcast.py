@@ -288,7 +288,6 @@ if __name__ == "__main__":
         input_file = abspath(options.FILE[0])
 
     if domain.lower() in ("greenland_ext", "gris_ext"):
-
         pism_dataname = f"$data_dir/bed_dem/pism_Greenland_ext_{grid}m_mcb_jpl_v{version}_{bed_type}.nc"
     else:
         pism_dataname = (

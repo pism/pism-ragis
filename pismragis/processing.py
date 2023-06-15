@@ -67,7 +67,6 @@ def ncfile2dataframe(
     norm_year: float = 1992.0,
     verbose: bool = False,
 ) -> pd.DataFrame:
-
     """Convert netCDF file to pandas.DataFrame"""
 
     assert os.path.isfile(infile)
@@ -88,7 +87,7 @@ def ncfile2dataframe(
         m_dx = int(m_dx_re.group(1))
         datetimeindex = ds.indexes["time"]
         years = [to_decimal_year(x.to_pydatetime()) for x in datetimeindex]
-        norm_year_idx = np.nonzero(np.array(years) == norm_year)
+        norm_year_idx = np.nonzero(np.array(years) == norm_year)[0][0]
         nt = len(datetimeindex)
         id_S = pd.Series(data=np.repeat(m_id, nt), index=datetimeindex, name="id")
         S = [id_S]
@@ -122,9 +121,7 @@ def add_vars_to_dataframe(df: pd.DataFrame, norm_year_idx: int):
     """Add additional variables to DataFrame"""
 
     if "limnsw (kg)" in df.columns:
-        df["Mass (Gt)"] = (
-            df["limnsw (kg)"] - df["limnsw (kg)"][norm_year_idx[0][0]]
-        ) / 1e12
+        df["Mass (Gt)"] = (df["limnsw (kg)"] - df["limnsw (kg)"][norm_year_idx]) / 1e12
         df["SLE (cm)"] = -df["Mass (Gt)"] * gt2cmsle
         if "grounding_line_flux (Gt year-1)" in df.columns:
             df["D (Gt/yr)"] = df["grounding_line_flux (Gt year-1)"]

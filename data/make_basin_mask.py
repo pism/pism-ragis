@@ -22,13 +22,11 @@ Module to create basin masks
 """
 
 
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-
-import numpy as np
-import os
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from pathlib import Path
-from osgeo import gdal, ogr
 from typing import Union
+
+from osgeo import gdal, ogr
 
 default_basin_file = "basins/GRE_Basins_IMBIE2_v1.3_epsg3413.shp"
 default_layer = "GRE_Basins_IMBIE2_v1.3_epsg3413"
@@ -41,11 +39,11 @@ n1 = -635600
 default_extend = [e0, n0, e1, n1]
 
 
-def get_info(basin_file: Union[Path, str]):
+def get_info(vector_file: Union[Path, str]):
     """
     Return info
     """
-    ds_v = ogr.Open(str(basin_file))
+    ds_v = ogr.Open(str(vector_file))
     for layer in ds_v:
         print("Layer Name:", layer.GetName())
         print("Layer Feature Count:", len(layer))
