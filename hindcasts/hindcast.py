@@ -229,6 +229,7 @@ if __name__ == "__main__":
             "1_RAGIS",
             "5_RAGIS",
             "2022_RAGIS",
+            "2023_GIMP",
             "2023_RAGIS",
             "2023_RAGIS_l1e5",
         ],
@@ -236,7 +237,7 @@ if __name__ == "__main__":
         default="2023_RAGIS",
     )
     parser.add_argument("--start", help="Simulation start year", default="2008-1-1")
-    parser.add_argument("--end", help="Simulation end year", default="2015-1-1")
+    parser.add_argument("--end", help="Simulation end year", default="1980-1-1")
     parser.add_argument(
         "-e",
         "--ensemble_file",
@@ -286,9 +287,13 @@ if __name__ == "__main__":
     else:
         input_file = abspath(options.FILE[0])
 
-    pism_dataname = (
-        f"$data_dir/bed_dem/pism_Greenland_ext_{grid}m_mcb_jpl_v{version}_{bed_type}.nc"
-    )
+    if domain.lower() in ("greenland_ext", "gris_ext"):
+
+        pism_dataname = f"$data_dir/bed_dem/pism_Greenland_ext_{grid}m_mcb_jpl_v{version}_{bed_type}.nc"
+    else:
+        pism_dataname = (
+            f"$data_dir/bed_dem/pism_Greenland_{grid}m_mcb_jpl_v{version}_{bed_type}.nc"
+        )
 
     master_config_file = computing.get_path_to_config()
 
@@ -489,7 +494,9 @@ done\n\n
                 "stress_balance.sia.enhancement_factor": combination["sia_e"],
                 "stress_balance.ssa.enhancement_factor": ssa_e,
                 "stress_balance.ssa.Glen_exponent": ssa_n,
+                "basal_resistance.pseudo_plastic.enabled": "yes",
                 "basal_resistance.pseudo_plastic.q": combination["pseudo_plastic_q"],
+                "basal_yield_stress.mohr_coulomb.topg_to_phi.enabled": "yes",
                 "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden": combination[
                     "till_effective_fraction_overburden"
                 ],
@@ -664,13 +671,12 @@ done\n\n
                 scalar_ts_dict,
                 solver_dict,
             )
-
-            if not spatial_ts == "none":
+            if spatial_ts != "none":
                 exvars = computing.spatial_ts_vars[spatial_ts]
                 spatial_ts_dict = computing.generate_spatial_ts(
                     outfile, exvars, exstep, odir=dirs["spatial_tmp"]
                 )
-
+                print(spatial_ts_dict)
                 all_params_dict = computing.merge_dicts(
                     all_params_dict, spatial_ts_dict
                 )
@@ -683,7 +689,7 @@ done\n\n
             print("------------------------------------------------------------")
             with xr.open_dataset(master_config_file) as ds:
                 for key in all_params_dict:
-                    if not hasattr(ds["pism_config"], key):
+                    if hasattr(ds["pism_config"], key) is False:
                         print(f"  - {key} not found in pism_config")
             print("------------------------------------------------------------\n")
 

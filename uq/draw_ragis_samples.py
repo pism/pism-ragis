@@ -59,7 +59,7 @@ dists: Dict[str, Any] = {
             "pseudo_plastic_q": 0.6,
             "sia_e": 1.25,
             "ssa_n": 3.0,
-            "thickness_calving_threshold": 100,
+            "calving.thickness_calving.threshold": 100,
             "vcm": 0.75,
             "fractures": "false",
             "z_min": -700,
@@ -84,7 +84,7 @@ dists: Dict[str, Any] = {
             "pseudo_plastic_q": 0.6,
             "sia_e": 1.25,
             "ssa_n": 3.0,
-            "thickness_calving_threshold": 100,
+            "calving.thickness_calving.threshold": 100,
             "vcm": 0.75,
             "fractures": "false",
             "z_min": -700,
@@ -98,7 +98,7 @@ dists: Dict[str, Any] = {
     "calving": {
         "uq": {
             "vcm": uniform(loc=0.25, scale=0.5),
-            "thickness_calving_threshold": uniform(loc=100, scale=300),
+            "calving.thickness_calving.threshold": uniform(loc=100, scale=300),
         },
         "default_values": {
             "climate": "given_smb",
@@ -112,7 +112,7 @@ dists: Dict[str, Any] = {
             "pseudo_plastic_q": 0.6,
             "sia_e": 1.25,
             "ssa_n": 3.0,
-            "thickness_calving_threshold": 100,
+            "calving.thickness_calving.threshold": 100,
             "fractures": "false",
             "sliding_law": "pseudo_plastic",
         },
@@ -140,7 +140,7 @@ dists: Dict[str, Any] = {
             "phi_min": 5,
             "phi_max": 40,
             "till_effective_fraction_overburden": 0.02,
-            "thickness_calving_threshold": 50,
+            "calving.thickness_calving.threshold": 50,
         },
     },
     "thickness-calving": {
@@ -148,7 +148,7 @@ dists: Dict[str, Any] = {
             "vcm": uniform(loc=0.2, scale=0.8),
             "gamma_T": uniform(loc=1e-4, scale=0.5e-4),
             "ocean_file": randint(0, len(gcms)),
-            "thickness_calving_threshold": uniform(loc=50, scale=450),
+            "calving.thickness_calving.threshold": uniform(loc=50, scale=450),
         },
         "default_values": {
             "climate": "given_smb",
@@ -193,7 +193,7 @@ dists: Dict[str, Any] = {
             "phi_min": 5,
             "phi_max": 40,
             "till_effective_fraction_overburden": 0.02,
-            "thickness_calving_threshold": 50,
+            "calving.thickness_calving.threshold": 50,
         },
     },
     "ocean-simple": {
@@ -220,7 +220,7 @@ dists: Dict[str, Any] = {
             "phi_min": 5,
             "phi_max": 40,
             "till_effective_fraction_overburden": 0.02,
-            "thickness_calving_threshold": 50,
+            "calving.thickness_calving.threshold": 50,
         },
     },
     "calving-simple": {
@@ -252,7 +252,7 @@ dists: Dict[str, Any] = {
     },
     "dem": {
         "uq": {
-            "thickness_calving_threshold": uniform(loc=50, scale=250),
+            "calving.thickness_calving.threshold": uniform(loc=50, scale=250),
             "surface.pdd.factor_ice": uniform(loc=0.5, scale=12.5),
             "surface.pdd.factor_snow": uniform(loc=0.5, scale=5.5),
             "surface.pdd.std_dev.value": uniform(loc=2, scale=4),
