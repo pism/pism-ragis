@@ -24,6 +24,7 @@ requirements = [
     "openpyxl",
     "pyarrow",
     "fastparquet",
+    "scikit-learn",
 ]
 
 setup(
