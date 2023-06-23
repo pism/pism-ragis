@@ -493,7 +493,6 @@ done\n\n
                 "stress_balance.sia.enhancement_factor": combination["sia_e"],
                 "stress_balance.ssa.enhancement_factor": ssa_e,
                 "stress_balance.ssa.Glen_exponent": ssa_n,
-                "basal_resistance.pseudo_plastic.enabled": "yes",
                 "basal_resistance.pseudo_plastic.q": combination["pseudo_plastic_q"],
                 "basal_yield_stress.mohr_coulomb.topg_to_phi.enabled": "yes",
                 "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden": combination[
@@ -540,7 +539,8 @@ done\n\n
             sliding_law = "pseudo_plastic"
             if hasattr(combination, "sliding_law"):
                 sliding_law = combination["sliding_law"]
-                sb_params_dict[sliding_law] = ""
+                sb_params_dict[f"basal_resistance.{sliding_law}.enabled"]: "yes",
+] = ""
 
             stress_balance_params_dict = computing.generate_stress_balance(
                 stress_balance, sb_params_dict
