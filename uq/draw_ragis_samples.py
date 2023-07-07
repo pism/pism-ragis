@@ -126,7 +126,7 @@ dists: Dict[str, Any] = {
         "default_values": {
             "climate": "given_smb",
             "hydrology": "routing",
-            "frontal_melt": "discharge_routing",
+            "frontal_melt": "routing",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
             "climate_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
             "runoff_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
@@ -153,7 +153,7 @@ dists: Dict[str, Any] = {
         "default_values": {
             "climate": "given_smb",
             "hydrology": "routing",
-            "frontal_melt": "discharge_routing",
+            "frontal_melt": "routing",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
             "climate_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
             "runoff_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
@@ -178,7 +178,7 @@ dists: Dict[str, Any] = {
         "default_values": {
             "climate": "given_smb",
             "hydrology": "routing",
-            "frontal_melt": "discharge_routing",
+            "frontal_melt": "routing",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
             "climate_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
             "runoff_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",

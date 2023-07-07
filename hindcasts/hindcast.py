@@ -674,7 +674,6 @@ done\n\n
                 spatial_ts_dict = computing.generate_spatial_ts(
                     outfile, exvars, exstep, odir=dirs["spatial_tmp"]
                 )
-                print(spatial_ts_dict)
                 all_params_dict = computing.merge_dicts(
                     all_params_dict, spatial_ts_dict
                 )
