@@ -539,7 +539,7 @@ done\n\n
             sliding_law = "pseudo_plastic"
             if hasattr(combination, "sliding_law"):
                 sliding_law = combination["sliding_law"]
-                sb_params_dict[f"basal_resistance.{sliding_law}.enabled"]: "yes"
+            sb_params_dict[f"basal_resistance.{sliding_law}.enabled"] = "yes"
 
             stress_balance_params_dict = computing.generate_stress_balance(
                 stress_balance, sb_params_dict
