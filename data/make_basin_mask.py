@@ -49,10 +49,12 @@ def get_info(vector_file: Union[Path, str]):
         print("Layer Feature Count:", len(layer))
         print("Layer Schema")
         layer_defn = layer.GetLayerDefn()
+        print("Loop over fields")
         for i in range(layer_defn.GetFieldCount()):
             print(layer_defn.GetFieldDefn(i).GetName())
         # some layers have multiple geometric feature types
         # most of the time, it should only have one though
+        print("Loop over Geometries")
         for i in range(layer_defn.GetGeomFieldCount()):
             # some times the name doesn't appear
             # but the type codes are well defined
@@ -88,14 +90,6 @@ if __name__ == "__main__":
         default=default_basin_file,
     )
     parser.add_argument(
-        "-n",
-        "--n_procs",
-        dest="n_procs",
-        type=int,
-        help="""number of cores/processors. default=4. Only used if --ugid all""",
-        default=4,
-    )
-    parser.add_argument(
         "-r",
         "--resolution",
         type=float,
@@ -114,12 +108,11 @@ if __name__ == "__main__":
     attribute = options.attribute
     attribute_value = options.attribute_value
     layers = options.layers
-    n_procs = options.n_procs
     ofile = options.OUTFILE[-1]
     resolution = options.resolution
     basin_file = Path(options.basin_file)
 
-    select_cmd = f"""'{attribute}={attribute_value}'"""
+    select_cmd = f"""{attribute}='{attribute_value}'"""
 
     get_info(basin_file)
 
@@ -130,7 +123,7 @@ if __name__ == "__main__":
         xRes=resolution,
         yRes=resolution,
         noData=-9999,
-        burnValues=1,
+        burnValues=0,
         outputBounds=default_extend,
     )
     ds = gdal.Rasterize(ofile, str(basin_file), options=gdal_options)
