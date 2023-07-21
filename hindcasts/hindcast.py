@@ -297,10 +297,12 @@ if __name__ == "__main__":
         input_file = abspath(options.FILE[0])
 
     if domain.lower() in ("greenland_ext", "gris_ext"):
-        pism_dataname = f"$data_dir/bed_dem/pism_Greenland_ext_{grid}m_mcb_jpl_v{version}_{bed_type}.nc"
+        pism_dataname = (
+            f"$data_dir/bed_dem/pism_Greenland_ext_{grid}m_v{version}_{bed_type}.nc"
+        )
     else:
         pism_dataname = (
-            f"$data_dir/bed_dem/pism_Greenland_{grid}m_mcb_jpl_v{version}_{bed_type}.nc"
+            f"$data_dir/bed_dem/pism_Greenland_{grid}m_v{version}_{bed_type}.nc"
         )
 
     master_config_file = computing.get_path_to_config()
@@ -747,6 +749,7 @@ done\n\n
                     f"mv {tmpfile} {ofile}\n",
                 )
             f.write("\n")
+            f.write("Moving file done\n")
             f.write(batch_system.get("footer", ""))
 
         scripts.append(script)
