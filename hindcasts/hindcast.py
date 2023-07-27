@@ -189,7 +189,16 @@ if __name__ == "__main__":
     parser.add_argument(
         "--spatial_ts",
         dest="spatial_ts",
-        choices=["basic", "standard", "none", "ismip6", "strain", "fractures", "ragis"],
+        choices=[
+            "basic",
+            "standard",
+            "none",
+            "ismip6",
+            "strain",
+            "fractures",
+            "ragis",
+            "dem",
+        ],
         help="output size type",
         default="ragis",
     )
@@ -735,6 +744,7 @@ done\n\n
                     f"mv {tmpfile} {ofile}\n",
                 )
             f.write("\n")
+            f.write("Moving file done\n")
             f.write(batch_system.get("footer", ""))
 
         scripts.append(script)

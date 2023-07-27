@@ -144,6 +144,12 @@ spatial_ts_vars["ragis"] = [
     "vonmises_calving_rate",
 ]
 
+spatial_ts_vars["dem"] = [
+    "usurf",
+    "velsurf_mag",
+    "flux_divergence",
+]
+
 spatial_ts_vars["standard"] = [
     "bmelt",
     "basal_mass_flux_floating",

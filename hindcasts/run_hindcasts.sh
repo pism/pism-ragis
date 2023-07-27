@@ -1,0 +1,32 @@
+;; This buffer is for text that is not saved, and for Lisp evaluation.
+;; To create a file, visit it with C-x C-f and enter text in its buffer.
+
+PISM_PREFIX=~/local/pism/ python hindcast.py --exstep monthly --spatial_ts ragis --data_dir /import/c1/ICESHEET/ICESHEET/pism-greenland/data_sets/ --dataset_version 2023_RAGIS -s chinook -n 48 -q t2small -w 48:00:00 --o_dir 2023_06_ragis_vcm --start 1980-1-1 --end 2020-1-1  -g 1200 -e ../uq/ensemble_gris_ragis_ctrl.csv /import/c1/ICESHEET/ICESHEET/pism-greenland/calibration/2023_06_init_ragis/state/gris_g1200m_v2023_RAGIS_id_CTRL_0_50.nc
+
+PISM_PREFIX=~/local/pism/ python hindcast.py --exstep monthly --spatial_ts ragis --data_dir /import/c1/ICESHEET/ICESHEET/pism-greenland/data_sets/ --dataset_version 2023_GIMP -s chinook -n 48 -q t2small -w 48:00:00 --o_dir 2023_06_gimp_vcm --start 1980-1-1 --end 2020-1-1  -g 1200 -e ../uq/ensemble_gris_ragis_ctrl.csv /import/c1/ICESHEET/ICESHEET/pism-greenland/calibration/2023_06_init_ragis/state/gris_g1200m_v2023_RAGIS_id_CTRL_0_50.nc
+
+python calibrate-v2022.py --o_dir 2023_06_init_gimp --dataset_version 2023_GIMP --b wc --step 250 --duration 250 -s chinook -q t2small -n 48 -g 1200 -w 72:00:00 --ensemble_file ../uncertainty_quantification/ensemble_gris_ctrl.csv ../../best_v1/g1200m_const_ctrl_e_1.25_ppq_0.6_tefo_0.02_ssa_n_3.25_philow_5.0_hydro_null_100a.nc
+
+python calibrate-v2022.py --o_dir 2023_06_init_ragis --dataset_version 2023_RAGIS --b wc --step 250 --duration 250 -s chinook -q t2small -n 48 -g 1200 -w 72:00:00 --ensemble_file ../uncertainty_quantification/ensemble_gris_ctrl.csv ../../best_v1/g1200m_const_ctrl_e_1.25_ppq_0.6_tefo_0.02_ssa_n_3.25_philow_5.0_hydro_null_100a.nc
+
+PISM_PREFIX=~/local/pism/ python hindcast.py --exstep monthly --spatial_ts ragis --data_dir /import/c1/ICESHEET/ICESHEET/pism-greenland/data_sets/ --dataset_version 2023_RAGIS -s chinook -n 48 -q t2small -w 48:00:00 --o_dir 2023_06_ragis_250 --start 1980-1-1 --end 1986-1-1  -g 1200 -e ../uq/ensemble_gris_ragis_ctrl.csv /import/c1/ICESHEET/ICESHEET/pism-greenland/calibration/2023_06_init_ragis/state/gris_g1200m_v2023_RAGIS_id_CTRL_0_250.nc
+
+PISM_PREFIX=~/local/pism/ python hindcast.py --exstep monthly --spatial_ts ragis --data_dir /import/c1/ICESHEET/ICESHEET/pism-greenland/data_sets/ --dataset_version 2023_RAGIS -s chinook -n 48 -q t2small -w 8:00:00 --o_dir 2023_06_ragis --start 1980-1-1 --end 1986-1-1  -g 1200 -e ../uq/ensemble_gris_ragis_ctrl.csv /import/c1/ICESHEET/ICESHEET/pism-greenland/calibration/2023_06_init_ragis/state/gris_g1200m_v2023_RAGIS_id_CTRL_0_250.nc
+
+PISM_PREFIX=~/local/pism/ python hindcast.py --exstep monthly --spatial_ts ragis --data_dir /import/c1/ICESHEET/ICESHEET/pism-greenland/data_sets/ --dataset_version 2023_GIMP -s chinook -n 48 -q t2small -w 8:00:00 --o_dir 2023_06_gimp --start 1980-1-1 --end 2020-1-1  -g 1200 -e ../uq/ensemble_gris_ragis_ctrl.csv /import/c1/ICESHEET/ICESHEET/pism-greenland/calibration/2023_06_init_gimp/state/gris_g1200m_v2023_GIMP_id_CTRL_0_250.nc
+
+PISM_PREFIX=~/local/pism/ python hindcast.py --exstep monthly --spatial_ts ragis --data_dir /import/c1/ICESHEET/ICESHEET/pism-greenland/data_sets/ --dataset_version 2023_RAGIS -s chinook -n 48 -q t2small -w 8:00:00 --o_dir 2023_06_ragis --start 1980-1-1 --end 2020-1-1  -g 1200 -e ../uq/ensemble_gris_ragis_ctrl.csv /import/c1/ICESHEET/ICESHEET/pism-greenland/calibration/2023_06_init_ragis/state/gris_g1200m_v2023_RAGIS_id_CTRL_0_250.nc
+
+PISM_PREFIX=~/local/pism/ python hindcast.py --exstep monthly --spatial_ts ragis --data_dir /import/c1/ICESHEET/ICESHEET/pism-greenland/data_sets/ --dataset_version 2023_GIMP -s chinook -n 48 -q t2small -w 8:00:00 --o_dir 2023_06_gimp --start 1980-1-1 --end 1986-1-1  -g 1200 -e ../uq/ensemble_gris_ragis_ctrl.csv /import/c1/ICESHEET/ICESHEET/pism-greenland/calibration/2023_06_init_gimp/state/gris_g1200m_v2023_GIMP_id_CTRL_0_250.nc
+
+PISM_PREFIX=~/local/pism/ python hindcast.py --exstep monthly --spatial_ts ragis --data_dir /import/c1/ICESHEET/ICESHEET/pism-greenland/data_sets/ --dataset_version 2023_RAGIS -s chinook -n 192 -q t2standard -w 48:00:00 --o_dir 2023_07_ragis --start 1980-1-1 --end 1986-1-1  -g 600 -e ../uq/ensemble_gris_ragis_ctrl.csv /import/c1/ICESHEET/ICESHEET/pism-greenland/calibration/2023_07_init_gimp/state/gris_g600m_v2023_GIMP_id_CTRL_0_25.nc 
+
+PISM_PREFIX=~/local/pism/ python hindcast.py --exstep monthly --spatial_ts ragis --data_dir /import/c1/ICESHEET/ICESHEET/pism-greenland/data_sets/ --dataset_version 2023_GIMP -s chinook -n 192 -q t2standard -w 48:00:00 --o_dir 2023_07_gimp --start 1980-1-1 --end 1986-1-1  -g 600 -e ../uq/ensemble_gris_ragis_ctrl.csv /import/c1/ICESHEET/ICESHEET/pism-greenland/calibration/2023_07_init_ragis/state/gris_g600m_v2023_RAGIS_id_CTRL_0_25.nc
+
+PISM_PREFIX=~/local/pism/ python hindcast.py --exstep monthly --spatial_ts ragis --data_dir /import/c1/ICESHEET/ICESHEET/pism-greenland/data_sets/ --dataset_version 2023_GIMP -s chinook -n 48 -q t2standard -w 48:00:00 --o_dir 2023_07_gimp --start 1980-1-1 --end 1986-1-1 -g 1200 -e ../uq/ensemble_gris_ragis_ctrl.csv /import/c1/ICESHEET/ICESHEET/pism-greenland/calibration/2023_07_init_gimp/state/gris_g1200m_v2023_GIMP_id_CTRL_0_25.nc
+
+PISM_PREFIX=~/local/pism/ python hindcast.py --exstep monthly --spatial_ts ragis --data_dir /import/c1/ICESHEET/ICESHEET/pism-greenland/data_sets/ --dataset_version 2023_RAGIS -s chinook -n 48 -q t2standard -w 48:00:00 --o_dir 2023_07_ragis --start 1980-1-1 --end 1986-1-1 -g 1200 -e ../uq/ensemble_gris_ragis_ctrl.csv /import/c1/ICESHEET/ICESHEET/pism-greenland/calibration/2023_07_init_ragis/state/gris_g1200m_v2023_RAGIS_id_CTRL_0_25.nc
+
+PISM_PREFIX=~/local/pism/ python hindcast.py --exstep monthly --spatial_ts ragis --data_dir /import/c1/ICESHEET/ICESHEET/pism-greenland/data_sets/ --dataset_version 2023_GIMP -s chinook -n 192 -q t2standard -w 48:00:00 --o_dir 2023_07_gimp --start 1980-1-1 --end 1986-1-1  -g 600 -e ../uq/ensemble_gris_ragis_ctrl.csv /import/c1/ICESHEET/ICESHEET/pism-greenland/calibration/2023_07_init_gimp/state/gris_g600m_v2023_GIMP_id_CTRL_0_25.nc
+
+PISM_PREFIX=~/local/pism/ python hindcast.py --exstep monthly --spatial_ts ragis --data_dir /import/c1/ICESHEET/ICESHEET/pism-greenland/data_sets/ --dataset_version 2023_RAGIS -s chinook -n 192 -q t2standard -w 48:00:00 --o_dir 2023_07_ragis --start 1980-1-1 --end 1986-1-1  -g 600 -e ../uq/ensemble_gris_ragis_ctrl.csv /import/c1/ICESHEET/ICESHEET/pism-greenland/calibration/2023_07_init_ragis/state/gris_g600m_v2023_RAGIS_id_CTRL_0_25.nc 
