@@ -225,16 +225,11 @@ if __name__ == "__main__":
         "--dataset_version",
         dest="version",
         choices=[
-            "2022",
-            "1_RAGIS",
-            "5_RAGIS",
-            "2022_RAGIS",
             "2023_GIMP",
             "2023_RAGIS",
-            "2023_RAGIS_l1e5",
         ],
         help="input data set version",
-        default="2023_RAGIS",
+        default="2023_GIMP",
     )
     parser.add_argument("--start", help="Simulation start year", default="2008-1-1")
     parser.add_argument("--end", help="Simulation end year", default="1980-1-1")
@@ -288,10 +283,12 @@ if __name__ == "__main__":
         input_file = abspath(options.FILE[0])
 
     if domain.lower() in ("greenland_ext", "gris_ext"):
-        pism_dataname = f"$data_dir/bed_dem/pism_Greenland_ext_{grid}m_mcb_jpl_v{version}_{bed_type}.nc"
+        pism_dataname = (
+            f"$data_dir/bed_dem/pism_Greenland_ext_{grid}m_v{version}_{bed_type}.nc"
+        )
     else:
         pism_dataname = (
-            f"$data_dir/bed_dem/pism_Greenland_{grid}m_mcb_jpl_v{version}_{bed_type}.nc"
+            f"$data_dir/bed_dem/pism_Greenland_{grid}m_v{version}_{bed_type}.nc"
         )
 
     master_config_file = computing.get_path_to_config()
