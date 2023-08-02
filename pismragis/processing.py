@@ -81,7 +81,12 @@ def ncfile2dataframe(
             pass
         m_id_re = re.search("id_(.+?)_", infile)
         assert m_id_re is not None
-        m_id = int(m_id_re.group(1))
+        m_id: Union[str, int]
+        try:
+            m_id = int(m_id_re.group(1))
+        except:
+            m_id = str(m_id_re.group(1))
+
         m_dx_re = re.search("gris_g(.+?)m", infile)
         assert m_dx_re is not None
         m_dx = int(m_dx_re.group(1))
