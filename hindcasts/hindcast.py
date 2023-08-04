@@ -645,14 +645,13 @@ done\n\n
                 if "calving.thickness_calving.threshold" in calving_parameters:
                     del calving_parameters["calving.thickness_calving.threshold"]
 
-            if hasattr(combination, "calving_rate_scaling_file"):
-                calving_rate_scaling_file_p = (
-                    f"""$data_dir/calving/{combination["calving_rate_scaling_file"]}"""
-                )
+            if "calving.rate_scaling.file" in combination:
                 calving_parameters[
                     "calving.rate_scaling.file"
-                ] = calving_rate_scaling_file_p
+                ] = f"""$data_dir/calving/{combination[
+                    "calving.rate_scaling.file"]}"""
                 calving_parameters["calving.rate_scaling.period"] = 0
+
             calving = options.calving
             calving_params_dict = computing.generate_calving(
                 calving, **calving_parameters
