@@ -142,6 +142,9 @@ spatial_ts_vars["ragis"] = [
     "frontal_melt_rate",
     "frontal_melt_retreat_rate",
     "vonmises_calving_rate",
+    "tendency_of_ice_mass_due_to_calving",
+    "tendency_of_ice_mass_due_to_frontal_melt",
+    "tendency_of_ice_mass_due_to_forced_retreat",
 ]
 
 spatial_ts_vars["dem"] = [
@@ -532,7 +535,7 @@ systems["chinook"] = {
 }
 
 systems["chinook-rl8"] = {
-    "mpido": "mpirun -np {cores} -machinefile ./nodes_$SLURM_JOBID",
+    "mpido": "mpirun -np {cores}",
     "submit": "sbatch",
     "work_dir": "SLURM_SUBMIT_DIR",
     "job_id": "SLURM_JOBID",
