@@ -22,5 +22,5 @@
 r=$1
 mkdir -p glaciers
 for ugid in 225; do
-    python make_basin_mask.py -r $r --attribute_value $ugid --attribute UGID --layers Greenland_Basins_PS_v1.4.2_1980_epsg3413 --basin_file glaciers/Greenland_Basins_PS_v1.4.2_1980_epsg3413.shp glaciers/gris_g${r}m_mask_basin_${b}.nc;
+    python make_basin_mask.py -r $r --attribute_value $ugid --attribute UGID --layers Greenland_Basins_PS_v1.4.2_1980_epsg3413 --basin_file glaciers/Greenland_Basins_PS_v1.4.2_1980_epsg3413.shp glaciers/gris_g${r}m_mask_glacier_${ugid}.nc;
 done
