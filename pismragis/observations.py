@@ -22,6 +22,7 @@ Module provides functions to deal with observations
 
 import pandas as pd
 import pylab as plt
+import numpy as np
 
 kg2cmsle = 1 / 1e12 * 1.0 / 362.5 / 10.0
 gt2cmsle = 1 / 362.5 / 10.0
@@ -107,6 +108,87 @@ def load_imbie(
     df["Date"] = pd.to_datetime({"year": y, "month": 1, "day": 1}) + pd.to_timedelta(
         (df["Year"] - df["Year"].astype("int")) * 3.15569259747e7, "seconds"
     )
+
+    return df
+
+
+def load_mouginot(
+    url: "/Users/andy/Google Drive/My Drive/Projects/RAGIS/data/pnas.1904242116.sd02.xlsx",
+    norm_year: float = 1992.0,
+):
+    """
+    Load the Mouginot et al (2019) data set
+    """
+
+    df_m = pd.read_excel(
+        url,
+        sheet_name="(2) MB_GIS",
+        header=8,
+        usecols="B,P:BJ",
+        engine="openpyxl",
+    )
+
+    d = df_m.iloc[7]
+    smb = df_m.iloc[19]
+    mass = df_m.iloc[41]
+
+    df_u = pd.read_excel(
+        url,
+        sheet_name="(2) MB_GIS",
+        header=8,
+        usecols="B,CE:DY",
+        engine="openpyxl",
+    )
+    d_u = df_u.iloc[7]
+    smb_u = df_u.iloc[19]
+    mass_u = df_u.iloc[29]
+    mass_uc = df_u.iloc[41]
+
+    df = pd.DataFrame(
+        data=np.hstack(
+            [
+                df_m.columns[1::].values.reshape(-1, 1),
+                mass.values[1::].reshape(-1, 1),
+                smb.values[1::].reshape(-1, 1),
+                -d.values[1::].reshape(-1, 1),
+                mass_uc.values[1::].reshape(-1, 1),
+                smb_u.values[1::].reshape(-1, 1),
+                d_u.values[1::].reshape(-1, 1),
+            ]
+        ),
+        columns=[
+            "Year",
+            "Mass (Gt)",
+            "SMB (Gt/yr)",
+            "D (Gt/yr)",
+            "Mass uncertainty (Gt)",
+            "SMB uncertainty (Gt/yr)",
+            "D uncertainty (Gt/yr)",
+        ],
+    )
+    df = df.astype(
+        {
+            "Year": float,
+            "Mass (Gt)": float,
+            "Mass uncertainty (Gt)": float,
+            "SMB (Gt/yr)": float,
+            "SMB uncertainty (Gt/yr)": float,
+            "D (Gt/yr)": float,
+            "D uncertainty (Gt/yr)": float,
+        }
+    )
+
+    df["Date"] = pd.date_range(start="1972-1-1", end="2018-1-1", freq="AS")
+
+    # Normalize
+    for v in [
+        "Mass (Gt)",
+    ]:
+        df[v] -= df[df["Year"] == norm_year][v].values
+
+    cmSLE = 1.0 / 362.5 / 10.0
+    df["SLE (cm)"] = -df["Mass (Gt)"] * cmSLE
+    df["SLE uncertainty (cm)"] = -df["Mass uncertainty (Gt)"] * cmSLE
 
     return df
 

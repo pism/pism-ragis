@@ -14,10 +14,12 @@ itslive=GRE_G0240_0000.nc
 for grid in 1800 1500 1200 900 600 450; do
     itslivepism=GRE_G${grid}_0000.nc
     gdalwarp $options  -dstnodata 0 -te $x_min $y_min $x_max $y_max -tr $grid $grid  NETCDF:$itslivedir/$itslive:v $itslivedir/$itslivepism
+    ncrename -v Band1,velsurf_mag $itslivedir/$itslivepism
 done
 
 itslive=GRE_G0240_1985.nc
 for grid in 1800 1500 1200 900 600 450; do
     itslivepism=GRE_G${grid}_1985.nc
     gdalwarp $options  -dstnodata 0 -te $x_min $y_min $x_max $y_max -tr $grid $grid  NETCDF:$itslivedir/$itslive:v $itslivedir/$itslivepism
+    ncrename -v Band1,velsurf_mag $itslivedir/$itslivepism
 done
