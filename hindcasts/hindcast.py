@@ -481,7 +481,13 @@ done\n\n
             general_params_dict["bootstrap"] = ""
             #              general_params_dict["input.file"] = pism_dataname
             general_params_dict["i"] = pism_dataname
-            general_params_dict["input.regrid.file"] = input_file
+            if hasattr(combination, "input.regrid.file"):
+                regrid_file = (
+                    f"""$data_dir/initial_states/{combination["input.regrid.file"]}"""
+                )
+                general_params_dict["input.regrid.file"] = regrid_file
+            else:
+                general_params_dict["input.regrid.file"] = input_file
             general_params_dict["input.regrid.vars"] = regridvars
             if test_climate_models:
                 general_params_dict["test_climate_models"] = ""

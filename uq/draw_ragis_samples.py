@@ -44,6 +44,12 @@ tcts: Dict[int, str] = {
     2: "tct_forcing_400myr_74n_50myr_76n.nc",
 }
 
+initialstates: Dict[int, str] = {
+    0: "gris_g900m_v2023_GIMP_id_CTRL_0_25.nc",
+    1: "gris_g900m_v2023_RAGIS_id_CTRL_0_25.nc",
+}
+
+
 dists: Dict[str, Any] = {
     "init": {
         "uq": {},
@@ -123,6 +129,33 @@ dists: Dict[str, Any] = {
             "gamma_T": uniform(loc=1e-4, scale=0.5e-4),
             "ocean_file": randint(0, len(gcms)),
             "calving.thickness_calving.file": randint(0, len(tcts)),
+        },
+        "default_values": {
+            "climate": "given_smb",
+            "hydrology": "routing",
+            "frontal_melt": "routing",
+            "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
+            "climate_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
+            "runoff_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
+            "pseudo_plastic_q": 0.6,
+            "sia_e": 1.25,
+            "ssa_n": 3.0,
+            "fractures": "false",
+            "sliding_law": "pseudo_plastic",
+            "z_min": -700,
+            "z_max": 700,
+            "phi_min": 5,
+            "phi_max": 40,
+            "till_effective_fraction_overburden": 0.02,
+        },
+    },
+    "ocean-calving-init": {
+        "uq": {
+            "vcm": uniform(loc=0.25, scale=0.75),
+            "gamma_T": uniform(loc=1e-4, scale=0.5e-4),
+            "ocean_file": randint(0, len(gcms)),
+            "calving.thickness_calving.file": randint(0, len(tcts)),
+            "input.regrid.file": randint(0, len(initialstates)),
         },
         "default_values": {
             "climate": "given_smb",
@@ -370,6 +403,10 @@ for i, key in enumerate(keys_prior):
     elif key == "calving.thickness_calving.file":
         dist_sample[:, i] = [
             tcts[id] for id in distributions[key].ppf(unif_sample[:, i])
+        ]
+    elif key == "input.regrid.file":
+        dist_sample[:, i] = [
+            initialstates[id] for id in distributions[key].ppf(unif_sample[:, i])
         ]
     elif key == "stress_balance":
         dist_sample[:, i] = [
