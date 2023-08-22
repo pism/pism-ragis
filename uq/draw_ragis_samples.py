@@ -39,9 +39,9 @@ gcms: Dict[int, str] = {
 }
 
 tcts: Dict[int, str] = {
-    0: "tct_forcing_400myr_74n_50myr_76n.nc",
-    1: "tct_forcing_500myr_74n_100myr_76n.nc",
-    2: "tct_forcing_600myr_74n_150myr_76n.nc",
+    0: "tct_forcing_200myr_74n_50myr_76n.nc",
+    1: "tct_forcing_300myr_74n_50myr_76n.nc",
+    2: "tct_forcing_400myr_74n_50myr_76n.nc",
 }
 
 dists: Dict[str, Any] = {
@@ -119,9 +119,10 @@ dists: Dict[str, Any] = {
     },
     "ocean-calving": {
         "uq": {
-            "vcm": uniform(loc=0.2, scale=0.8),
+            "vcm": uniform(loc=0.25, scale=0.75),
             "gamma_T": uniform(loc=1e-4, scale=0.5e-4),
             "ocean_file": randint(0, len(gcms)),
+            "calving.thickness_calving.file": randint(0, len(tcts)),
         },
         "default_values": {
             "climate": "given_smb",
@@ -140,7 +141,6 @@ dists: Dict[str, Any] = {
             "phi_min": 5,
             "phi_max": 40,
             "till_effective_fraction_overburden": 0.02,
-            "calving.thickness_calving.threshold": 50,
         },
     },
     "thickness-calving": {
