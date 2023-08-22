@@ -652,11 +652,12 @@ done\n\n
                     del calving_parameters["calving.thickness_calving.threshold"]
 
             if "calving.rate_scaling.file" in combination:
-                calving_parameters[
-                    "calving.rate_scaling.file"
-                ] = f"""$data_dir/calving/{combination[
+                if combination["calving.rate_scaling.file"]:
+                    calving_parameters[
+                        "calving.rate_scaling.file"
+                    ] = f"""$data_dir/calving/{combination[
                     "calving.rate_scaling.file"]}"""
-                calving_parameters["calving.rate_scaling.period"] = 0
+                    calving_parameters["calving.rate_scaling.period"] = 0
 
             calving = options.calving
             calving_params_dict = computing.generate_calving(
@@ -757,3 +758,8 @@ done\n\n
     scripts = computing.uniquify_list(scripts)
     print("\n".join([script for script in scripts]))
     print("\nwritten\n")
+
+    for n, row in enumerate(uq_df.iterrows()):
+        combination = row[1]
+
+        print(combination["id"])
