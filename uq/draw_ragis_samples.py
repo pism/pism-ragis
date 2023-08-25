@@ -125,10 +125,9 @@ dists: Dict[str, Any] = {
     },
     "ocean-calving": {
         "uq": {
-            "vcm": uniform(loc=0.25, scale=0.75),
-            "gamma_T": uniform(loc=1e-4, scale=0.5e-4),
+            "vcm": uniform(loc=0.40, scale=0.40),
+            "gamma_T": uniform(loc=0.75e-4, scale=0.75e-4),
             "ocean_file": randint(0, len(gcms)),
-            "calving.thickness_calving.file": randint(0, len(tcts)),
         },
         "default_values": {
             "climate": "given_smb",
@@ -147,6 +146,7 @@ dists: Dict[str, Any] = {
             "phi_min": 5,
             "phi_max": 40,
             "till_effective_fraction_overburden": 0.02,
+            "calving.thickness_calving.threshold": 100,
         },
     },
     "ocean-calving-init": {
