@@ -185,16 +185,21 @@ def to_decimal_year(date):
 def check_file(infile: Union[str, pathlib.Path], norm_year: float = 1992.0) -> bool:
     """Check netCDF file"""
     with xr.open_dataset(infile) as ds:
-        datetimeindex = ds.indexes["time"]
-        years = np.array([to_decimal_year(x.to_pydatetime()) for x in datetimeindex])
-        monotonically_increasing = np.all(
-            years.reshape(1, -1)[:, 1:] >= years.reshape(1, -1)[:, :-1], axis=1
-        )[0]
         is_ok: bool = False
-        if (years[-1] >= norm_year) and monotonically_increasing:
-            is_ok = True
-        else:
-            print(f"{infile} time-series too short or not monotonically-increasing.")
+        if "time" in ds.indexes:
+            datetimeindex = ds.indexes["time"]
+            years = np.array(
+                [to_decimal_year(x.to_pydatetime()) for x in datetimeindex]
+            )
+            monotonically_increasing = np.all(
+                years.reshape(1, -1)[:, 1:] >= years.reshape(1, -1)[:, :-1], axis=1
+            )[0]
+            if (years[-1] >= norm_year) and monotonically_increasing:
+                is_ok = True
+            else:
+                print(
+                    f"{infile} time-series too short or not monotonically-increasing."
+                )
         return is_ok
 
 
