@@ -267,6 +267,7 @@ def resample_ensemble_by_data(
     verbose: bool = False,
     m_var: str = "Mass (Gt)",
     m_var_std: str = "Mass uncertainty (Gt)",
+    return_weights: bool = False,
 ) -> pd.DataFrame:
     """
     Resampling algorithm by Douglas C. Brinkerhoff
@@ -339,4 +340,7 @@ def resample_ensemble_by_data(
 
     simulated_resampled = pd.concat(resampled_list)
 
-    return simulated_resampled
+    if return_weights:
+        return simulated_resampled, weights
+    else:
+        return simulated_resampled
