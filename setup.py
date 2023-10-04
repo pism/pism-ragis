@@ -25,6 +25,7 @@ requirements = [
     "pyarrow",
     "fastparquet",
     "scikit-learn",
+    "tqdm",
 ]
 
 setup(

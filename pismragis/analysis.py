@@ -37,17 +37,17 @@ from pismragis.processing import tqdm_joblib
 
 def prepare_df(url: str):
     """
-    Helper function to read csv or parquet file and return pd.DataFrame.
+     Helper function to read csv or parquet file and return pd.DataFrame.
 
-    Parameters
+     Parameters
     ----------
-    url : str
-        The file location
+     url : str
+         The file location
 
-    Returns
-    -------
-    pd.DataFrame
-        a Pandas DataFrame
+     Returns
+     -------
+     pd.DataFrame
+         a Pandas DataFrame
     """
 
     suffix = pathlib.Path(url).suffix
@@ -326,12 +326,12 @@ def resample_ensemble_by_data(
             log_likes.append(log_like)
             if verbose:
                 print(f"Experiment {i:.0f}: {log_like:.2f}")
-    experiments = np.array(evals)
+    experiments_array = np.asarray(evals)
     w = np.array(log_likes)
     w -= w.mean()
     weights = np.exp(w)
     weights /= weights.sum()
-    resampled_experiments = np.random.choice(experiments, n_samples, p=weights)
+    resampled_experiments = np.random.choice(experiments_array, n_samples, p=weights)
     new_frame = []
     for i in resampled_experiments:
         new_frame.append(simulated[(simulated[id_var] == i)])

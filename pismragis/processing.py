@@ -203,6 +203,25 @@ def check_file(infile: Union[str, pathlib.Path], norm_year: float = 1992.0) -> b
         return is_ok
 
 
+def check_paleo_file(infile: Union[str, pathlib.Path], norm_year: float = 0.0) -> bool:
+    """Check netCDF file"""
+    with xr.open_dataset(infile) as ds:
+        is_ok: bool = False
+        if "time" in ds.indexes:
+            datetimeindex = ds.indexes["time"]
+            years = datetimeindex.year
+            monotonically_increasing = np.all(
+                years.reshape(1, -1)[:, 1:] >= years.reshape(1, -1)[:, :-1], axis=1
+            )[0]
+            if (years[-1] >= norm_year) and monotonically_increasing:
+                is_ok = True
+            else:
+                print(
+                    f"{infile} time-series too short or not monotonically-increasing."
+                )
+        return is_ok
+
+
 def copy_file(
     infile: Union[str, pathlib.Path], outdir: Union[str, pathlib.Path]
 ) -> None:
