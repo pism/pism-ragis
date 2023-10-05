@@ -51,7 +51,7 @@ def test_sensitivity_analysis():
     X_df = pd.read_parquet("tests/data/test_scalar_YM.parquet")
     Y_true = pd.read_parquet("tests/data/test_sensitivity.parquet")[sens_vars].mean()
     ensemble_file = "tests/data/gris_ragis_ocean_simple_lhs_50_w_posterior.csv"
-    for n_jobs in [1, 2]:
+    for n_jobs in [1, 2, 4]:
         Y = sensitivity_analysis(X_df, ensemble_file=ensemble_file, n_jobs=n_jobs)[
             sens_vars
         ].mean()

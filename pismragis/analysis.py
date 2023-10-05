@@ -34,6 +34,8 @@ from tqdm import tqdm
 
 from pismragis.processing import tqdm_joblib
 
+np.random.seed(42)
+
 
 def prepare_df(url: str):
     """
