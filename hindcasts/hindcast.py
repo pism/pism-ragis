@@ -475,7 +475,7 @@ done\n\n
                 "stress_balance.ice_free_thickness_standard": 5,
                 "input.forcing.time_extrapolation": "true",
                 "energy.ch_warming.enabled": "false",
-                "energy.bedrock_thermal.file": "$input_dir/data_sets/bheatflux/Geothermal_heatflux_map_v2.1_g450m.nc",
+                "energy.bedrock_thermal.file": "$data_dir/bheatflux/Geothermal_heatflux_map_v2.1_g450m.nc",
             }
 
             outfile = f"{domain}_g{grid}m_{experiment}.nc"
