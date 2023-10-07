@@ -17,13 +17,22 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 import pandas as pd
-from numpy.testing import assert_array_almost_equal
+import xarray as xr
 from pandas.testing import assert_frame_equal
 
 from pismragis.analysis import prepare_df, sensitivity_analysis
+from pismragis.processing import nc_add_id
+
+seed = 42
+
+ens_vars_dict = {
+    "grounding_line_flux": "grounding_line_flux (Gt year-1)",
+    "limnsw": "limnsw (kg)",
+}
 
 
 def test_prepare_df():
+    """Test preparing a DataFrame"""
     true_infile = "tests/data/test_scalar_YM.parquet"
     for suffix in ["parquet"]:
         test_infile = f"tests/data/test_scalar_YM.{suffix}"
@@ -34,25 +43,49 @@ def test_prepare_df():
 
 
 def test_sensitivity_analysis():
-    sens_vars = [
-        "vcm",
-        "gamma_T",
-        "thickness_calving_threshold",
-        "ocean_file",
-        "sia_e",
-        "ssa_n",
-        "pseudo_plastic_q",
-        "till_effective_fraction_overburden",
-        "phi_min",
-        "phi_max",
-        "z_min",
-        "z_max",
-    ]
-    X_df = pd.read_parquet("tests/data/test_scalar_YM.parquet")
-    Y_true = pd.read_parquet("tests/data/test_sensitivity.parquet")[sens_vars].mean()
+    X_df = (
+        pd.read_parquet("tests/data/test_scalar_YM.parquet")
+        .drop(columns=["Year", "resolution_m"])
+        .sort_values(by=["time", "id"])
+    )
+    Y_true_df = pd.read_parquet("tests/data/test_sensitivity.parquet")
     ensemble_file = "tests/data/gris_ragis_ocean_simple_lhs_50_w_posterior.csv"
-    for n_jobs in [1, 2, 4]:
-        Y = sensitivity_analysis(X_df, ensemble_file=ensemble_file, n_jobs=n_jobs)[
-            sens_vars
-        ].mean()
-        assert_array_almost_equal(Y, Y_true, decimal=True)
+    for n_jobs in [1, 2]:
+        Y_df = sensitivity_analysis(
+            X_df, ensemble_file=ensemble_file, n_jobs=n_jobs, seed=seed
+        )
+        assert_frame_equal(Y_df, Y_true_df, atol=1e-1, rtol=1e-6)
+
+
+def test_sensitivity_analysis_from_xarray():
+    ds = xr.open_mfdataset(
+        "tests/data/ts_gris_g1200m_v2023_RAGIS_id_*.nc",
+        combine="nested",
+        concat_dim="id",
+        preprocess=nc_add_id,
+        parallel=True,
+    )
+    ens = (
+        ds.sel(time=slice("1980-01-01", "1982-01-01"))[ens_vars_dict.keys()]
+        .resample(time="1AS")
+        .mean()
+    )
+    X_df = (
+        ens.to_dataframe()
+        .rename(columns=ens_vars_dict)
+        .reset_index()
+        .dropna()
+        .sort_values(by=["time", "id"])
+        .reset_index(drop=True)
+    )
+
+    Y_true_df = pd.read_parquet("tests/data/test_sensitivity.parquet")
+    ensemble_file = "tests/data/gris_ragis_ocean_simple_lhs_50_w_posterior.csv"
+    for n_jobs in [1, 2]:
+        Y_df = sensitivity_analysis(
+            X_df,
+            ensemble_file=ensemble_file,
+            n_jobs=n_jobs,
+            seed=seed,
+        )
+        assert_frame_equal(Y_df, Y_true_df, atol=1e-1, rtol=1e-6)

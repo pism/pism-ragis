@@ -34,8 +34,6 @@ from tqdm import tqdm
 
 from pismragis.processing import tqdm_joblib
 
-np.random.seed(42)
-
 
 def prepare_df(url: str):
     """
@@ -72,6 +70,7 @@ def sensitivity_analysis(
     ],
     n_jobs: int = 4,
     sensitivity_indices: Union[str, list] = ["delta", "S1"],
+    seed: Union[None, int] = None,
 ) -> pd.DataFrame:
     """
     Calculate sensitivity indices using SALIB and return pd.DataFrame.
@@ -140,6 +139,7 @@ def sensitivity_analysis(
                     id_df,
                     problem,
                     calc_variables,
+                    seed=seed,
                     sensitivity_indices=sensitivity_indices,
                 )
             )
@@ -152,6 +152,7 @@ def sensitivity_analysis(
                     id_df,
                     problem,
                     calc_variables,
+                    seed=seed,
                     sensitivity_indices=sensitivity_indices,
                 )
                 for m_date, s_df in df.groupby(by="time")
@@ -175,6 +176,7 @@ def compute_sensitivity_indices(
     problem: dict,
     calc_variables: list,
     sensitivity_indices: list,
+    seed: Union[None, int],
     verbose: bool = False,
 ) -> pd.DataFrame:
     """
@@ -230,6 +232,7 @@ def compute_sensitivity_indices(
             params,
             response_matrix,
             num_resamples=100,
+            seed=seed,
             print_to_console=False,
         )
         Si_df = Si.to_df()

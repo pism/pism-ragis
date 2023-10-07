@@ -40,6 +40,19 @@ kg2cmsle = 1 / 1e12 * 1.0 / 362.5 / 10.0
 gt2cmsle = 1 / 362.5 / 10.0
 
 
+def nc_add_id(ds):
+    m_id_re = re.search("id_(.+?)_", ds.encoding["source"])
+    ds.expand_dims("id")
+    assert m_id_re is not None
+    m_id: Union[str, int]
+    try:
+        m_id = int(m_id_re.group(1))
+    except:
+        m_id = str(m_id_re.group(1))
+    ds["id"] = m_id
+    return ds
+
+
 @contextlib.contextmanager
 def tqdm_joblib(tqdm_object):
     """Context manager to patch joblib to report into tqdm progress bar given as argument"""
@@ -167,7 +180,7 @@ def convert_netcdf_to_dataframe(
 
     df = pd.concat(result)
 
-    return df
+    return df.sort_values(by=["time", "id"])
 
 
 def to_decimal_year(date):
