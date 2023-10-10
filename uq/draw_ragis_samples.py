@@ -125,7 +125,7 @@ dists: Dict[str, Any] = {
     },
     "ocean-calving": {
         "uq": {
-            "vcm": uniform(loc=0.35, scale=0.20),
+            "vcm": uniform(loc=0.40, scale=0.20),
             "gamma_T": uniform(loc=0.75e-4, scale=0.75e-4),
             "ocean_file": randint(0, len(gcms)),
         },

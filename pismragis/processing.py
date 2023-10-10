@@ -40,7 +40,10 @@ kg2cmsle = 1 / 1e12 * 1.0 / 362.5 / 10.0
 gt2cmsle = 1 / 362.5 / 10.0
 
 
-def nc_add_id(ds):
+def preprocess_nc(ds):
+    """
+    Add 'id' and remove 'nv' dimension
+    """
     m_id_re = re.search("id_(.+?)_", ds.encoding["source"])
     ds.expand_dims("id")
     assert m_id_re is not None
@@ -50,7 +53,7 @@ def nc_add_id(ds):
     except:
         m_id = str(m_id_re.group(1))
     ds["id"] = m_id
-    return ds
+    return ds.mean("nv")
 
 
 @contextlib.contextmanager
