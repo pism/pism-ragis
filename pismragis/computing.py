@@ -276,7 +276,6 @@ def generate_grid_description(grid_resolution, domain, restart=False):
 
     grid["grid.Lz"] = 4000
     grid["grid.Lbz"] = 2000
-    grid["grid.ice_vertical_spacing"] = "equal"
     grid["grid.Mz"] = 201
     grid["grid.Mbz"] = 21
 
