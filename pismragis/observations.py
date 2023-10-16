@@ -113,7 +113,7 @@ def load_imbie(
 
 def load_mouginot(
     url: str = "/Users/andy/Google Drive/My Drive/Projects/RAGIS/data/pnas.1904242116.sd02.xlsx",
-    norm_year: float = 1972.0,
+    norm_year: Union[None, float] = None,
 ):
     """
     Load the Mouginot et al (2019) data set
@@ -170,12 +170,12 @@ def load_mouginot(
                     mass_cumulative.values[1::].reshape(-1, 1),
                     smb_cumulative_anomaly.values[1::].reshape(-1, 1),
                     d_cumulative_anomaly.values[1::].reshape(-1, 1),
-                    mass_rate.values[1::].reshape(-1, 1),
-                    smb_rate.values[1::].reshape(-1, 1),
-                    -d_rate.values[1::].reshape(-1, 1),
                     mass_cumulative_u.values[1::].reshape(-1, 1),
                     smb_cumulative_u.values[1::].reshape(-1, 1),
                     d_cumulative_u.values[1::].reshape(-1, 1),
+                    mass_rate.values[1::].reshape(-1, 1),
+                    smb_rate.values[1::].reshape(-1, 1),
+                    -d_rate.values[1::].reshape(-1, 1),
                     mass_rate_u.values[1::].reshape(-1, 1),
                     smb_rate_u.values[1::].reshape(-1, 1),
                     d_rate_u.values[1::].reshape(-1, 1),
@@ -218,10 +218,13 @@ def load_mouginot(
         df["Date"] = pd.date_range(start="1972-1-1", end="2018-1-1", freq="AS")
 
         # Normalize
-        for v in [
-            "Cumulative ice sheet mass change (Gt)",
-        ]:
-            df[v] -= df[df["Year"] == norm_year][v].values
+        if norm_year:
+            for v in [
+                "Cumulative ice sheet mass change (Gt)",
+                "Cumulative ice discharge anomaly (Gt)",
+                "Cumulative surface mass balance anomaly (Gt)",
+            ]:
+                df[v] -= df[df["Year"] == norm_year][v].values
 
         cmSLE = 1.0 / 362.5 / 10.0
         df["SLE (cm)"] = -df["Cumulative ice sheet mass change (Gt)"] * cmSLE
