@@ -77,7 +77,7 @@ def tqdm_joblib(tqdm_object):
 
 
 def ncfile2dataframe(
-    infile,
+    infile: Union[str, pathlib.Path],
     resample: Union[str, None] = None,
     add_vars: bool = True,
     norm_year: float = 1992.0,
@@ -85,7 +85,10 @@ def ncfile2dataframe(
 ) -> pd.DataFrame:
     """Convert netCDF file to pandas.DataFrame"""
 
-    assert os.path.isfile(infile)
+    if isinstance(infile, pathlib.Path):
+        assert infile.exists()
+    else:
+        assert os.path.isfile(infile)
     if verbose:
         print(f"Opening {infile}")
     with xr.open_dataset(infile) as ds:
@@ -95,7 +98,10 @@ def ncfile2dataframe(
             ds = ds.resample(time="1YS").mean()
         else:
             pass
-        m_id_re = re.search("id_(.+?)_", infile)
+        if isinstance(infile, pathlib.Path):
+            m_id_re = re.search("id_(.+?)_", str(infile))
+        else:
+            m_id_re = re.search("id_(.+?)_", infile)
         assert m_id_re is not None
         m_id: Union[str, int]
         try:
@@ -103,7 +109,10 @@ def ncfile2dataframe(
         except:
             m_id = str(m_id_re.group(1))
 
-        m_dx_re = re.search("gris_g(.+?)m", infile)
+        if isinstance(infile, pathlib.Path):
+            m_dx_re = re.search("gris_g(.+?)m", str(infile))
+        else:
+            m_dx_re = re.search("gris_g(.+?)m", infile)
         assert m_dx_re is not None
         m_dx = int(m_dx_re.group(1))
         datetimeindex = ds.indexes["time"]

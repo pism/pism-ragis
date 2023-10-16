@@ -20,9 +20,14 @@
 Module provides functions to deal with observations
 """
 
+from pathlib import Path
+from typing import Union
+
 import numpy as np
 import pandas as pd
 import pylab as plt
+
+from pismragis.processing import to_decimal_year
 
 kg2cmsle = 1 / 1e12 * 1.0 / 362.5 / 10.0
 gt2cmsle = 1 / 362.5 / 10.0
@@ -68,41 +73,35 @@ def load_imbie(
         sheet_name="Greenland Ice Mass",
         engine="openpyxl",
     )
-    df = df_df[
-        [
-            "Year",
-            "Cumulative ice sheet mass change (Gt)",
-            "Cumulative ice sheet mass change uncertainty (Gt)",
-            "Cumulative surface mass balance anomaly (Gt)",
-            "Cumulative surface mass balance anomaly uncertainty (Gt)",
-            "Cumulative ice dynamics anomaly (Gt)",
-            "Cumulative ice dynamics anomaly uncertainty (Gt)",
-            "Rate of mass balance anomaly (Gt/yr)",
-            "Rate of ice dynamics anomaly (Gt/yr)",
-            "Rate of mass balance anomaly uncertainty (Gt/yr)",
-            "Rate of ice dyanamics anomaly uncertainty (Gt/yr)",
-        ]
-    ].rename(
+    df = df_df.rename(
         columns={
-            "Cumulative ice sheet mass change (Gt)": "Mass (Gt)",
-            "Cumulative ice sheet mass change uncertainty (Gt)": "Mass uncertainty (Gt)",
-            "Cumulative surface mass balance anomaly (Gt)": "SMB (Gt)",
-            "Cumulative surface mass balance anomaly uncertainty (Gt)": "SMB uncertainty (Gt)",
-            "Cumulative ice dynamics anomaly (Gt)": "D (Gt)",
-            "Cumulative ice dynamics anomaly uncertainty (Gt)": "D uncertainty (Gt)",
-            "Rate of mass balance anomaly (Gt/yr)": "SMB (Gt/yr)",
-            "Rate of ice dynamics anomaly (Gt/yr)": "D (Gt/yr)",
-            "Rate of mass balance anomaly uncertainty (Gt/yr)": "SMB uncertainty (Gt/yr)",
-            "Rate of ice dyanamics anomaly uncertainty (Gt/yr)": "D uncertainty (Gt/yr)",
+            "Cumulative ice dynamics anomaly (Gt)": "Cumulative ice discharge anomaly (Gt)",
+            "Cumulative ice dynamics anomaly uncertainty (Gt)": "Cumulative ice discharge anomaly uncertainty (Gt)",
+            "Rate of mass balance anomaly (Gt/yr)": "Rate of surface mass balance anomaly (Gt/yr)",
+            "Rate of ice dynamics anomaly (Gt/yr)": "Rate of ice discharge anomaly (Gt/yr)",
+            "Rate of mass balance anomaly uncertainty (Gt/yr)": "Rate of surface mass balance anomaly uncertainty (Gt/yr)",
+            "Rate of ice dyanamics anomaly uncertainty (Gt/yr)": "Rate of ice discharge anomaly uncertainty (Gt/yr)",
         }
     )
 
-    df = df[df["Year"] >= 1992.0]
-    df["SMB (Gt/yr)"] += 2 * 1964 / 10
-    df["D (Gt/yr)"] -= 2 * 1964 / 10
+    # df = df[df["Year"] >= 1992.0]
+    df["Rate of surface mass balance (Gt/yr)"] = (
+        df["Rate of surface mass balance anomaly (Gt/yr)"] + 2 * 1964 / 10
+    )
+    df["Rate of ice discharge (Gt/yr)"] = (
+        df["Rate of ice discharge anomaly (Gt/yr)"] - 2 * 1964 / 10
+    )
+    df["Rate of surface mass balance uncertainty (Gt/yr)"] = df[
+        "Rate of surface mass balance anomaly uncertainty (Gt/yr)"
+    ]
+    df["Rate of ice discharge uncertainty (Gt/yr)"] = df[
+        "Rate of ice discharge anomaly uncertainty (Gt/yr)"
+    ]
     cmSLE = 1.0 / 362.5 / 10.0
-    df["SLE (cm)"] = -df["Mass (Gt)"] * cmSLE
-    df["SLE uncertainty (cm)"] = df["Mass uncertainty (Gt)"] * cmSLE
+    df["SLE (cm)"] = -df["Cumulative ice sheet mass change (Gt)"] * cmSLE
+    df["SLE uncertainty (cm)"] = (
+        df["Cumulative ice sheet mass change uncertainty (Gt)"] * cmSLE
+    )
 
     y = df["Year"].astype("int")
     df["Date"] = pd.to_datetime({"year": y, "month": 1, "day": 1}) + pd.to_timedelta(
@@ -141,9 +140,9 @@ def load_mouginot(
             engine="openpyxl",
         )
 
-        d = df_m.iloc[idx[0]]
-        smb = df_m.iloc[idx[1]]
-        mass = df_m.iloc[idx[3]]
+        d_rate = df_m.iloc[idx[0]]
+        smb_rate = df_m.iloc[idx[1]]
+        mass_rate = df_m.iloc[idx[3]]
 
         df_u = pd.read_excel(
             url,
@@ -161,9 +160,9 @@ def load_mouginot(
             data=np.hstack(
                 [
                     df_m.columns[1::].values.reshape(-1, 1),
-                    mass.values[1::].reshape(-1, 1),
-                    smb.values[1::].reshape(-1, 1),
-                    -d.values[1::].reshape(-1, 1),
+                    mass_rate.values[1::].reshape(-1, 1),
+                    smb_rate.values[1::].reshape(-1, 1),
+                    -d_rate.values[1::].reshape(-1, 1),
                     mass_uc.values[1::].reshape(-1, 1),
                     smb_u.values[1::].reshape(-1, 1),
                     d_u.values[1::].reshape(-1, 1),
@@ -171,23 +170,23 @@ def load_mouginot(
             ),
             columns=[
                 "Year",
-                "Mass (Gt)",
-                "SMB (Gt/yr)",
-                "D (Gt/yr)",
-                "Mass uncertainty (Gt)",
-                "SMB uncertainty (Gt/yr)",
-                "D uncertainty (Gt/yr)",
+                "Rate of ice sheet mass change (Gt/yr)",
+                "Rate of surface mass balance (Gt/yr)",
+                "Rate of ice discharge (Gt/yr)",
+                "Rate of ice sheet mass change uncertainty (Gt/yr)",
+                "Rate of surface mass balance uncertainty (Gt/yr)",
+                "Rate of ice discharge uncertainty (Gt/yr)",
             ],
         )
         df = df.astype(
             {
                 "Year": float,
-                "Mass (Gt)": float,
-                "Mass uncertainty (Gt)": float,
-                "SMB (Gt/yr)": float,
-                "SMB uncertainty (Gt/yr)": float,
-                "D (Gt/yr)": float,
-                "D uncertainty (Gt/yr)": float,
+                "Rate of ice sheet mass change (Gt/yr)": float,
+                "Rate of ice sheet mass change uncertainty (Gt/yr)": float,
+                "Rate of surface mass balance (Gt/yr)": float,
+                "Rate of surface mass balance uncertainty (Gt/yr)": float,
+                "Rate of ice discharge (Gt/yr)": float,
+                "Rate of ice discharge uncertainty (Gt/yr)": float,
             }
         )
 
@@ -195,67 +194,195 @@ def load_mouginot(
 
         # Normalize
         for v in [
-            "Mass (Gt)",
+            "Cumulative ice sheet mass change (Gt)",
         ]:
             df[v] -= df[df["Year"] == norm_year][v].values
 
         cmSLE = 1.0 / 362.5 / 10.0
-        df["SLE (cm)"] = -df["Mass (Gt)"] * cmSLE
-        df["SLE uncertainty (cm)"] = -df["Mass uncertainty (Gt)"] * cmSLE
+        df["SLE (cm)"] = -df["Cumulative ice sheet mass change (Gt)"] * cmSLE
+        df["SLE uncertainty (cm)"] = (
+            -df["Cumulative ice sheet mass change uncertainty (Gt)"] * cmSLE
+        )
         df["Basin"] = basin
         dfs.append(df)
     df = pd.concat(dfs).reset_index(drop=True)
     return df
 
 
+def load_mankoff(
+    discharge_url: Union[str, Path] = Path(
+        "/Users/andy/Google Drive/My Drive/Projects/RAGIS/data/gate_D.csv"
+    ),
+    discharge_error_url: Union[str, Path] = Path(
+        "/Users/andy/Google Drive/My Drive/Projects/RAGIS/data/gate_err.csv"
+    ),
+):
+    m_df = pd.read_csv(discharge_url, parse_dates=["Date"], infer_datetime_format=True)
+    d_df = pd.read_csv(discharge_url, parse_dates=["Date"], infer_datetime_format=True)
+    de_df = pd.read_csv(
+        discharge_error_url, parse_dates=["Date"], infer_datetime_format=True
+    )
+    d_df = -d_df.drop(columns="Date").sum(axis=1)
+    d_df.name = "Rate of ice discharge (Gt/yr)"
+    de_df = de_df.drop(columns="Date").apply(np.square).sum(axis=1).apply(np.sqrt)
+    de_df.name = "Rate of ice discharge uncertainty (Gt/yr)"
+    df = pd.merge(d_df, de_df, left_index=True, right_index=True)
+    df["Date"] = m_df["Date"]
+    df["Year"] = [to_decimal_year(d) for d in df["Date"]]
+    return df
+
+
 def plot_imbie(
     df: pd.DataFrame,
-    sigma: float = 2,
-    mass_color: str = "k",
-    d_color: str = "#648fff",
-    smb_color: str = "#dc267f",
-) -> None:
+    sigma: float = 1,
+    mass_varname: str = "Cumulative ice sheet mass change (Gt)",
+    mass_uncertainty_varname: str = "Cumulative ice sheet mass change uncertainty (Gt)",
+    smb_varname: str = "Cumulative surface mass balance anomaly (Gt)",
+    smb_uncertainty_varname: str = "Cumulative surface mass balance anomaly uncertainty (Gt)",
+    discharge_varname: str = "Cumulative ice discharge anomaly (Gt)",
+    discharge_uncertainty_varname: str = "Cumulative ice discharge anomaly uncertainty (Gt)",
+    mass_rate_varname: str = "Rate of ice sheet mass change (Gt/yr)",
+    mass_rate_uncertainty_varname: str = "Rate of ice sheet mass change uncertainty (Gt/yr)",
+    smb_rate_varname: str = "Rate of surface mass balance (Gt/yr)",
+    smb_rate_uncertainty_varname: str = "Rate of surface mass balance uncertainty (Gt/yr)",
+    discharge_rate_varname: str = "Rate of ice discharge (Gt/yr)",
+    discharge_rate_uncertainty_varname: str = "Rate of ice discharge uncertainty (Gt/yr)",
+    smb_color: str = "#bae4bc",
+    discharge_color: str = "#7bccc4",
+    mass_color: str = "#2b8cbe",
+) -> plt.Figure:
     """Plot IMBIE time series"""
     fig, axs = plt.subplots(nrows=2, ncols=1, sharex="col", figsize=(6.2, 4))
     fig.subplots_adjust(wspace=0.0, hspace=0.0)
 
-    axs[0].fill_between(
-        df["Date"],
-        (df["Mass (Gt)"] + sigma * df["Mass uncertainty (Gt)"]) * gt2cmsle,
-        (df["Mass (Gt)"] - sigma * df["Mass uncertainty (Gt)"]) * gt2cmsle,
-        ls="solid",
-        lw=0,
-        alpha=0.5,
-        color=mass_color,
-        label=f"{sigma}-$\\sigma$ DF",
-    )
-    axs[0].plot(df["Date"], df["Mass (Gt)"] * gt2cmsle, color=mass_color)
+    for m_var, m_u_var, m_color, m_label in zip(
+        [mass_varname, smb_varname, discharge_varname],
+        [
+            mass_uncertainty_varname,
+            smb_uncertainty_varname,
+            discharge_uncertainty_varname,
+        ],
+        [mass_color, smb_color, discharge_color],
+        ["Total", "Surface", "Ice Discharge"],
+    ):
+        axs[0].fill_between(
+            df["Date"],
+            df[m_var] + sigma * df[m_u_var],
+            df[m_var] - sigma * df[m_u_var],
+            ls="solid",
+            lw=0,
+            alpha=0.6,
+            color=m_color,
+        )
+        axs[0].plot(df["Date"], df[m_var], lw=1, color=m_color, label=m_label)
 
-    axs[1].fill_between(
-        df["Date"],
-        (df["D (Gt/yr)"] + sigma * df["D uncertainty (Gt/yr)"]),
-        (df["D (Gt/yr)"] - sigma * df["D uncertainty (Gt/yr)"]),
-        ls="solid",
-        lw=0,
-        alpha=0.5,
-        color=d_color,
-    )
-    axs[1].fill_between(
-        df["Date"],
-        (df["SMB (Gt/yr)"] + sigma * df["SMB uncertainty (Gt/yr)"]),
-        (df["SMB (Gt/yr)"] - sigma * df["SMB uncertainty (Gt/yr)"]),
-        ls="solid",
-        lw=0,
-        alpha=0.5,
-        color=smb_color,
-    )
-    axs[1].plot(df["Date"], df["D (Gt/yr)"], color=d_color)
-    axs[1].plot(df["Date"], df["SMB (Gt/yr)"], color=smb_color)
+    for m_var, m_u_var, m_color, m_label in zip(
+        [mass_rate_varname, smb_rate_varname, discharge_rate_varname],
+        [
+            mass_rate_uncertainty_varname,
+            smb_rate_uncertainty_varname,
+            discharge_rate_uncertainty_varname,
+        ],
+        [mass_color, smb_color, discharge_color],
+        ["Total", "Surface", "Ice Discharge"],
+    ):
+        axs[1].fill_between(
+            df["Date"],
+            df[m_var] + sigma * df[m_u_var],
+            df[m_var] - sigma * df[m_u_var],
+            ls="solid",
+            lw=0,
+            alpha=0.6,
+            color=m_color,
+        )
+        axs[1].plot(df["Date"], df[m_var], lw=1, color=m_color, label=m_label)
 
+    axs[0].axhline(0, ls="dashed", color="k", lw=0.5)
+    axs[1].axhline(0, ls="dashed", color="k", lw=0.5)
     axs[0].set_xlabel("")
-    axs[0].set_ylabel("Contribution to sea-level\n since 1992 (cm SLE)")
+    axs[0].set_ylabel("Mass change (Gt)")
     axs[1].set_xlabel("Year")
-    axs[1].set_ylabel("Flux (Gt/yr)")
+    axs[1].set_ylabel("Rate (Gt/yr)")
+    legend = axs[0].legend()
+    legend.get_frame().set_linewidth(0.0)
+    legend.get_frame().set_alpha(0.0)
+    fig.tight_layout()
+
+    return fig
+
+
+def plot_observations(
+    dfs: list[pd.DataFrame],
+    sigma: float = 1,
+    mass_varname: str = "Cumulative ice sheet mass change (Gt)",
+    mass_uncertainty_varname: str = "Cumulative ice sheet mass change uncertainty (Gt)",
+    smb_varname: str = "Cumulative surface mass balance anomaly (Gt)",
+    smb_uncertainty_varname: str = "Cumulative surface mass balance anomaly uncertainty (Gt)",
+    discharge_varname: str = "Cumulative ice discharge anomaly (Gt)",
+    discharge_uncertainty_varname: str = "Cumulative ice discharge anomaly uncertainty (Gt)",
+    mass_rate_varname: str = "Rate of ice sheet mass change (Gt/yr)",
+    mass_rate_uncertainty_varname: str = "Rate of ice sheet mass change uncertainty (Gt/yr)",
+    smb_rate_varname: str = "Rate of surface mass balance (Gt/yr)",
+    smb_rate_uncertainty_varname: str = "Rate of surface mass balance uncertainty (Gt/yr)",
+    discharge_rate_varname: str = "Rate of ice discharge (Gt/yr)",
+    discharge_rate_uncertainty_varname: str = "Rate of ice discharge uncertainty (Gt/yr)",
+    smb_color: str = "#bae4bc",
+    discharge_color: str = "#7bccc4",
+    mass_color: str = "#2b8cbe",
+) -> plt.Figure:
+    """Plot IMBIE time series"""
+    fig, axs = plt.subplots(nrows=2, ncols=1, sharex="col", figsize=(6.2, 4))
+    fig.subplots_adjust(wspace=0.0, hspace=0.0)
+
+    for df in dfs:
+        for m_var, m_u_var, m_color, m_label in zip(
+            [mass_varname, smb_varname, discharge_varname],
+            [
+                mass_uncertainty_varname,
+                smb_uncertainty_varname,
+                discharge_uncertainty_varname,
+            ],
+            [mass_color, smb_color, discharge_color],
+            ["Total", "Surface", "Ice Discharge"],
+        ):
+            axs[0].fill_between(
+                df["Date"],
+                df[m_var] + sigma * df[m_u_var],
+                df[m_var] - sigma * df[m_u_var],
+                ls="solid",
+                lw=0,
+                alpha=0.6,
+                color=m_color,
+            )
+            axs[0].plot(df["Date"], df[m_var], lw=1, color=m_color, label=m_label)
+
+        for m_var, m_u_var, m_color, m_label in zip(
+            [mass_rate_varname, smb_rate_varname, discharge_rate_varname],
+            [
+                mass_rate_uncertainty_varname,
+                smb_rate_uncertainty_varname,
+                discharge_rate_uncertainty_varname,
+            ],
+            [mass_color, smb_color, discharge_color],
+            ["Total", "Surface", "Ice Discharge"],
+        ):
+            axs[1].fill_between(
+                df["Date"],
+                df[m_var] + sigma * df[m_u_var],
+                df[m_var] - sigma * df[m_u_var],
+                ls="solid",
+                lw=0,
+                alpha=0.6,
+                color=m_color,
+            )
+            axs[1].plot(df["Date"], df[m_var], lw=1, color=m_color, label=m_label)
+
+    axs[0].axhline(0, ls="dashed", color="k", lw=0.5)
+    axs[1].axhline(0, ls="dashed", color="k", lw=0.5)
+    axs[0].set_xlabel("")
+    axs[0].set_ylabel("Mass change (Gt)")
+    axs[1].set_xlabel("Year")
+    axs[1].set_ylabel("Rate (Gt/yr)")
     legend = axs[0].legend()
     legend.get_frame().set_linewidth(0.0)
     legend.get_frame().set_alpha(0.0)
