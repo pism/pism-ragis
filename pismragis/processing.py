@@ -42,7 +42,7 @@ gt2cmsle = 1 / 362.5 / 10.0
 
 def preprocess_nc(ds):
     """
-    Add 'id' and remove 'nv' dimension
+    Add experiment 'id'
     """
     m_id_re = re.search("id_(.+?)_", ds.encoding["source"])
     ds.expand_dims("id")
@@ -53,7 +53,7 @@ def preprocess_nc(ds):
     except:
         m_id = str(m_id_re.group(1))
     ds["id"] = m_id
-    return ds.mean("nv")
+    return ds
 
 
 @contextlib.contextmanager
