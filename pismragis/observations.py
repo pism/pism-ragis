@@ -51,7 +51,7 @@ def load_imbie_csv(url: str = "imbie_greenland_2021_Gt.csv", proj_start=1992):
         df[v] -= df[df["Year"] == proj_start][v].values
 
     cmSLE = 1.0 / 362.5 / 10.0
-    df["SLE (cm)"] = -df["Mass (Gt)"] * cmSLE
+    df["SLE (cm)"] = df["Mass (Gt)"] * cmSLE
     df["SLE uncertainty (cm)"] = -df["Mass uncertainty (Gt)"] * cmSLE
     df["SLE change uncertainty (cm/yr)"] = (
         df["Mass change uncertainty (Gt/yr)"] * gt2cmsle
@@ -98,7 +98,7 @@ def load_imbie(
         "Rate of ice discharge anomaly uncertainty (Gt/yr)"
     ]
     cmSLE = 1.0 / 362.5 / 10.0
-    df["SLE (cm)"] = -df["Cumulative ice sheet mass change (Gt)"] * cmSLE
+    df["SLE (cm)"] = df["Cumulative ice sheet mass change (Gt)"] * cmSLE
     df["SLE uncertainty (cm)"] = (
         df["Cumulative ice sheet mass change uncertainty (Gt)"] * cmSLE
     )
@@ -227,7 +227,7 @@ def load_mouginot(
                 df[v] -= df[df["Year"] == norm_year][v].values
 
         cmSLE = 1.0 / 362.5 / 10.0
-        df["SLE (cm)"] = -df["Cumulative ice sheet mass change (Gt)"] * cmSLE
+        df["SLE (cm)"] = df["Cumulative ice sheet mass change (Gt)"] * cmSLE
         df["SLE uncertainty (cm)"] = (
             -df["Cumulative ice sheet mass change uncertainty (Gt)"] * cmSLE
         )
@@ -238,25 +238,97 @@ def load_mouginot(
 
 
 def load_mankoff(
-    discharge_url: Union[str, Path] = Path(
-        "/Users/andy/Google Drive/My Drive/Projects/RAGIS/data/gate_D.csv"
+    url: Union[str, Path] = Path(
+        "/Users/andy/Google Drive/My Drive/Projects/RAGIS/data/MB_SMB_D_BMB.csv"
     ),
-    discharge_error_url: Union[str, Path] = Path(
-        "/Users/andy/Google Drive/My Drive/Projects/RAGIS/data/gate_err.csv"
-    ),
-):
-    m_df = pd.read_csv(discharge_url, parse_dates=["Date"], infer_datetime_format=True)
-    d_df = pd.read_csv(discharge_url, parse_dates=["Date"], infer_datetime_format=True)
-    de_df = pd.read_csv(
-        discharge_error_url, parse_dates=["Date"], infer_datetime_format=True
+    norm_year: Union[None, float] = None,
+) -> pd.DataFrame:
+    df = pd.read_csv(url, parse_dates=["time"], infer_datetime_format=True)
+
+    df = df.rename(
+        columns={
+            "time": "Date",
+            "MB": "Rate of ice sheet mass change (Gt/day)",
+            "SMB": "Rate of surface mass balance (Gt/day)",
+            "D": "Rate of ice discharge (Gt/day)",
+            "MB_err": "Rate of ice sheet mass change uncertainty (Gt/day)",
+            "SMB_err": "Rate of surface mass balance uncertainty (Gt/day)",
+            "D_err": "Rate of ice discharge uncertainty (Gt/day)",
+        }
     )
-    d_df = -d_df.drop(columns="Date").sum(axis=1)
-    d_df.name = "Rate of ice discharge (Gt/yr)"
-    de_df = de_df.drop(columns="Date").apply(np.square).sum(axis=1).apply(np.sqrt)
-    de_df.name = "Rate of ice discharge uncertainty (Gt/yr)"
-    df = pd.merge(d_df, de_df, left_index=True, right_index=True)
-    df["Date"] = m_df["Date"]
+
+    sec_per_day = 24 * 60**2
+    days_per_year = np.where(df["Date"].dt.is_leap_year, 366, 365)
+    time = df[["Date"]]
+    time["delta"] = 1
+    time["delta"][df["Date"] < "1986-01-01"] = days_per_year[df["Date"] < "1986-01-01"]
+    df = df[
+        [
+            "Rate of ice sheet mass change (Gt/day)",
+            "Rate of surface mass balance (Gt/day)",
+            "Rate of ice discharge (Gt/day)",
+            "Rate of ice sheet mass change uncertainty (Gt/day)",
+            "Rate of surface mass balance uncertainty (Gt/day)",
+            "Rate of ice discharge uncertainty (Gt/day)",
+        ]
+    ]
+    # df = df.set_index(time["Date"]).resample("1D").mean().ffill().reset_index(drop=True)
+    df["Cumulative ice sheet mass change (Gt)"] = (
+        df["Rate of ice sheet mass change (Gt/day)"].multiply(time["delta"]).cumsum()
+    )
+    df["Cumulative ice discharge anomaly (Gt)"] = (
+        df["Rate of ice discharge (Gt/day)"].multiply(time["delta"]).cumsum()
+    )
+    df["Cumulative surface mass balance anomaly (Gt)"] = (
+        df["Rate of surface mass balance (Gt/day)"].multiply(time["delta"]).cumsum()
+    )
+    df["Cumulative ice sheet mass change uncertainty (Gt)"] = (
+        df["Rate of ice sheet mass change uncertainty (Gt/day)"]
+        .apply(np.square)
+        .cumsum()
+        .apply(np.sqrt)
+    )
+    df["Cumulative surface mass balance anomaly uncertainty (Gt)"] = (
+        df["Rate of surface mass balance uncertainty (Gt/day)"]
+        .apply(np.square)
+        .cumsum()
+        .apply(np.sqrt)
+    )
+    df["Cumulative ice discharge anomaly uncertainty (Gt)"] = (
+        df["Rate of ice discharge uncertainty (Gt/day)"]
+        .apply(np.square)
+        .cumsum()
+        .apply(np.sqrt)
+    )
+    df["Rate of ice sheet mass change (Gt/yr)"] = df[
+        "Rate of ice sheet mass change (Gt/day)"
+    ].multiply(days_per_year)
+    df["Rate of ice discharge (Gt/yr)"] = df["Rate of ice discharge (Gt/day)"].multiply(
+        days_per_year
+    )
+    df["Rate of surface mass balance (Gt/yr)"] = df[
+        "Rate of surface mass balance (Gt/day)"
+    ].multiply(days_per_year)
+    df = pd.merge(df, time, left_index=True, right_index=True)
     df["Year"] = [to_decimal_year(d) for d in df["Date"]]
+
+    cmSLE = 1.0 / 362.5 / 10.0
+    df["SLE (cm)"] = df["Cumulative ice sheet mass change (Gt)"] * cmSLE
+    df["SLE uncertainty (cm)"] = (
+        df["Cumulative ice sheet mass change uncertainty (Gt)"] * cmSLE
+    )
+    if norm_year:
+        # Normalize
+        for v in [
+            "Cumulative ice sheet mass change (Gt)",
+            "Cumulative surface mass balance anomaly (Gt)",
+            "Cumulative ice discharge anomaly (Gt)",
+            "Cumulative ice sheet mass change uncertainty (Gt)",
+            "Cumulative surface mass balance anomaly uncertainty (Gt)",
+            "Cumulative ice discharge anomaly uncertainty (Gt)",
+        ]:
+            df[v] -= df[df["Year"] == norm_year][v].values
+
     return df
 
 
