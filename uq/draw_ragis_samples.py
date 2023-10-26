@@ -291,7 +291,7 @@ dists: Dict[str, Any] = {
             "surface.pdd.std_dev.value": uniform(loc=2, scale=4),
         },
         "default_values": {
-            "climate": "given_pdd",
+            "climate": "given_pdd_delta",
             "hydrology": "diffuse",
             "frontal_melt": "off",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
