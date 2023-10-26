@@ -581,7 +581,7 @@ done\n\n
                     "surface.pdd.std_dev.value"
                 ]
                 climate_parameters["atmosphere.delta_T.file"] = climate_offset_file_p
-                climate_parameters["atmosphere.frace_P.file"] = climate_offset_file_p
+                climate_parameters["atmosphere.frac_P.file"] = climate_offset_file_p
             climate_params_dict = computing.generate_climate(
                 combination["climate"], **climate_parameters
             )
