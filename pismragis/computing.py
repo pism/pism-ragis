@@ -444,6 +444,10 @@ def generate_climate(climate, **kwargs):
 
     climate_dict = {
         "given_pdd": {"atmosphere.models": "given", "surface.models": "pdd"},
+        "given_pdd_delta": {
+            "atmosphere.models": "given,delta_T,frac_P",
+            "surface.models": "pdd",
+        },
         "given_smb": {"atmosphere.models": "given", "surface.models": "given"},
     }
 

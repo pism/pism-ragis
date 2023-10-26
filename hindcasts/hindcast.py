@@ -561,12 +561,13 @@ done\n\n
             )
 
             climate_file_p = f"""$data_dir/climate/{combination["climate_file"]}"""
+            climate_offset_file_p = "$data_dir/climate/ragis_dem_climate_1980_2020.nc"
             climate_parameters: Dict[str, Union[str, int, float]] = {
                 "atmosphere.given.file": climate_file_p,
                 "surface.given.file": climate_file_p,
             }
 
-            if combination["climate"] == "given_pdd":
+            if combination["climate"] in ("given_pdd", "given_pdd_delta"):
                 climate_parameters["surface.pdd.factor_ice"] = (
                     combination["surface.pdd.factor_ice"] / 910.0
                 )
@@ -579,6 +580,8 @@ done\n\n
                 climate_parameters["surface.pdd.std_dev.value"] = combination[
                     "surface.pdd.std_dev.value"
                 ]
+                climate_parameters["atmosphere.delta_T.file"] = climate_offset_file_p
+                climate_parameters["atmosphere.frace_P.file"] = climate_offset_file_p
             climate_params_dict = computing.generate_climate(
                 combination["climate"], **climate_parameters
             )

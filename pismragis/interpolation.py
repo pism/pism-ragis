@@ -238,7 +238,7 @@ def interpolate_rkf(
     Examples:
     """
 
-    k1_vx, k1_vy = point_velocity(Vx, Vy, x, y, start_pt)
+    k1_vx, k1_vy = velocity_at_point(Vx, Vy, x, y, start_pt)
 
     if k1_vx is None or k1_vy is None:
         return None, None
@@ -248,7 +248,7 @@ def interpolate_rkf(
         start_pt.y + (0.25) * delta_time * k1_vy,
     )
 
-    k2_vx, k2_vy = point_velocity(Vx, Vy, x, y, k2_pt)
+    k2_vx, k2_vy = velocity_at_point(Vx, Vy, x, y, k2_pt)
 
     if k2_vx is None or k2_vy is None:
         return None, None
@@ -262,7 +262,7 @@ def interpolate_rkf(
         + (9.0 / 32.0) * delta_time * k2_vy,
     )
 
-    k3_vx, k3_vy = point_velocity(Vx, Vy, x, y, k3_pt)
+    k3_vx, k3_vy = velocity_at_point(Vx, Vy, x, y, k3_pt)
 
     if k3_vx is None or k3_vy is None:
         return None, None
@@ -278,7 +278,7 @@ def interpolate_rkf(
         + (7296.0 / 2197.0) * delta_time * k3_vy,
     )
 
-    k4_vx, k4_vy = point_velocity(Vx, Vy, x, y, k4_pt)
+    k4_vx, k4_vy = velocity_at_point(Vx, Vy, x, y, k4_pt)
 
     if k4_vx is None or k4_vy is None:
         return None, None
@@ -296,7 +296,7 @@ def interpolate_rkf(
         - (845.0 / 4104.0) * delta_time * k4_vy,
     )
 
-    k5_vx, k5_vy = point_velocity(Vx, Vy, x, y, k5_pt)
+    k5_vx, k5_vy = velocity_at_point(Vx, Vy, x, y, k5_pt)
 
     if k5_vx is None or k5_vy is None:
         return None, None
@@ -316,7 +316,7 @@ def interpolate_rkf(
         - (11.0 / 40.0) * delta_time * k5_vy,
     )
 
-    k6_vx, k6_vy = point_velocity(Vx, Vy, x, y, k6_pt)
+    k6_vx, k6_vy = velocity_at_point(Vx, Vy, x, y, k6_pt)
 
     if k6_vx is None or k6_vy is None:
         return None, None
@@ -356,7 +356,7 @@ def interpolate_rkf(
     return interp_pt, interp_pt_error_estim
 
 
-def point_velocity(
+def velocity_at_point(
     Vx: np.ndarray,
     Vy: np.ndarray,
     x: np.ndarray,
