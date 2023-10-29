@@ -764,8 +764,3 @@ done\n\n
     scripts = computing.uniquify_list(scripts)
     print("\n".join([script for script in scripts]))
     print("\nwritten\n")
-
-    for n, row in enumerate(uq_df.iterrows()):
-        combination = row[1]
-
-        print(combination["id"])
