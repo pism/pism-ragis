@@ -21,6 +21,8 @@ Module provides functions for calculating trajectories
 """
 
 
+from typing import Tuple
+
 import geopandas as gp
 import numpy as np
 import pandas as pd
@@ -30,7 +32,7 @@ from pismragis.interpolation import interpolate_rkf, velocity_at_point
 
 
 def compute_trajectory(
-    p: Point,
+    point: Point,
     Vx: np.ndarray,
     Vy: np.ndarray,
     x: np.ndarray,
@@ -38,26 +40,24 @@ def compute_trajectory(
     dt: float = 0.1,
     total_time: float = 1000,
     reverse: bool = False,
-) -> list[Point]:
+) -> Tuple[list[Point], list]:
     """
     Compute trajectory
     """
     if reverse:
         Vx = -Vx
         Vy = -Vy
-    pts = [p]
+    pts = [point]
+    pts_error_estim = [0.0]
     time = 0.0
     while abs(time) <= (total_time):
-        interp_point, interp_point_error_estim = interpolate_rkf(
-            Vx, Vy, x, y, p, delta_time=dt
-        )
-
-        if interp_point is None or interp_point_error_estim is None:
+        point, point_error_estim = interpolate_rkf(Vx, Vy, x, y, point, delta_time=dt)
+        if (point is None) or (point_error_estim is None):
             break
-
-        pts.append(p)
+        pts.append(point)
+        pts_error_estim.append(point_error_estim)
         time += dt
-    return pts
+    return pts, pts_error_estim
 
 
 def trajectories_to_geopandas(
@@ -79,6 +79,7 @@ def trajectories_to_geopandas(
             "vy": vy,
             "v": v,
             "trai_id": traj_id,
+            "traj_pt": range(len(traj)),
             "distance": d,
             "distance_from_origin": np.cumsum(d),
         }

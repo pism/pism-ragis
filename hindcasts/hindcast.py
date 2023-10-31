@@ -692,10 +692,6 @@ done\n\n
                     all_params_dict, spatial_ts_dict
                 )
 
-            if stress_balance == "blatter":
-                del all_params_dict["skip"]
-                all_params_dict["time_stepping.adaptive_ratio"] = 25
-
             print("\nChecking parameters")
             print("------------------------------------------------------------")
             with xr.open_dataset(master_config_file) as ds:
