@@ -46,8 +46,16 @@ def generate_domain(domain):
     Returns: string
     """
 
-    if domain.lower() in ("greenland", "gris", "gris_ext", "ismip6"):
+    if domain.lower() in ("greenland", "gris", "gris_ext"):
         pism_exec = "pismr"
+    elif domain.lower() in ("qaamerujup"):
+        x_min = -250000.0
+        x_max = -153000.0
+        y_min = -2075000.0
+        y_max = -2021000.0
+        pism_exec = """pismr -regional -x_range {x_min},{x_max} -y_range {y_min},{y_max}  -bootstrap -regional.zero_gradient true -regional.no_model_strip 4.5""".format(
+            x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max
+        )
     else:
         print(f"Domain {domain} not recognized, exiting")
 
@@ -241,6 +249,9 @@ def generate_grid_description(grid_resolution, domain, restart=False):
     if domain.lower() in ("greenland_ext", "gris_ext"):
         mx_max = 14400
         my_max = 24080
+    elif domain.lower() in ("qaamerujup"):
+        mx_max = 520
+        my_max = 240
     else:
         mx_max = 10560
         my_max = 18240

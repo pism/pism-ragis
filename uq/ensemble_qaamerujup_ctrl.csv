@@ -1,0 +1,2 @@
+id,climate,hydrology,frontal_melt,ocean_file,climate_file,runoff_file,gamma_T,salinity,pseudo_plastic_q,sia_e,ssa_n,calving.thickness_calving.threshold,calving.rate_scaling.file,vcm,fractures,z_min,z_max,phi_min,phi_max,till_effective_fraction_overburden
+BAYES-MEDIAN,given_smb,diffuse,off,MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc,MARv3.5.2-20km-monthly-20CRv2c_4500m_1900_2014.nc,MARv3.5.2-20km-monthly-20CRv2c_4500m_1900_2014.nc,0.000125,34,0.7508220999999999,2.608046,3.309718,200,,0.42,false,-369.6359,243.82395,7.193718,42.79528,0.01845403

@@ -95,12 +95,7 @@ if __name__ == "__main__":
         choices=[
             "gris",
             "gris_ext",
-            "jib",
-            "jakobshavn",
-            "nw",
-            "ismip6",
             "qaamerujup",
-            "qaanaaq",
         ],
         help="sets the modeling domain",
         default="gris",

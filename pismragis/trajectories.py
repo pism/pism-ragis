@@ -25,7 +25,6 @@ import geopandas as gp
 import numpy as np
 import pandas as pd
 from shapely import Point
-from tqdm import tqdm
 
 from pismragis.interpolation import interpolate_rkf, velocity_at_point
 
@@ -49,7 +48,13 @@ def compute_trajectory(
     pts = [p]
     time = 0.0
     while abs(time) <= (total_time):
-        p, _ = interpolate_rkf(Vx, Vy, x, y, p, delta_time=dt)
+        interp_point, interp_point_error_estim = interpolate_rkf(
+            Vx, Vy, x, y, p, delta_time=dt
+        )
+
+        if interp_point is None or interp_point_error_estim is None:
+            break
+
         pts.append(p)
         time += dt
     return pts
@@ -65,9 +70,7 @@ def trajectories_to_geopandas(
 ) -> gp.GeoDataFrame:
     """Convert trajectory to GeoDataFrame"""
     dfs = []
-    progress = tqdm(enumerate(trajs), total=len(trajs), leave=False, position=3)
-    for traj_id, traj in progress:
-        progress.set_description(f"Converting trajectory {traj_id} to GeoDataFrame")
+    for traj_id, traj in enumerate(trajs):
         vx, vy = velocity_at_point(Vx, Vy, x, y, traj)
         v = np.sqrt(vx**2 + vy**2)
         d = [0] + [traj[k].distance(traj[k - 1]) for k in range(1, len(traj))]

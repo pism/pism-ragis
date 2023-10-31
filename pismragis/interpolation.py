@@ -366,7 +366,10 @@ def velocity_at_point(
     """
     Return velocity at Point p using bilinear interpolation
     """
+
     if isinstance(p, Point):
+        if p.is_empty:
+            return None, None
         px = np.array([p.x])
         py = np.array([p.y])
     else:
