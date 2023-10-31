@@ -161,9 +161,20 @@ spatial_ts_vars["dem"] = [
     "flux_divergence",
 ]
 
+spatial_ts_vars["qaamerujup"] = [
+    "climatic_mass_balance",
+    "dHdt",
+    "mask",
+    "mass_fluxes",
+    "thk",
+    "usurf",
+    "velsurf_mag",
+    "velbase_mag",
+]
+
+
 spatial_ts_vars["standard"] = [
     "bmelt",
-    "basal_mass_flux_floating",
     "beta",
     "bwat",
     "dHdt",
@@ -184,9 +195,7 @@ spatial_ts_vars["standard"] = [
     "sftgif",
     "strain_rates",
     "subglacial_discharge",
-    "tauc",
     "taud_mag",
-    "tendency_of_subglacial_water_mass",
     "thk",
     "tillwat",
     "topg",

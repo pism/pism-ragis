@@ -192,6 +192,7 @@ if __name__ == "__main__":
             "strain",
             "fractures",
             "ragis",
+            "qaamerujup",
             "dem",
         ],
         help="output size type",
