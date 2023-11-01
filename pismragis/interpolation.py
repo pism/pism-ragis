@@ -24,7 +24,9 @@ from typing import Optional, Tuple, Union
 
 import numpy as np
 import scipy
+from numpy import ndarray
 from shapely import Point
+from xarray import DataArray
 
 
 class InterpolationMatrix:
@@ -357,15 +359,24 @@ def interpolate_rkf(
 
 
 def velocity_at_point(
-    Vx: np.ndarray,
-    Vy: np.ndarray,
-    x: np.ndarray,
-    y: np.ndarray,
+    Vx: Union[ndarray, DataArray],
+    Vy: Union[ndarray, DataArray],
+    x: Union[ndarray, DataArray],
+    y: Union[ndarray, DataArray],
     p: Union[list[Point], Point],
 ) -> Tuple:
     """
     Return velocity at Point p using bilinear interpolation
     """
+
+    if isinstance(Vx, DataArray):
+        Vx = Vx.to_numpy()
+    if isinstance(Vy, DataArray):
+        Vy = Vy.to_numpy()
+    if isinstance(x, DataArray):
+        x = x.to_numpy()
+    if isinstance(y, DataArray):
+        y = y.to_numpy()
 
     if isinstance(p, Point):
         if p.is_empty:
