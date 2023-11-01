@@ -50,6 +50,69 @@ def compute_trajectory(
 ) -> Tuple[list[Point], list]:
     """
     Compute trajectory
+
+    Computes a trajectory using Runge-Kutta-Fehlberg integration. Routine is
+    unit-agnostic, requiring the user to ensure consistency of units. For example
+    if the velocity field is given in m/yr, the `dt` and `total_time` are assumed
+    to be in years.
+
+    Parameters
+    ----------
+    Point : shapely.Point
+        Starting point of the trajectory
+    Vx : numpy.ndarray or xarray.DataArray
+        x-component of velocity
+    Vy : numpy.ndarray or xarray.DataArray
+        y-component of velocity
+    x : numpy.ndarray or xarray.DataArray
+        coordinates in x direction
+    y : numpy.ndarray or xarray.DataArray
+        coordinates in y direction
+    dt : float
+        integration time step
+    dt : float
+        total integration time
+
+    Returns
+    ----------
+    pts: list[shapely.Point]
+        `dt`-spaced points along trajectory from 0 to `total_time`.
+    pts_error_estim: list[
+        error estimate at `dt`-spaced points along trajectory
+        from 0 to `total_time`.
+
+    Examples
+    ----------
+
+    Create data:
+
+    >>>    import numpy as np
+    >>>    from shapely import Point
+
+    >>>    nx = 201
+    >>>    ny = 401
+    >>>    x = np.linspace(-100e3, 100e3, nx)
+    >>>    y = np.linspace(-100e3, 100e3, ny)
+    >>>    X, Y = np.meshgrid(x, y)
+
+    >>>    vx = -Y / np.sqrt(X**2 + Y**2) * 250
+    >>>    vy = X / np.sqrt(X**2 + Y**2) * 250
+    >>>    p = Point(0, -50000)
+
+    >>>    pts, pts_error_estim = compute_trajectory(p, vx, vx, x, y, dt=1, total_time=10)
+    >>>    pts
+    [<POINT (0 -50000)>,
+     <POINT (249.994 -49750.006)>,
+     <POINT (499.975 -49500.025)>,
+     <POINT (749.943 -49250.057)>,
+     <POINT (999.897 -49000.103)>,
+     <POINT (1249.825 -48750.175)>,
+     <POINT (1499.713 -48500.287)>,
+     <POINT (1749.56 -48250.44)>,
+     <POINT (1999.364 -48000.636)>,
+     <POINT (2249.113 -47750.887)>,
+     <POINT (2498.79 -47501.21)>,
+     <POINT (2748.394 -47251.606)>]
     """
     if reverse:
         Vx = -Vx
