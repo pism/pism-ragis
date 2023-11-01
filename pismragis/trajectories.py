@@ -21,22 +21,28 @@ Module provides functions for calculating trajectories
 """
 
 
-from typing import Tuple
+from pathlib import Path
+from typing import Tuple, Union
 
 import geopandas as gp
 import numpy as np
 import pandas as pd
+from geopandas import GeoDataFrame
+from numpy import ndarray
+from osgeo import ogr, osr
 from shapely import Point
+from tqdm.auto import tqdm
+from xarray import DataArray
 
 from pismragis.interpolation import interpolate_rkf, velocity_at_point
 
 
 def compute_trajectory(
     point: Point,
-    Vx: np.ndarray,
-    Vy: np.ndarray,
-    x: np.ndarray,
-    y: np.ndarray,
+    Vx: Union[ndarray, DataArray],
+    Vy: Union[ndarray, DataArray],
+    x: Union[ndarray, DataArray],
+    y: Union[ndarray, DataArray],
     dt: float = 0.1,
     total_time: float = 1000,
     reverse: bool = False,
@@ -58,6 +64,62 @@ def compute_trajectory(
         pts_error_estim.append(point_error_estim)
         time += dt
     return pts, pts_error_estim
+
+
+def compute_perturbation(
+    url: Union[str, Path],
+    VX_min: Union[ndarray, DataArray],
+    VX_max: Union[ndarray, DataArray],
+    VY_min: Union[ndarray, DataArray],
+    VY_max: Union[ndarray, DataArray],
+    x: Union[ndarray, DataArray],
+    y: Union[ndarray, DataArray],
+    perturbation: int = 0,
+    sample: Union[list, ndarray] = [0.5, 0.5],
+    total_time: float = 10_000,
+    dt: float = 1,
+    reverse: bool = False,
+) -> GeoDataFrame:
+    """
+    Compute a perturbed trajectory.
+
+    It appears OGR objects cannot be pickled by joblib hence we load it here.
+
+    """
+    Vx = VX_min + sample[0] * (VX_max - VX_min)
+    Vy = VY_min + sample[1] * (VY_max - VY_min)
+
+    ogr.UseExceptions()
+    if isinstance(url, Path):
+        url = str(url.absolute())
+    in_ds = ogr.Open(url)
+
+    layer = in_ds.GetLayer(0)
+    layer_type = ogr.GeometryTypeToName(layer.GetGeomType())
+    srs = layer.GetSpatialRef()
+    srs_geo = osr.SpatialReference()
+    srs_geo.ImportFromEPSG(3413)
+
+    all_glaciers = []
+    progress = tqdm(enumerate(layer), total=len(layer), leave=False)
+    for ft, feature in progress:
+        geometry = feature.GetGeometryRef()
+        geometry.TransformTo(srs_geo)
+        points = geometry.GetPoints()
+        points = [Point(p) for p in points]
+        attrs = feature.items()
+        attrs["perturbation"] = perturbation
+        glacier_name = attrs["name"]
+        progress.set_description(f"""Processing {glacier_name}""")
+        trajs = []
+        for p in points:
+            traj, _ = compute_trajectory(
+                p, Vx, Vy, x, y, total_time=total_time, dt=dt, reverse=reverse
+            )
+            trajs.append(traj)
+        df = trajectories_to_geopandas(trajs, Vx, Vy, x, y, attrs=attrs)
+        all_glaciers.append(df)
+    return pd.concat(all_glaciers)
 
 
 def trajectories_to_geopandas(
