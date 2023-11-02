@@ -20,7 +20,6 @@ from glob import glob
 
 import pandas as pd
 from pandas.testing import assert_frame_equal
-
 from pismragis.stats import run_stats
 
 
