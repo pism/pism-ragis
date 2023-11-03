@@ -59,7 +59,7 @@ def test_sensitivity_analysis():
 
 def test_sensitivity_analysis_from_xarray():
     ds = xr.open_mfdataset(
-        "tests/data/ts_gris_g1200m_v2023_RAGIS_id_*.nc",
+        "tests/data/ts_gris_g1200m_v2023_RAGIS_id_*_1980-1-1_2020-1-1.nc",
         combine="nested",
         concat_dim="id",
         preprocess=preprocess_nc,

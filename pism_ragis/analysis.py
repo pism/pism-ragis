@@ -28,10 +28,11 @@ import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
 from pandas.api.types import is_string_dtype
-from pismragis.processing import tqdm_joblib
 from SALib.analyze import delta
 from scipy.interpolate import interp1d
-from tqdm import tqdm
+from tqdm.auto import tqdm
+
+from pism_ragis.processing import tqdm_joblib
 
 
 def prepare_df(url: str):
