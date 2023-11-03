@@ -19,8 +19,9 @@
 import pandas as pd
 import xarray as xr
 from pandas.testing import assert_frame_equal
-from pismragis.analysis import prepare_df, sensitivity_analysis
-from pismragis.processing import preprocess_nc
+
+from pism_ragis.analysis import prepare_df, sensitivity_analysis
+from pism_ragis.processing import preprocess_nc
 
 seed = 42
 

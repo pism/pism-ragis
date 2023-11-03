@@ -20,10 +20,11 @@ from glob import glob
 
 import pandas as pd
 from pandas.testing import assert_frame_equal
-from pismragis.processing import convert_netcdf_to_dataframe, ncfile2dataframe
+
+from pism_ragis.processing import convert_netcdf_to_dataframe, ncfile2dataframe
 
 
-def test_ncfiletodataframe():
+def test_ncfiletodataframe_basic():
     """
     Reading in a netCDF file and return a pandas.DataFrame:
       - add variables
@@ -43,6 +44,26 @@ def test_ncfiletodataframe():
     assert_frame_equal(df, df_parquet_true)
     assert_frame_equal(df, df_csv_true)
 
+
+def test_ncfiletodataframe_norm():
+    """
+    Reading in a netCDF file and return a pandas.DataFrame:
+      - normalization by year
+    """
+    infile = "tests/data/ts_gris_g1200m_v2023_RAGIS_id_0_1980-1-1_2020-1-1.nc"
+
+    df_parquet_true = pd.read_parquet("tests/data/test_scalar_file_norm_1992.parquet")
+    df = ncfile2dataframe(infile, add_vars=False, norm_year=1992.0)
+    assert_frame_equal(df, df_parquet_true)
+
+
+def test_ncfiletodataframe_resampling():
+    """
+    Reading in a netCDF file and return a pandas.DataFrame:
+      - resampling
+    """
+    infile = "tests/data/ts_gris_g1200m_v2023_RAGIS_id_0_1980-1-1_2020-1-1.nc"
+
     df_parquet_true = pd.read_parquet("tests/data/test_scalar_file_YM.parquet")
     df_csv_true = pd.read_csv(
         "tests/data/test_scalar_file_YM.csv",
@@ -55,17 +76,36 @@ def test_ncfiletodataframe():
     assert_frame_equal(df, df_parquet_true)
     assert_frame_equal(df, df_csv_true)
 
-    df_parquet_true = pd.read_parquet("tests/data/test_scalar_file_add_vars.parquet")
 
+def test_ncfiletodataframe_addvars():
+    """
+    Reading in a netCDF file and return a pandas.DataFrame:
+      - add variables
+    """
+    infile = "tests/data/ts_gris_g1200m_v2023_RAGIS_id_0_1980-1-1_2020-1-1.nc"
+
+    df_parquet_true = pd.read_parquet("tests/data/test_scalar_file_add_vars.parquet")
     df = ncfile2dataframe(infile, add_vars=True)
     assert_frame_equal(df, df_parquet_true)
 
 
-def test_convert_netcdf_to_dataframe():
+def test_ncfiletodataframe_addvars_norm():
+    """
+    Reading in a netCDF file and return a pandas.DataFrame:
+      - add variables
+    """
+    infile = "tests/data/ts_gris_g1200m_v2023_RAGIS_id_0_1980-1-1_2020-1-1.nc"
+
+    df_parquet_true = pd.read_parquet(
+        "tests/data/test_scalar_file_add_vars_norm_1992.parquet"
+    )
+    df = ncfile2dataframe(infile, add_vars=True, norm_year=1992)
+    assert_frame_equal(df, df_parquet_true)
+
+
+def test_convert_netcdf_to_dataframe_basic():
     """
     Reading in a list of netCDF files and return a pandas.DataFrame:
-      - add variables
-      - resampling
     """
 
     df_parquet_true = pd.read_parquet("tests/data/test_scalar.parquet")
@@ -76,10 +116,16 @@ def test_convert_netcdf_to_dataframe():
         parse_dates=["time"],
     )
     infiles = glob("tests/data/ts_gris_g1200m_v2023_RAGIS_id_*_1980-1-1_2020-1-1.nc")
-
     df = convert_netcdf_to_dataframe(infiles, add_vars=False)
     assert_frame_equal(df, df_parquet_true)
     assert_frame_equal(df, df_csv_true)
+
+
+def test_convert_netcdf_to_dataframe_resampling():
+    """
+    Reading in a list of netCDF files and return a pandas.DataFrame:
+      - resampling
+    """
 
     df_parquet_true = pd.read_parquet("tests/data/test_scalar_YM.parquet")
     df_csv_true = pd.read_csv(
@@ -88,13 +134,7 @@ def test_convert_netcdf_to_dataframe():
         infer_datetime_format=True,
         parse_dates=["time"],
     )
-    infiles = glob("tests/data/ts_gris_g1200m_v2023_RAGIS_id_*_1980-1-1_2020-1-1.nc")
-
+    infiles = glob("tests/data/ts_gris_g1200m_v2023_RAGIS_id_*_1980-1-1_1982-1-1.nc")
     df = convert_netcdf_to_dataframe(infiles, resample="yearly", add_vars=False)
     assert_frame_equal(df, df_parquet_true)
-
-    df_parquet_true = pd.read_parquet("tests/data/test_scalar_add_vars.parquet")
-    infiles = glob("tests/data/ts_gris_g1200m_v2023_RAGIS_id_*_1980-1-1_2020-1-1.nc")
-
-    df = convert_netcdf_to_dataframe(infiles, add_vars=True)
-    assert_frame_equal(df, df_parquet_true)
+    assert_frame_equal(df, df_csv_true)
