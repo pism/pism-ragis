@@ -32,7 +32,7 @@ from SALib.analyze import delta
 from scipy.interpolate import interp1d
 from tqdm.auto import tqdm
 
-from pism_ragis.processing import tqdm_joblib
+from .processing import tqdm_joblib
 
 
 def prepare_df(url: str):
