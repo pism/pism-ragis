@@ -32,7 +32,7 @@ def current_script_directory():
 
 script_directory = current_script_directory()
 
-sys.path.append(join(script_directory, "../pismragis"))
+sys.path.append(join(script_directory, "../pism_ragis"))
 import computing
 
 grid_choices = [

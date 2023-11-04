@@ -49,4 +49,9 @@ repos:
   #      entry: pytest
   #      language: system
   #      types: [python]
-  #      exclude: ^venv/ ^.git/ ^.vscode/ ^.DS_Store
+  #      exclude: ^venv/ ^.git/ ^.vscode/ ^.DS_Store ^uq/ ^hindcasts/
+
+  # - repo: https://github.com/srstevenson/nb-clean
+  #   rev: 3.1.0
+  #   hooks:
+  #     - id: nb-clean
