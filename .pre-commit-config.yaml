@@ -55,14 +55,14 @@ repos:
             "-sn", # Don't display the score
           ]
 
-  # - repo: local
-  #   hooks:
-  #    - id: pytest # pytest is a pre-commit hook
-  #      name: pytest
-  #      entry: pytest
-  #      language: system
-  #      types: [python]
-  #      exclude: ^venv/ ^.git/ ^.vscode/ ^.DS_Store ^uq/ ^hindcasts/
+  - repo: local
+    hooks:
+     - id: pytest # pytest is a pre-commit hook
+       name: pytest
+       entry: pytest
+       language: system
+       types: [python]
+       exclude: ^venv/ ^.git/ ^.vscode/ ^.DS_Store ^uq/ ^hindcasts/
 
   # - repo: https://github.com/srstevenson/nb-clean
   #   rev: 3.1.0
