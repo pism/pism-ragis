@@ -40,7 +40,6 @@ def test_ncfiletodataframe_basic():
     df_csv_true = pd.read_csv(
         "tests/data/test_scalar_file.csv",
         index_col=0,
-        infer_datetime_format=True,
         parse_dates=["time"],
     )
 
@@ -72,7 +71,6 @@ def test_ncfiletodataframe_resampling():
     df_csv_true = pd.read_csv(
         "tests/data/test_scalar_file_YM.csv",
         index_col=0,
-        infer_datetime_format=True,
         parse_dates=["time"],
     )
 
@@ -116,7 +114,6 @@ def test_convert_netcdf_to_dataframe_basic():
     df_csv_true = pd.read_csv(
         "tests/data/test_scalar.csv",
         index_col=0,
-        infer_datetime_format=True,
         parse_dates=["time"],
     )
     infiles = glob("tests/data/ts_gris_g1200m_v2023_RAGIS_id_*_1980-1-1_2020-1-1.nc")
@@ -135,7 +132,6 @@ def test_convert_netcdf_to_dataframe_resampling():
     df_csv_true = pd.read_csv(
         "tests/data/test_scalar_YM.csv",
         index_col=0,
-        infer_datetime_format=True,
         parse_dates=["time"],
     )
     infiles = glob("tests/data/ts_gris_g1200m_v2023_RAGIS_id_*_1980-1-1_1982-1-1.nc")
