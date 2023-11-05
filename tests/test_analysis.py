@@ -16,6 +16,10 @@
 # along with PISM; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
+"""
+Test for analysis module
+"""
+
 import pandas as pd
 import xarray as xr
 from pandas.testing import assert_frame_equal
@@ -43,6 +47,9 @@ def test_prepare_df():
 
 
 def test_sensitivity_analysis():
+    """
+    Test sensitivity analysis
+    """
     X_df = (
         pd.read_parquet("tests/data/test_scalar_YM.parquet")
         .drop(columns=["Year", "resolution_m"])
@@ -58,6 +65,9 @@ def test_sensitivity_analysis():
 
 
 def test_sensitivity_analysis_from_xarray():
+    """
+    Test sensitivity analysis from an xarray DataSet
+    """
     ds = xr.open_mfdataset(
         "tests/data/ts_gris_g1200m_v2023_RAGIS_id_*_1980-1-1_2020-1-1.nc",
         combine="nested",

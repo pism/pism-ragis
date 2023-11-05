@@ -95,15 +95,15 @@ class InterpolationMatrix:
         delta."""
         if delta > 0:
             # grid points are stored in the increasing order
-            if point <= grid[0]:
+            if point <= grid[0]:  # pylint: disable=R1705
                 return 0
             elif point >= grid[-1]:
-                return len(grid) - 1
+                return len(grid) - 1  # pylint: disable=R1705
             else:
                 return int(np.floor((point - grid[0]) / delta))
         else:
             # grid points are stored in the decreasing order
-            if point >= grid[0]:
+            if point >= grid[0]:  # pylint: disable=R1705
                 return 0
             elif point <= grid[-1]:
                 return len(grid) - 1
@@ -131,15 +131,10 @@ class InterpolationMatrix:
             y_max = np.max(y)
 
             # make sure we are in the bounding box defined by the grid
-            if x_k <= x_min:
-                x_k = x_min
-            if x_k >= x_max:
-                x_k = x_max
-
-            if y_k <= y_min:
-                y_k = y_min
-            if y_k >= y_max:
-                y_k = y_max
+            x_k = max(x_k, x_min)
+            x_k = min(x_k, x_max)
+            y_k = max(y_k, y_min)
+            y_k = min(y_k, y_max)
 
             C = self.grid_column(x, dx, x_k)
             R = self.grid_row(y, dy, y_k)

@@ -33,7 +33,7 @@ def current_script_directory():
 script_directory = current_script_directory()
 
 sys.path.append(join(script_directory, "../pism_ragis"))
-import computing
+import computing  # pylint: disable=C0413
 
 grid_choices = [
     18000,
@@ -462,7 +462,7 @@ done\n\n
 
             general_params_dict = {
                 "profile": join(
-                    dirs["performance"], "profile_${job_id}.py".format(**batch_system)
+                    dirs["performance"], f"""profile_${batch_system["job_id"]}.py"""
                 ),
                 "time.file": pism_timefile,
                 "output.format": oformat,
@@ -636,7 +636,7 @@ done\n\n
             try:
                 vcm = float(vcm)
                 calving_parameters["calving.vonmises_calving.sigma_max"] = vcm * 1e6
-            except:
+            except:  # pylint: disable=W0702
                 vonmises_calving_threshold_file_p = "$data_dir/calving/{vcm}"
                 calving_parameters[
                     "calving.vonmises_calving.threshold_file"
@@ -754,5 +754,5 @@ done\n\n
         scripts.append(script)
 
     scripts = computing.uniquify_list(scripts)
-    print("\n".join([script for script in scripts]))
+    print("\n".join([script for script in scripts]))  # pylint: disable=R1721
     print("\nwritten\n")

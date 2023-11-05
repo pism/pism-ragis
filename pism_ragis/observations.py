@@ -243,6 +243,9 @@ def load_mankoff(
     ),
     norm_year: Union[None, float] = None,
 ) -> pd.DataFrame:
+    """
+    Load Mass Balance from Mankoff
+    """
     df = pd.read_csv(url, parse_dates=["time"], infer_datetime_format=True)
 
     df = df.rename(
@@ -257,7 +260,6 @@ def load_mankoff(
         }
     )
 
-    sec_per_day = 24 * 60**2
     days_per_year = np.where(df["Date"].dt.is_leap_year, 366, 365)
     time = df[["Date"]]
     time["delta"] = 1

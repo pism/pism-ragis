@@ -264,14 +264,12 @@ def compute_perturbation(
     in_ds = ogr.Open(ogr_url)
 
     layer = in_ds.GetLayer(0)
-    layer_type = ogr.GeometryTypeToName(layer.GetGeomType())
-    srs = layer.GetSpatialRef()
     srs_geo = osr.SpatialReference()
     srs_geo.ImportFromEPSG(3413)
 
     all_glaciers = []
     with tqdm(enumerate(layer), total=len(layer), leave=False) as pbar:
-        for ft, feature in pbar:
+        for _, feature in pbar:
             geometry = feature.GetGeometryRef()
             geometry.TransformTo(srs_geo)
             points = geometry.GetPoints()

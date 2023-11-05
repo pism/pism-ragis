@@ -42,6 +42,19 @@ repos:
     hooks:
       - id: mypy
 
+  - repo: local
+    hooks:
+      - id: pylint
+        name: pylint
+        entry: pylint
+        language: system
+        types: [python]
+        args:
+          [
+            "-rn", # Only display messages
+            "-sn", # Don't display the score
+          ]
+
   # - repo: local
   #   hooks:
   #    - id: pytest # pytest is a pre-commit hook

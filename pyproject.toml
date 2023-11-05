@@ -129,3 +129,13 @@ exclude = '''
     | docs
  )/
 '''
+
+[tool.pylint.messages_control]
+disable = """
+    too-many-lines,
+    no-else-return,
+    bare-except
+"""
+
+[tool.pylint.format]
+max-line-length = 120

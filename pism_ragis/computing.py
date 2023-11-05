@@ -1,3 +1,21 @@
+# Copyright (C) 2023 Andy Aschwanden
+#
+# This file is part of pism-ragis.
+#
+# PISM-RAGIS is free software; you can redistribute it and/or modify it under the
+# terms of the GNU General Public License as published by the Free Software
+# Foundation; either version 3 of the License, or (at your option) any later
+# version.
+#
+# PISM-RAGIS is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+# details.
+#
+# You should have received a copy of the GNU General Public License
+# along with PISM; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+
 """
 resources
 =========
@@ -53,9 +71,7 @@ def generate_domain(domain):
         x_max = -153000.0
         y_min = -2075000.0
         y_max = -2021000.0
-        pism_exec = """pismr -regional -x_range {x_min},{x_max} -y_range {y_min},{y_max}  -bootstrap -regional.zero_gradient true -regional.no_model_strip 4.5""".format(
-            x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max
-        )
+        pism_exec = f"""pismr -regional -x_range {x_min},{x_max} -y_range {y_min},{y_max}  -bootstrap -regional.zero_gradient true -regional.no_model_strip 4.5"""
     else:
         print(f"Domain {domain} not recognized, exiting")
 
