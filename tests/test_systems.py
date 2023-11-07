@@ -26,7 +26,7 @@ from pathlib import Path
 
 import pytest
 
-from pism_ragis.systems import System
+from pism_ragis.systems import System, Systems
 
 
 @pytest.fixture(name="machine_file")
@@ -58,6 +58,24 @@ def fixture_machine_dict():
     }
 
 
+@pytest.fixture(name="system")
+def fixture_system(machine_file):
+    """
+    Return a basic systems
+    """
+
+    return System(machine_file)
+
+
+@pytest.fixture(name="systems")
+def fixture_systems():
+    """
+    Return a basic systems
+    """
+
+    return Systems()
+
+
 def test_system_from_dict(machine_dict):
     """
     Test creating a System from a dictionary
@@ -74,15 +92,43 @@ def test_system_from_file(machine_file):
     assert s.machine == "chinook"  # type: ignore[attr-defined] # pylint: disable=E1101
 
 
-# @pytest.fixture
-# def systems():
-#     """
-#     Return a basic systems
-#     """
+def test_system_list_queues(system):
+    """
+    Test listing queues
+    """
+    assert system.list_queues() == ["t1standard", "t1small", "t2standard", "t2small"]
+    assert system.list_queues("old") == [
+        "t1standard",
+        "t1small",
+        "t2standard",
+        "t2small",
+    ]
 
-#     p = "tests/data"
-#     return Systems(p)
+
+def test_systems_to_dict(system):
+    """
+    Test class returning a dictionary
+
+    """
+    assert system.to_dict()["machine"] == "chinook"
 
 
-# def test_systems_len(systems):
-#     assert len(systems) == 2
+def test_system_list_partitions(system):
+    """
+    Test listing partitions
+    """
+    assert system.list_partitions() == ["old-chinook", "new-chinook"]
+
+
+def test_systems_len(systems):
+    """
+    Test len of Systems
+    """
+    assert len(systems) == 2
+
+
+def test_systems_default_path(systems):
+    """
+    Test default path
+    """
+    assert systems.default_path == Path("tests/data")

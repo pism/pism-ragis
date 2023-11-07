@@ -55,10 +55,10 @@ repos:
             "-sn", # Don't display the score
           ]
 
-  - repo: https://github.com/srstevenson/nb-clean
-    rev: 3.1.0
-    hooks:
-      - id: nb-clean
+  # - repo: https://github.com/srstevenson/nb-clean
+  #   rev: 3.1.0
+  #  hooks:
+  #    - id: nb-clean
 
   - repo: local
     hooks:

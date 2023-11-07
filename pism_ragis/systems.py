@@ -20,6 +20,7 @@
 Module provides System class
 """
 
+import math
 from pathlib import Path
 from typing import Union
 
@@ -28,7 +29,7 @@ import toml
 
 class System:
     """
-    Class fo a system
+    Class for a system
     """
 
     def __init__(self, d: Union[dict, Path, str]):
@@ -42,6 +43,69 @@ class System:
             self._values = toml.loads(d)
         else:
             print(f"{d} not recognized")
+
+    def make_batch_header(
+        self,
+        partition: str = "chinook_new",
+        queue: str = "t2standard",
+        walltime: str = "8:00:00",
+        n_cores: int = 40,
+        gid: Union[None, str] = None,
+    ):
+        """
+        Create a batch header from system and kwargs
+        """
+        assert n_cores > 0
+
+        assert partition in self.list_partitions()
+        assert queue in self.list_queues(partition)
+
+        partition = partition.split("_")[-1]
+        ppn = self.partitions[partition]["cores_per_node"]  # type: ignore[attr-defined] # pylint: disable=E1101
+        nodes = int(math.ceil(float(n_cores) / ppn))
+
+        if nodes * ppn != n_cores:
+            print(
+                f"Warning! Running {n_cores} tasks on {nodes} {ppn}-processor nodes, wasting {ppn * nodes - n_cores} processors!"
+            )
+
+        lines = (
+            self.job["header"]  # type: ignore[attr-defined] # pylint: disable=E1101
+            .format(
+                queue=queue,
+                walltime=walltime,
+                cores=n_cores,
+                ppn=ppn,
+                partition=partition,
+                gid=gid,
+            )
+            .split("\n")
+        )
+        m_str = "\n".join(list(lines))
+        return m_str
+
+    def list_partitions(self):
+        """
+        List all partitions
+        """
+        return [
+            values["name"]
+            for key, values in self.partitions.items()  # type: ignore[attr-defined] # pylint: disable=E1101
+            if key != "default"
+        ]
+
+    def list_queues(self, partition: Union[None, str] = None):
+        """
+        List available queues for partition. If no partition
+        is given return default partition
+        """
+
+        if not partition:
+            p = self.partitions["default"]  # type: ignore[attr-defined] # pylint: disable=E1101
+        else:
+            p = partition
+        partition = p.split("_")[-1]
+        return self.partitions[partition]["queues"]  # type: ignore[attr-defined] # pylint: disable=E1101
 
     def to_dict(self):
         """
@@ -69,8 +133,8 @@ class Systems:
     """
 
     def __init__(self):
-        self._default_path: Path = Path("data/")
-        self.add_systems_from_path(self.default_path)
+        self._default_path: Path = Path("tests/data")
+        self.add_systems_from_path(self._default_path)
 
     @property
     def default_path(self):
@@ -128,11 +192,11 @@ class Systems:
         for p_ in p:
             s = toml.load(p_)
             machine = s["machine"]
-            sys[machine] = s
+            sys[machine] = System(s)
         self._values = sys
 
-    # def __len__(self):
-    #     return len(self.systems)
+    def __len__(self):
+        return len(self.values())
 
     def dump(self):
         """
@@ -140,9 +204,8 @@ class Systems:
         """
         repr_str = ""
         for s in self.values():
-            repr_str += s["machine"]
             repr_str += "\n------------\n\n"
-            repr_str += toml.dumps(s)
+            repr_str += toml.dumps(s.to_dict())
             repr_str += "\n"
         return repr_str
 
