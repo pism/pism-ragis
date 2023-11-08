@@ -1,0 +1,59 @@
+machine = "pleiades"
+
+[partitions]
+
+default = "sandy_bridge"
+
+[partitions.broadwell]
+
+name = "bro"
+cores_per_node = 28
+queues = ["debug", "normal", "long"]
+
+[partitions.haswell]
+
+name = "has"
+cores_per_node = 24
+queues = ["debug", "normal", "long"]
+
+[partitions.ivy_bridge]
+
+name = "ivy"
+cores_per_node = 20
+queues = ["debug", "normal", "long"]
+
+[partitions.sandy_bridge]
+
+name = "san"
+cores_per_node = 16
+queues = ["debug", "normal", "long"]
+
+[MPI]
+
+mpido = "mpiexec -n {cores}"
+
+[scheduler]
+
+name = "QSUB"
+submit = "qusb"
+job_id =  "PBS_JOBID"
+
+[filesystem]
+
+work_dir = "PBS_O_WORKDIR"
+
+[job]
+
+header = """#PBS -S /bin/bash
+#PBS -N cfd
+#PBS -l walltime={walltime}
+#PBS -m e
+#PBS -W group_list={gid}
+#PBS -q {queue}
+#PBS -lselect={nodes}:ncpus={ppn}:mpiprocs={ppn}:model={partition}
+#PBS -j oe
+
+module list
+
+cd $PBS_O_WORKDIR
+"""

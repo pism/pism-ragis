@@ -1,0 +1,30 @@
+machine = "debug"
+
+[MPI]
+
+mpido = "mpirun -np {cores}"
+
+[scheduler]
+
+name = "shell"
+submit = "sh"
+job_id =  ""
+
+[filesystem]
+
+work_dir = "PWD"
+
+[partitions]
+
+default = "debug"
+
+[partitions.debug]
+
+name = "debug"
+
+[job]
+
+header =  """
+
+
+"""

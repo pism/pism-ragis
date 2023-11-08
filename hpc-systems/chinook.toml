@@ -1,0 +1,60 @@
+machine = "chinook"
+
+[MPI]
+
+mpido = "mpirun -np {cores} -machinefile ./nodes_$SLURM_JOBID"
+
+[scheduler]
+
+name = "SLRUM"
+submit = "sbatch"
+job_id =  "SLURM_JOBID"
+
+[filesystem]
+
+work_dir = "SLURM_SUBMIT_DIR"
+
+[partitions]
+
+default = "new"
+
+[partitions.old]
+
+name = "old-chinook"
+cores_per_node = 24
+queues = ["t1standard", "t1small", "t2standard", "t2small"]
+
+[partitions.new]
+
+name = "new-chinook"
+cores_per_node = 40
+queues = ["t1standard", "t1small", "t2standard", "t2small"]
+
+[job]
+
+header =  """#!/bin/sh
+#SBATCH --partition={queue}
+#SBATCH --ntasks={cores}
+#SBATCH --tasks-per-node={ppn}
+#SBATCH --time={walltime}
+#SBATCH --mail-type=BEGIN
+#SBATCH --mail-type=END
+#SBATCH --mail-type=FAIL
+#SBATCH --output=pism.%j
+
+module list
+
+umask 007
+
+cd $SLURM_SUBMIT_DIR
+
+# Generate a list of compute node hostnames reserved for this job,
+# this ./nodes file is necessary for slurm to spawn mpi processes
+# across multiple compute nodes
+srun -l /bin/hostname | sort -n | awk '{{print $2}}' > ./nodes_$SLURM_JOBID
+
+ulimit -l unlimited
+ulimit -s unlimited
+ulimit
+
+"""

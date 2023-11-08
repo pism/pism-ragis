@@ -19,7 +19,6 @@
 """
 Tests for Systems class
 
-We need a way to register machine. Maybe the machine list should be its own repo?
 """
 
 from pathlib import Path
@@ -30,7 +29,7 @@ from pism_ragis.systems import System, Systems
 
 
 @pytest.fixture(name="machine_file")
-def fixture_machine_file():
+def fixture_machine_file() -> Path:
     """
     Return Path to toml file
     """
@@ -38,7 +37,7 @@ def fixture_machine_file():
 
 
 @pytest.fixture(name="machine_dict")
-def fixture_machine_dict():
+def fixture_machine_dict() -> dict:
     """
     Return system dict
     """
@@ -81,7 +80,7 @@ def test_system_from_dict(machine_dict):
     Test creating a System from a dictionary
     """
     s = System(machine_dict)
-    assert s.machine == "chinook"  # type: ignore[attr-defined] # pylint: disable=E1101
+    assert s["machine"] == "chinook"
 
 
 def test_system_from_file(machine_file):
@@ -89,7 +88,7 @@ def test_system_from_file(machine_file):
     Test creating a System from a toml file
     """
     s = System(machine_file)
-    assert s.machine == "chinook"  # type: ignore[attr-defined] # pylint: disable=E1101
+    assert s["machine"] == "chinook"
 
 
 def test_system_list_queues(system):
@@ -124,11 +123,40 @@ def test_systems_len(systems):
     """
     Test len of Systems
     """
-    assert len(systems) == 2
+    assert len(systems) == 3
 
 
 def test_systems_default_path(systems):
     """
     Test default path
     """
-    assert systems.default_path == Path("tests/data")
+    assert systems.default_path == Path("hpc-systems")
+
+
+def test_systems_from_pathlib_path():
+    """
+    Test adding systems from a pathlib path
+    """
+    systems = Systems()
+    systems.add_from_path(Path("tests/data"))
+    assert len(systems) == 2
+
+
+def test_systems_from_str_path():
+    """
+    Test adding systems from a str path
+    """
+    systems = Systems()
+    systems.add_from_path("tests/data")
+    assert len(systems) == 2
+
+
+def test_systems_add_system(systems):
+    """
+    Test adding a system
+    Test checking if system exists
+    """
+    system = System("tests/data/debug.txt")
+    systems.add_system(system)
+    assert len(systems) == 4
+    assert systems.add_system(system) == "debugger already exists"

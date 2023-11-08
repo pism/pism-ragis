@@ -1,11 +1,23 @@
-#!/usr/bin/env python
-# Copyright (C) 2019-23 Andy Aschwanden
-
-# Historical simulations for
-# "A reanalyis of the Greenland Ice Sheet"
+# Copyright (C) 2023 Andy Aschwanden
+#
+# This file is part of pism-ragis.
+#
+# PISM-RAGIS is free software; you can redistribute it and/or modify it under the
+# terms of the GNU General Public License as published by the Free Software
+# Foundation; either version 3 of the License, or (at your option) any later
+# version.
+#
+# PISM-RAGIS is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+# details.
+#
+# You should have received a copy of the GNU General Public License
+# along with PISM; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 """
-Perform hindcasts of the Greenland Ice Sheet
+Generate scrips to hindcasts of the Greenland Ice Sheet using the Parallel Ice Sheet Model (PISM)
 """
 
 import inspect
@@ -21,7 +33,7 @@ import pandas as pd
 import xarray as xr
 
 
-def current_script_directory():
+def current_script_directory() -> str:
     """
     Return the current directory
     """
@@ -34,6 +46,7 @@ script_directory = current_script_directory()
 
 sys.path.append(join(script_directory, "../pism_ragis"))
 import computing  # pylint: disable=C0413
+from systems import Systems  # pylint: disable=C0413
 
 grid_choices = [
     18000,
@@ -52,6 +65,9 @@ grid_choices = [
     300,
     150,
 ]
+
+available_systems = Systems()
+available_systems.default_path = "../hpc-systems"
 
 if __name__ == "__main__":
     # set up the option parser
@@ -169,7 +185,7 @@ if __name__ == "__main__":
         "-s",
         "--system",
         dest="system",
-        choices=computing.list_systems(),
+        choices=available_systems.list_systems(),
         help="computer system to use.",
         default="debug",
     )
@@ -264,7 +280,7 @@ if __name__ == "__main__":
     osize = options.osize
     queue = options.queue
     walltime = options.walltime
-    system = options.system
+    system = available_systems[options.system]
 
     spatial_ts = options.spatial_ts
     test_climate_models = options.test_climate_models
@@ -277,9 +293,7 @@ if __name__ == "__main__":
 
     stress_balance = options.stress_balance
     version = options.version
-
     ensemble_file = options.ensemble_file
-
     domain = options.domain
     pism_exec = computing.generate_domain(domain)
 
@@ -358,7 +372,7 @@ for each in {m_dirs};
       mkdir -p $each
 done\n\n
 """
-    if system != "debug":
+    if system["machine"] != "debug":
         cmd = f"""lfs setstripe -c -1 {dirs["output"]}"""
         sub.call(shlex.split(cmd))
         cmd = f"""lfs setstripe -c -1 {dirs["spatial_tmp"]}"""

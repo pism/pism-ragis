@@ -22,7 +22,7 @@ Module provides System class
 
 import math
 from pathlib import Path
-from typing import Union
+from typing import Any, Iterator, Union
 
 import toml
 
@@ -33,16 +33,42 @@ class System:
     """
 
     def __init__(self, d: Union[dict, Path, str]):
+        self._values = {}
         if isinstance(d, dict):
             for key, value in d.items():
-                setattr(self, key, value)
-        elif isinstance(d, Path):
+                self._values[key] = value
+        elif isinstance(d, (Path, str)):
             for key, value in toml.load(d).items():
-                setattr(self, key, value)
-        elif isinstance(d, str):
-            self._values = toml.loads(d)
+                self._values[key] = value
         else:
             print(f"{d} not recognized")
+
+    def __getitem__(self, name) -> Any:
+        return self._values[name]
+
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+
+    def __iter__(self) -> Iterator:
+        return iter(self._values)
+
+    def keys(self):
+        """
+        Return keys
+        """
+        return self._values.keys()
+
+    def items(self):
+        """
+        Return items
+        """
+        return self._values.items()
+
+    def values(self):
+        """
+        Return values
+        """
+        return self._values.values()
 
     def make_batch_header(
         self,
@@ -51,7 +77,7 @@ class System:
         walltime: str = "8:00:00",
         n_cores: int = 40,
         gid: Union[None, str] = None,
-    ):
+    ) -> str:
         """
         Create a batch header from system and kwargs
         """
@@ -84,36 +110,36 @@ class System:
         m_str = "\n".join(list(lines))
         return m_str
 
-    def list_partitions(self):
+    def list_partitions(self) -> list:
         """
         List all partitions
         """
         return [
             values["name"]
-            for key, values in self.partitions.items()  # type: ignore[attr-defined] # pylint: disable=E1101
+            for key, values in self["partitions"].items()
             if key != "default"
         ]
 
-    def list_queues(self, partition: Union[None, str] = None):
+    def list_queues(self, partition: Union[None, str] = None) -> list:
         """
         List available queues for partition. If no partition
         is given return default partition
         """
 
         if not partition:
-            p = self.partitions["default"]  # type: ignore[attr-defined] # pylint: disable=E1101
+            p = self["partitions"]["default"]
         else:
             p = partition
         partition = p.split("_")[-1]
-        return self.partitions[partition]["queues"]  # type: ignore[attr-defined] # pylint: disable=E1101
+        return self["partitions"][partition]["queues"]
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         """
         Returns self as dictionary
         """
-        return self.__dict__
+        return self._values
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         repr_str = ""
 
         repr_str += toml.dumps(self.to_dict())
@@ -133,8 +159,8 @@ class Systems:
     """
 
     def __init__(self):
-        self._default_path: Path = Path("tests/data")
-        self.add_systems_from_path(self._default_path)
+        self._default_path: Path = Path("hpc-systems")
+        self.add_from_path(self._default_path)
 
     @property
     def default_path(self):
@@ -146,14 +172,15 @@ class Systems:
     @default_path.setter
     def default_path(self, value):
         self._default_path = value
+        self.add_from_path(self._default_path)
 
-    def __getitem__(self, name):
+    def __getitem__(self, name) -> Any:
         return self._values[name]
 
     def __setitem__(self, key, value):
         setattr(self, key, value)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator:
         return iter(self._values)
 
     def keys(self):
@@ -174,16 +201,34 @@ class Systems:
         """
         return self._values.values()
 
-    def add_system(self, system):
-        """
-        Add a system from a System class
-        """
-        system.to_dict()
+    def __repr__(self) -> str:
+        return self.dump()
 
-    def add_systems_from_path(self, path):
-        """
+    def __len__(self) -> int:
+        return len(self.values())
 
-        Add systems from a pathlib.Path.
+    def list_systems(self) -> list:
+        """
+        Return name of machines as list
+        """
+        return list(self.keys())
+
+    def add_system(self, system: System):
+        """
+        Add a system
+        """
+        machine = system["machine"]
+        if machine not in self.keys():
+            self._values[machine] = system
+            return None
+        else:
+            msg = f"{machine} already exists"
+            print(msg)
+            return msg
+
+    def add_from_path(self, path: Union[Path, str]):
+        """
+        Add systems from a pathlib.Path or str.
 
         Use glob to add all files with suffix `toml`.
         """
@@ -195,10 +240,16 @@ class Systems:
             sys[machine] = System(s)
         self._values = sys
 
-    def __len__(self):
-        return len(self.values())
+    def add_system_from_file(self, path: Union[Path, str]):
+        """
+        Add a system from a pathlib.Path or str.
 
-    def dump(self):
+        """
+        s = toml.load(path)
+        machine = s["machine"]
+        self._values[machine] = System(s)
+
+    def dump(self) -> str:
         """
         Dump class to string
         """
@@ -208,6 +259,3 @@ class Systems:
             repr_str += toml.dumps(s.to_dict())
             repr_str += "\n"
         return repr_str
-
-    def __repr__(self):
-        return self.dump()

@@ -1,6 +1,6 @@
 [project]
 name = "pism-ragis"
-version = "0.1.0"
+version = "0.2.0"
 maintainers = [{name = "Andy Aschwanden", email = "andy.aschwanden@gmail.com"}]
 description = """Home of NASA ROSES project "A Reanalysis of the Greenland Ice Sheet"""
 readme = "README.md"
@@ -30,11 +30,10 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools]
 py-modules = ["pism_ragis"]
 
-
 [tool.poetry]
 name = "pism-ragis"
-version = "0.1.0"
-description = ""
+version = "0.2.0"
+description = """Home of NASA ROSES project "A Reanalysis of the Greenland Ice Sheet"""
 authors = ["Andy Aschwanden <andy.aschwanden@gmail.com>"]
 readme = "README.md"
 
