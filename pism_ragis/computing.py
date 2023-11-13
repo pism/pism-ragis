@@ -500,7 +500,7 @@ def generate_ocean(ocean, **kwargs):
     Returns: OrderedDict
     """
 
-    ocean_dict = {"th": {"ocean.models": "th"}}
+    ocean_dict = {"th": {"ocean.models": "th"}, "const": {"ocean.models": "const"}}
     if ocean in ocean_dict:
         params_dict = ocean_dict.get(ocean)
 

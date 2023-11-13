@@ -427,9 +427,9 @@ done\n\n
     simulation_end_year = options.end
 
     batch_header, batch_system = computing.make_batch_header(
-        system, nn, walltime, queue
+        options.system, nn, walltime, queue
     )
-    post_header = computing.make_batch_post_header(system)
+    post_header = computing.make_batch_post_header(options.system)
 
     for n, row in enumerate(uq_df.iterrows()):
         combination = row[1]
