@@ -638,7 +638,9 @@ done\n\n
                         "salinity"
                     ]
 
-            ocean_params_dict = computing.generate_ocean("th", **ocean_parameters)
+            ocean_params_dict = computing.generate_ocean(
+                combination["ocean"], **ocean_parameters
+            )
 
             calving_parameters: Dict[str, Union[str, int, float]] = {
                 "calving.float_kill.calve_near_grounding_line": float_kill_calve_near_grounding_line,
