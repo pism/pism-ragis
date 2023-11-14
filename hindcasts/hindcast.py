@@ -74,13 +74,13 @@ def create_offset_file(filename: str, delta_T: float = 0.0, frac_P: float = 1.0)
     delta_T = [delta_T]
     frac_P = [frac_P]
     time = [0]
-    time_bounds = [-1, 1]
+    time_bounds = [[-1, 1]]
 
     ds = xr.Dataset(
         data_vars=dict(
             delta_T=(["time"], delta_T, {"units": "K"}),
             frac_P=(["time"], frac_P, {"units": ""}),
-            time_bounds=(["bnds"], time_bounds, {}),
+            time_bounds=(["time", "bnds"], time_bounds, {}),
         ),
         coords=dict(
             time=(
