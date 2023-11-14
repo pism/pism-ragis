@@ -299,7 +299,7 @@ dists: Dict[str, Any] = {
             "climate": "given_pdd_delta",
             "hydrology": "diffuse",
             "frontal_melt": "off",
-            "ocean": "const",
+            "ocean": "constant",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
             "climate_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
             "runoff_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",

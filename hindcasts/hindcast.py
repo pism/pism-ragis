@@ -185,7 +185,7 @@ if __name__ == "__main__":
         "-s",
         "--system",
         dest="system",
-        choices=available_systems.list_systems(),
+        #        choices=available_systems.list_systems(),
         help="computer system to use.",
         default="debug",
     )
@@ -280,7 +280,7 @@ if __name__ == "__main__":
     osize = options.osize
     queue = options.queue
     walltime = options.walltime
-    system = available_systems[options.system]
+    # system = available_systems[options.system]
 
     spatial_ts = options.spatial_ts
     test_climate_models = options.test_climate_models
@@ -372,7 +372,7 @@ for each in {m_dirs};
       mkdir -p $each
 done\n\n
 """
-    if system["machine"] != "debug":
+    if options.system != "debug":
         cmd = f"""lfs setstripe -c -1 {dirs["output"]}"""
         sub.call(shlex.split(cmd))
         cmd = f"""lfs setstripe -c -1 {dirs["spatial_tmp"]}"""
@@ -731,7 +731,7 @@ done\n\n
                     print(f"  - {m_f_abs}: {os.path.isfile(m_f_abs)}")
             print("------------------------------------------------------------\n")
 
-            if system == "debug":
+            if options.system == "debug":
                 redirect = " 2>&1 | tee {jobs}/job.${job_id}"
             else:
                 redirect = " > {jobs}/job.${job_id} 2>&1"
