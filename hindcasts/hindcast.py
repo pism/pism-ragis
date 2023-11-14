@@ -67,22 +67,22 @@ grid_choices = [
 ]
 
 
-def create_offset_file(filename: str, delta_T: float = 0.0, frac_P: float = 1.0):
+def create_offset_file(file_name: str, delta_T: float = 0.0, frac_P: float = 1.0):
     """
     Generate offset file using xarray
     """
-    delta_T = [delta_T]
-    frac_P = [frac_P]
+    dT = [delta_T]
+    fP = [frac_P]
     time = [0]
     time_bounds = [[-1, 1]]
 
     ds = xr.Dataset(
-        data_vars=dict(
-            delta_T=(["time"], delta_T, {"units": "K"}),
-            frac_P=(["time"], frac_P, {"units": ""}),
+        data_vars=dict(  # pylint: disable=R1735
+            delta_T=(["time"], dT, {"units": "K"}),
+            frac_P=(["time"], fP, {"units": ""}),
             time_bounds=(["time", "bnds"], time_bounds, {}),
         ),
-        coords=dict(
+        coords=dict(  # pylint: disable=R1735
             time=(
                 "time",
                 time,
@@ -95,7 +95,7 @@ def create_offset_file(filename: str, delta_T: float = 0.0, frac_P: float = 1.0)
             )
         ),
     )
-    ds.to_netcdf(filename)
+    ds.to_netcdf(file_name)
 
 
 available_systems = Systems()
@@ -750,9 +750,9 @@ done\n\n
 
             print("\nChecking parameters")
             print("------------------------------------------------------------")
-            with xr.open_dataset(master_config_file) as ds:
+            with xr.open_dataset(master_config_file) as m_ds:
                 for key in all_params_dict:
-                    if hasattr(ds["pism_config"], key) is False:
+                    if hasattr(m_ds["pism_config"], key) is False:
                         print(f"  - {key} not found in pism_config")
             print("------------------------------------------------------------\n")
 
