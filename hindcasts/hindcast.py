@@ -68,6 +68,7 @@ grid_choices = [
 
 
 def create_offset_file(filename: str, delta_T: float = 0.0, frac_P: float = 1.0):
+    print(filename)
     delta_T = [delta_T]
     frac_P = [frac_P]
     time = [0]
@@ -600,9 +601,10 @@ done\n\n
             )
 
             climate_file_p = f"""$data_dir/climate/{combination["climate_file"]}"""
-            climate_offset_file_p = (
-                f"""$data_dir/climate/ragis_offset_file_id_{combination["id"]}.nc"""
+            climate_offset_file_p = join(
+                uq_dir, f"""ragis_offset_file_id_{combination["id"]}.nc"""
             )
+
             climate_parameters: Dict[str, Union[str, int, float]] = {
                 "atmosphere.given.file": climate_file_p,
                 "surface.given.file": climate_file_p,
@@ -622,7 +624,9 @@ done\n\n
                     "surface.pdd.std_dev.value"
                 ]
                 create_offset_file(
-                    climate_offset_file_p, combination["delta_T"], combination["frac_P"]
+                    realpath(climate_offset_file_p),
+                    combination["delta_T"],
+                    combination["frac_P"],
                 )
                 climate_parameters["atmosphere.delta_T.file"] = climate_offset_file_p
                 climate_parameters["atmosphere.frac_P.file"] = climate_offset_file_p
