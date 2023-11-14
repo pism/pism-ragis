@@ -11,7 +11,5 @@ __all__ = [
     "computing",
     "stats",
     "computing",
-    "interpolation",
     "systems",
-    "trajectories",
 ]
