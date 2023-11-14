@@ -68,7 +68,9 @@ grid_choices = [
 
 
 def create_offset_file(filename: str, delta_T: float = 0.0, frac_P: float = 1.0):
-    print(filename)
+    """
+    Generate offset file using xarray
+    """
     delta_T = [delta_T]
     frac_P = [frac_P]
     time = [0]
@@ -78,6 +80,7 @@ def create_offset_file(filename: str, delta_T: float = 0.0, frac_P: float = 1.0)
         data_vars=dict(
             delta_T=(["time"], delta_T, {"units": "K"}),
             frac_P=(["time"], frac_P, {"units": ""}),
+            time_bounds=(["bnds"], time_bounds, {}),
         ),
         coords=dict(
             time=(
@@ -89,8 +92,7 @@ def create_offset_file(filename: str, delta_T: float = 0.0, frac_P: float = 1.0)
                     "calendar": "365_day",
                     "bounds": "time_bounds",
                 },
-            ),
-            time_bounds=("time_bounds", time_bounds, {}),
+            )
         ),
     )
     ds.to_netcdf(filename)
