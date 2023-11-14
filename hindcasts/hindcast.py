@@ -66,6 +66,35 @@ grid_choices = [
     150,
 ]
 
+
+def create_offset_file(filename: str, delta_T: float = 0.0, frac_P: float = 1.0):
+    delta_T = [delta_T]
+    frac_P = [frac_P]
+    time = [0]
+    time_bounds = [-1, 1]
+
+    ds = xr.Dataset(
+        data_vars=dict(
+            delta_T=(["time"], delta_T, {"units": "K"}),
+            frac_P=(["time"], frac_P, {"units": ""}),
+        ),
+        coords=dict(
+            time=(
+                "time",
+                time,
+                {
+                    "units": "seconds since 01-01-01",
+                    "axis": "T",
+                    "calendar": "365_day",
+                    "bounds": "time_bounds",
+                },
+            ),
+            time_bounds=("time_bounds", time_bounds, {}),
+        ),
+    )
+    ds.to_netcdf(filename)
+
+
 available_systems = Systems()
 available_systems.default_path = "../hpc-systems"
 
@@ -571,7 +600,9 @@ done\n\n
             )
 
             climate_file_p = f"""$data_dir/climate/{combination["climate_file"]}"""
-            climate_offset_file_p = "$data_dir/climate/ragis_dem_climate_1980_2020.nc"
+            climate_offset_file_p = (
+                f"""$data_dir/climate/ragis_offset_file_id_{combination["id"]}.nc"""
+            )
             climate_parameters: Dict[str, Union[str, int, float]] = {
                 "atmosphere.given.file": climate_file_p,
                 "surface.given.file": climate_file_p,
@@ -590,6 +621,9 @@ done\n\n
                 climate_parameters["surface.pdd.std_dev.value"] = combination[
                     "surface.pdd.std_dev.value"
                 ]
+                create_offset_file(
+                    climate_offset_file_p, combination["delta_T"], combination["frac_P"]
+                )
                 climate_parameters["atmosphere.delta_T.file"] = climate_offset_file_p
                 climate_parameters["atmosphere.frac_P.file"] = climate_offset_file_p
             climate_params_dict = computing.generate_climate(
