@@ -290,13 +290,13 @@ dists: Dict[str, Any] = {
     },
     "dem": {
         "uq": {
-            "calving.thickness_calving.threshold": uniform(loc=50, scale=250),
-            "ocean.constant.melt_rate": uniform(0.05, 100),
+            "calving.thickness_calving.threshold": uniform(loc=50, scale=350),
+            "ocean.constant.melt_rate": uniform(0.05, 199.95),
             "delta_T": uniform(-5, 10),
-            "frac_P": uniform(0.75, 0.5),
+            "frac_P": uniform(0.7, 0.6),
             "surface.pdd.factor_ice": uniform(loc=0.5, scale=12.5),
             "surface.pdd.factor_snow": uniform(loc=0.5, scale=5.5),
-            "surface.pdd.std_dev.value": uniform(loc=2, scale=4),
+            "surface.pdd.std_dev.value": uniform(loc=1, scale=5),
         },
         "default_values": {
             "climate": "given_pdd_delta",
