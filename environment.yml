@@ -1,0 +1,8 @@
+name: pism-ragis
+channels:
+  - conda-forge
+dependencies:
+  - python
+  - pip
+  - pip:
+      - -r requirements.txt

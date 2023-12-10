@@ -12,5 +12,6 @@ pyogrio>=0.7.2
 pyarrow>=14.0.0
 tqdm>=4.66.1
 openpyxl>=3.1.2
+pytest
 toml
 types-toml
