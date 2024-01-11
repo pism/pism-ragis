@@ -6,7 +6,25 @@
 
 # pism-ragis: A Reanalysis for the Greenland Ice Sheet (RAGIS)
 
-## Repository for work related to NASA ROSES award 80NSSC21K0748 (2021-24).
+Repository for work related to NASA ROSES award 80NSSC21K0748 (2021-24).
+
+## Installation
+
+Get pism-ragis source from GitHub:
+
+    $ git clone git@github.com:pism/pism-ragis.git
+    $ cd pism-ragis
+
+Optionally create Conda environment named *pism-ragis*:
+
+    $ conda env create -f environment.yml
+    $ conda activate pism-ragis
+
+Install pism-ragis:
+
+    $ pip install -e .
+
+
 
 ### Synopsis
 

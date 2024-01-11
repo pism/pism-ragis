@@ -246,7 +246,7 @@ def load_mankoff(
     """
     Load Mass Balance from Mankoff
     """
-    df = pd.read_csv(url, parse_dates=["time"], infer_datetime_format=True)
+    df = pd.read_csv(url, parse_dates=["time"])
 
     df = df.rename(
         columns={
