@@ -15,3 +15,9 @@ openpyxl>=3.1.2
 pytest
 toml
 types-toml
+cartopy
+SALib
+pyDOE2
+cftime
+nc-time-axis
+netCDF4
