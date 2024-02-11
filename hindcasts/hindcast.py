@@ -689,6 +689,12 @@ done\n\n
                 "calving.vonmises_calving.Glen_exponent": 3.0,
                 "geometry.front_retreat.use_cfl": True,
             }
+
+            if hasattr(combination, "prescribed_retreat_file"):
+                calving_parameters[
+                    "geometry.front_retreat.prescribed.file"
+                ] = f"""$data_dir/front_retreat/{combination["prescribed_retreat_file"]}"""
+
             vcm = combination["vcm"]
             try:
                 vcm = float(vcm)
