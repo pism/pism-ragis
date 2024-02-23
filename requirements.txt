@@ -21,3 +21,10 @@ pyDOE2
 cftime
 nc-time-axis
 netCDF4
+rioxarray
+geocube
+geopandas
+cf-xarray
+nco
+cdo
+gsl
