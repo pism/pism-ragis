@@ -21,3 +21,5 @@ pyDOE2
 cftime
 nc-time-axis
 netCDF4
+seaborn
+pyarrow
