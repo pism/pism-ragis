@@ -379,7 +379,7 @@ def generate_stress_balance(stress_balance, additional_params_dict):
         params_dict["geometry.remove_icebergs"] = ""
         params_dict["geometry.part_grid.enabled"] = ""
         params_dict["stress_balance.sia.flow_law"] = "gpbld"
-        params_dict["basal_yield_stress.slippery_grounding_lines_option"] = ""
+        params_dict["basal_yield_stress.slippery_grounding_lines"] = ""
 
     if stress_balance == "ssa+sia":
         params_dict["time_stepping.skip.enabled"] = ""

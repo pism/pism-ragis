@@ -282,6 +282,7 @@ if __name__ == "__main__":
             "2023_GRIMP",
             "2023_RAGIS",
             "2023-12_RAGIS",
+            "2024-02_RAGIS",
         ],
         help="input data set version",
         default="2023_GRIMP",
@@ -306,7 +307,6 @@ if __name__ == "__main__":
     input_dir = abspath(options.input_dir)
     data_dir = abspath(options.data_dir)
     output_dir = abspath(options.output_dir)
-    spatial_tmp_dir = abspath(options.output_dir + "_tmp")
 
     compression_level = options.compression_level
     oformat = options.oformat
@@ -350,7 +350,7 @@ if __name__ == "__main__":
     # regridvars = "litho_temp,enthalpy,age,tillwat,bmelt,ice_area_specific_volume"
     regridvars = "litho_temp,enthalpy,age,tillwat,bmelt,ice_area_specific_volume,thk"
 
-    dirs = {"output": "$output_dir", "spatial_tmp": "$spatial_tmp_dir"}
+    dirs = {"output": "$output_dir"}
     for d in ["performance", "state", "scalar", "spatial", "jobs", "basins"]:
         dirs[d] = f"$output_dir/{d}"
 
@@ -396,8 +396,6 @@ input_dir="{input_dir}"
 data_dir="{data_dir}"
 # output directory
 output_dir="{output_dir}"
-# temporary directory for spatial files
-spatial_tmp_dir="{spatial_tmp_dir}"
 
 # create required output directories
 for each in {m_dirs};
@@ -407,8 +405,6 @@ done\n\n
 """
     if options.system != "debug":
         cmd = f"""lfs setstripe -c -1 {dirs["output"]}"""
-        sub.call(shlex.split(cmd))
-        cmd = f"""lfs setstripe -c -1 {dirs["spatial_tmp"]}"""
         sub.call(shlex.split(cmd))
 
     ensemble_infile = os.path.split(ensemble_file)[-1]
@@ -541,9 +537,9 @@ done\n\n
             if osize != "custom":
                 general_params_dict["output.size"] = osize
             else:
-                general_params_dict[
-                    "output.sizes.medium"
-                ] = "sftgif,velsurf_mag,mask,usurf,bmelt"
+                general_params_dict["output.sizes.medium"] = (
+                    "sftgif,velsurf_mag,mask,usurf,bmelt"
+                )
 
             grid_params_dict = computing.generate_grid_description(grid, domain)
 
@@ -563,18 +559,18 @@ done\n\n
             z_min = combination["z_min"]
             z_max = combination["z_max"]
 
-            sb_params_dict[
-                "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max"
-            ] = phi_max
-            sb_params_dict[
-                "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min"
-            ] = phi_min
-            sb_params_dict[
-                "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max"
-            ] = z_max
-            sb_params_dict[
-                "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min"
-            ] = z_min
+            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max"] = (
+                phi_max
+            )
+            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min"] = (
+                phi_min
+            )
+            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max"] = (
+                z_max
+            )
+            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min"] = (
+                z_min
+            )
 
             if (hasattr(combination, "fractures")) and (
                 combination["fractures"] is True
@@ -689,15 +685,23 @@ done\n\n
                 "calving.vonmises_calving.Glen_exponent": 3.0,
                 "geometry.front_retreat.use_cfl": True,
             }
+
+            if hasattr(combination, "prescribed_retreat_file") & (
+                combination["prescribed_retreat_file"] is not False
+            ):
+                calving_parameters["geometry.front_retreat.prescribed.file"] = (
+                    f"""$data_dir/front_retreat/{combination["prescribed_retreat_file"]}"""
+                )
+
             vcm = combination["vcm"]
             try:
                 vcm = float(vcm)
                 calving_parameters["calving.vonmises_calving.sigma_max"] = vcm * 1e6
             except:  # pylint: disable=W0702
                 vonmises_calving_threshold_file_p = "$data_dir/calving/{vcm}"
-                calving_parameters[
-                    "calving.vonmises_calving.threshold_file"
-                ] = vonmises_calving_threshold_file_p
+                calving_parameters["calving.vonmises_calving.threshold_file"] = (
+                    vonmises_calving_threshold_file_p
+                )
             if "calving.thickness_calving.threshold" in combination:
                 calving_parameters["calving.thickness_calving.threshold"] = combination[
                     "calving.thickness_calving.threshold"
@@ -743,7 +747,7 @@ done\n\n
             if spatial_ts != "none":
                 exvars = computing.spatial_ts_vars[spatial_ts]
                 spatial_ts_dict = computing.generate_spatial_ts(
-                    outfile, exvars, exstep, odir=dirs["spatial_tmp"]
+                    outfile, exvars, exstep, odir=dirs["spatial"]
                 )
                 all_params_dict = computing.merge_dicts(
                     all_params_dict, spatial_ts_dict
@@ -797,15 +801,6 @@ done\n\n
                 f.write(cmd)
             f.write("\n")
             f.write("\n")
-            if not spatial_ts == "none":
-                tmpfile = spatial_ts_dict["output.extra.file"]
-                ofile = join(dirs["spatial"], "ex_" + outfile)
-                f.write(f"{id_cmd} {tmpfile}\n")
-                f.write(
-                    f"mv {tmpfile} {ofile}\n",
-                )
-            f.write("\n")
-            f.write("Moving file done\n")
             f.write(batch_system.get("footer", ""))
 
         scripts.append(script)
