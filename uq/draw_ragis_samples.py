@@ -9,7 +9,7 @@ from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
-from pyDOE import lhs
+from pyDOE2 import lhs
 from SALib.sample import saltelli
 from scipy.stats.distributions import randint, uniform
 
@@ -59,8 +59,8 @@ dists: Dict[str, Any] = {
             "frontal_melt": "discharge_routing",
             "ocean": "th",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
-            "climate_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
-            "runoff_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
+            "climate_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
+            "runoff_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
             "gamma_T": 1.00e-4,
             "salinity": 34,
             "pseudo_plastic_q": 0.6,
@@ -85,8 +85,8 @@ dists: Dict[str, Any] = {
             "frontal_melt": "off",
             "ocean": "th",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
-            "climate_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
-            "runoff_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
+            "climate_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
+            "runoff_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
             "gamma_T": 1.00e-4,
             "salinity": 34,
             "pseudo_plastic_q": 0.6,
@@ -114,8 +114,8 @@ dists: Dict[str, Any] = {
             "frontal_melt": "off",
             "ocean": "th",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
-            "climate_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
-            "runoff_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
+            "climate_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
+            "runoff_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
             "gamma_T": 1.00e-4,
             "salinity": 34,
             "pseudo_plastic_q": 0.6,
@@ -136,9 +136,10 @@ dists: Dict[str, Any] = {
             "climate": "given_smb",
             "hydrology": "routing",
             "frontal_melt": "routing",
+            "ocean": "th",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
-            "climate_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
-            "runoff_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
+            "climate_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
+            "runoff_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
             "pseudo_plastic_q": 0.6,
             "sia_e": 1.25,
             "ssa_n": 3.25,
@@ -165,8 +166,8 @@ dists: Dict[str, Any] = {
             "hydrology": "routing",
             "frontal_melt": "routing",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
-            "climate_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
-            "runoff_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
+            "climate_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
+            "runoff_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
             "pseudo_plastic_q": 0.6,
             "sia_e": 1.25,
             "ssa_n": 3.25,
@@ -191,8 +192,8 @@ dists: Dict[str, Any] = {
             "hydrology": "routing",
             "frontal_melt": "routing",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
-            "climate_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
-            "runoff_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
+            "climate_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
+            "runoff_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
             "pseudo_plastic_q": 0.6,
             "sia_e": 1.25,
             "ssa_n": 3.25,
@@ -216,8 +217,8 @@ dists: Dict[str, Any] = {
             "hydrology": "routing",
             "frontal_melt": "routing",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
-            "climate_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
-            "runoff_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
+            "climate_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
+            "runoff_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
             "salinity": 34,
             "pseudo_plastic_q": 0.6,
             "sia_e": 1.25,
@@ -244,8 +245,8 @@ dists: Dict[str, Any] = {
             "frontal_melt": "off",
             "ocean": "th",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
-            "climate_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
-            "runoff_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
+            "climate_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
+            "runoff_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
             "salinity": 34,
             "pseudo_plastic_q": 0.6,
             "sia_e": 1.25,
@@ -273,8 +274,8 @@ dists: Dict[str, Any] = {
             "frontal_melt": "off",
             "ocean": "th",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
-            "climate_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
-            "runoff_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
+            "climate_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
+            "runoff_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
             "salinity": 34,
             "pseudo_plastic_q": 0.6,
             "sia_e": 1.25,
@@ -304,8 +305,8 @@ dists: Dict[str, Any] = {
             "frontal_melt": "off",
             "ocean": "constant",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
-            "climate_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
-            "runoff_file": "DMI-HIRHAM5_ERA_1980_2020_EPSG3413_4500M_MM.nc",
+            "climate_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
+            "runoff_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
             "salinity": 34,
             "pseudo_plastic_q": 0.7508221,
             "sia_e": 2.608046,
@@ -406,7 +407,7 @@ sb_dict = {0: "ssa+sia", 1: "blatter"}
 for i, key in enumerate(keys_prior):
     if key == "calving_rate_scaling_file":
         dist_sample[:, i] = [
-            f"seasonal_calving_{int(id)}_1980_2020.nc"
+            f"seasonal_calving_{int(id)}_1975_2020.nc"
             for id in distributions[key].ppf(unif_sample[:, i])
         ]
     elif key == "calving.thickness_calving.file":
