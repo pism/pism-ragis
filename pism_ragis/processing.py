@@ -36,24 +36,37 @@ import xarray as xr
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 
+from typing import List, Union
+
 kg2cmsle = 1 / 1e12 * 1.0 / 362.5 / 10.0
 gt2cmsle = 1 / 362.5 / 10.0
 
 
-def preprocess_nc(ds):
+def preprocess_nc(
+    ds,
+    regexp: str = "id_(.+?)_",
+    dim: str = "exp_id",
+    drop_vars: Union[List[str], None] = None,
+    drop_dims: List[str] = ["nv4"],
+):
     """
-    Add experiment 'id'
+    Add experiment 'exp_id'
     """
-    m_id_re = re.search("id_(.+?)_", ds.encoding["source"])
-    ds.expand_dims("id")
+    m_id_re = re.search(regexp, ds.encoding["source"])
+    ds.expand_dims(dim)
     assert m_id_re is not None
     m_id: Union[str, int]
     try:
         m_id = int(m_id_re.group(1))
     except:
         m_id = str(m_id_re.group(1))
-    ds["id"] = m_id
-    return ds
+    ds[dim] = m_id
+    kg2cmsle = 1 / 1e12 * 1.0 / 362.5 / 10.0
+    
+    if "ice_mass" in ds.data_vars:
+        ds["sle"] = (ds["ice_mass"].isel(time=0) - ds["ice_mass"]) * kg2cmsle
+        ds["sle"].attrs["units"] = "cm SLE"
+    return ds.drop_vars(drop_vars, errors="ignore").drop_dims(drop_dims, errors="ignore")
 
 
 @contextlib.contextmanager
