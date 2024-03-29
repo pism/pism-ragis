@@ -1,4 +1,4 @@
-# Copyright (C) 2023 Andy Aschwanden
+# Copyright (C) 2023-24 Andy Aschwanden
 #
 # This file is part of pism-ragis.
 #
@@ -215,7 +215,7 @@ def load_mouginot(
             }
         )
 
-        df["Date"] = pd.date_range(start="1972-1-1", end="2018-1-1", freq="AS")
+        df["Date"] = pd.date_range(start="1972-1-1", end="2018-1-1", freq="YS")
 
         # Normalize
         if norm_year:

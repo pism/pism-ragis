@@ -61,11 +61,7 @@ def preprocess_nc(
     except:
         m_id = str(m_id_re.group(1))
     ds[dim] = m_id
-    kg2cmsle = 1 / 1e12 * 1.0 / 362.5 / 10.0
     
-    if "ice_mass" in ds.data_vars:
-        ds["sle"] = (ds["ice_mass"].isel(time=0) - ds["ice_mass"]) * kg2cmsle
-        ds["sle"].attrs["units"] = "cm SLE"
     return ds.drop_vars(drop_vars, errors="ignore").drop_dims(drop_dims, errors="ignore")
 
 
