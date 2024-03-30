@@ -537,9 +537,9 @@ done\n\n
             if osize != "custom":
                 general_params_dict["output.size"] = osize
             else:
-                general_params_dict["output.sizes.medium"] = (
-                    "sftgif,velsurf_mag,mask,usurf,bmelt"
-                )
+                general_params_dict[
+                    "output.sizes.medium"
+                ] = "sftgif,velsurf_mag,mask,usurf,bmelt"
 
             grid_params_dict = computing.generate_grid_description(grid, domain)
 
@@ -559,18 +559,18 @@ done\n\n
             z_min = combination["z_min"]
             z_max = combination["z_max"]
 
-            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max"] = (
-                phi_max
-            )
-            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min"] = (
-                phi_min
-            )
-            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max"] = (
-                z_max
-            )
-            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min"] = (
-                z_min
-            )
+            sb_params_dict[
+                "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max"
+            ] = phi_max
+            sb_params_dict[
+                "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min"
+            ] = phi_min
+            sb_params_dict[
+                "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max"
+            ] = z_max
+            sb_params_dict[
+                "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min"
+            ] = z_min
 
             if (hasattr(combination, "fractures")) and (
                 combination["fractures"] is True
@@ -689,9 +689,9 @@ done\n\n
             if hasattr(combination, "prescribed_retreat_file") & (
                 combination["prescribed_retreat_file"] is not False
             ):
-                calving_parameters["geometry.front_retreat.prescribed.file"] = (
-                    f"""$data_dir/front_retreat/{combination["prescribed_retreat_file"]}"""
-                )
+                calving_parameters[
+                    "geometry.front_retreat.prescribed.file"
+                ] = f"""$data_dir/front_retreat/{combination["prescribed_retreat_file"]}"""
 
             vcm = combination["vcm"]
             try:
@@ -699,9 +699,9 @@ done\n\n
                 calving_parameters["calving.vonmises_calving.sigma_max"] = vcm * 1e6
             except:  # pylint: disable=W0702
                 vonmises_calving_threshold_file_p = "$data_dir/calving/{vcm}"
-                calving_parameters["calving.vonmises_calving.threshold_file"] = (
-                    vonmises_calving_threshold_file_p
-                )
+                calving_parameters[
+                    "calving.vonmises_calving.threshold_file"
+                ] = vonmises_calving_threshold_file_p
             if "calving.thickness_calving.threshold" in combination:
                 calving_parameters["calving.thickness_calving.threshold"] = combination[
                     "calving.thickness_calving.threshold"

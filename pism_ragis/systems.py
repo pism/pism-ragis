@@ -20,6 +20,7 @@
 Module provides System class
 """
 
+# mpypy --untyped-calls-exclude toml
 import math
 from pathlib import Path
 from typing import Any, Iterator, Union

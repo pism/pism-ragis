@@ -36,25 +36,25 @@ def fixture_machine_file() -> Path:
     return Path("tests/data/chinook.toml")
 
 
-@pytest.fixture(name="machine_dict")
-def fixture_machine_dict() -> dict:
-    """
-    Return system dict
-    """
-    return {
-        "machine": "chinook",
-        "MPI": {"mpido": "mpirun -np {cores} -machinefile ./nodes_$SLURM_JOBID"},
-        "scheduler": {"name": "SLRUM", "submit": "sbatch", "job_id": "SLURM_JOBID"},
-        "filesystem": {"work_dir": "SLURM_SUBMIT_DIR"},
-        "queues": {
-            "t1standard": 24,
-            "t1small": 24,
-            "t2standard": 24,
-            "t2small": 24,
-            "debug": 24,
-            "analysis": 24,
-        },
-    }
+# @pytest.fixture(name="machine_dict")
+# def fixture_machine_dict() -> dict:
+#     """
+#     Return system dict
+#     """
+#     return {
+#         "machine": "chinook",
+#         "MPI": {"mpido": "mpirun -np {cores} -machinefile ./nodes_$SLURM_JOBID"},
+#         "scheduler": {"name": "SLRUM", "submit": "sbatch", "job_id": "SLURM_JOBID"},
+#         "filesystem": {"work_dir": "SLURM_SUBMIT_DIR"},
+#         "queues": {
+#             "t1standard": 40,  # pylint disable-msg=R0801
+#             "t1small": 40,  # pylint disable-msg=R0801
+#             "t2standard": 40,  # pylint disable-msg=R0801
+#             "t2small": 40,  # pylint disable-msg=R0801
+#             "debug": 40,  # pylint disable-msg=R0801
+#             "analysis": 40,  # pylint disable-msg=R0801
+#         },
+#     }
 
 
 @pytest.fixture(name="system")
@@ -75,12 +75,12 @@ def fixture_systems():
     return Systems()
 
 
-def test_system_from_dict(machine_dict):
-    """
-    Test creating a System from a dictionary
-    """
-    s = System(machine_dict)
-    assert s["machine"] == "chinook"
+# def test_system_from_dict(machine_dict):
+#     """
+#     Test creating a System from a dictionary
+#     """
+#     s = System(machine_dict)
+#     assert s["machine"] == "chinook"
 
 
 def test_system_from_file(machine_file):

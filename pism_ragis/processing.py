@@ -27,7 +27,7 @@ import re
 import shutil
 import time
 from datetime import datetime
-from typing import Union
+from typing import List, Union
 
 import joblib
 import numpy as np
@@ -35,8 +35,6 @@ import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
-
-from typing import List, Union
 
 kg2cmsle = 1 / 1e12 * 1.0 / 362.5 / 10.0
 gt2cmsle = 1 / 362.5 / 10.0
@@ -61,8 +59,10 @@ def preprocess_nc(
     except:
         m_id = str(m_id_re.group(1))
     ds[dim] = m_id
-    
-    return ds.drop_vars(drop_vars, errors="ignore").drop_dims(drop_dims, errors="ignore")
+
+    return ds.drop_vars(drop_vars, errors="ignore").drop_dims(
+        drop_dims, errors="ignore"
+    )
 
 
 @contextlib.contextmanager

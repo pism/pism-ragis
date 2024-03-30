@@ -22,6 +22,7 @@ Module provides functions to deal with observations
 
 from pathlib import Path
 from typing import Union
+from urllib.request import Request, urlopen  # Python 3
 
 import numpy as np
 import pandas as pd
@@ -112,12 +113,17 @@ def load_imbie(
 
 
 def load_mouginot(
-    url: str = "/Users/andy/Google Drive/My Drive/Projects/RAGIS/data/pnas.1904242116.sd02.xlsx",
+    url: str = "https://www.pnas.org/doi/suppl/10.1073/pnas.1904242116/suppl_file/pnas.1904242116.sd02.xlsx",
     norm_year: Union[None, float] = None,
 ):
     """
     Load the Mouginot et al (2019) data set
     """
+
+
+    # req = Request(url)
+    # req.add_header('User-Agent', 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:77.0) Gecko/20100101 Firefox/124.0')
+    # content = urlopen(req)
 
     df_m = pd.read_excel(
         url,

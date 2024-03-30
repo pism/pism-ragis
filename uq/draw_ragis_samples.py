@@ -75,7 +75,7 @@ dists: Dict[str, Any] = {
             "phi_max": 40,
             "till_effective_fraction_overburden": 0.02,
             "sliding_law": "pseudo_plastic",
-            "prescribed_retreat_file": None
+            "prescribed_retreat_file": None,
         },
     },
     "stress_balance": {
@@ -95,16 +95,14 @@ dists: Dict[str, Any] = {
             "ssa_n": 3.309718,
             "fractures": "false",
             "vcm": 1,
-            "gamma_T": 1e-4,
             "surface.pdd.refreeze": 0.6,
             "till_effective_fraction_overburden": 0.01845403,
-            "sliding_law": "pseudo_plastic",
             "phi_min": 7.193718,
             "phi_max": 42.79528,
             "z_min": -369.6359,
             "z_max": 243.8239,
             "sliding_law": "pseudo_plastic",
-            "prescribed_retreat_file": None
+            "prescribed_retreat_file": None,
         },
     },
     "calving": {
@@ -128,7 +126,7 @@ dists: Dict[str, Any] = {
             "calving.thickness_calving.threshold": 100,
             "fractures": "false",
             "sliding_law": "pseudo_plastic",
-            "prescribed_retreat_file": None
+            "prescribed_retreat_file": None,
         },
     },
     "ocean-calving": {
@@ -159,7 +157,7 @@ dists: Dict[str, Any] = {
             "z_min": -369.6359,
             "z_max": 243.8239,
             "calving.thickness_calving.threshold": 50,
-            "prescribed_retreat_file": None
+            "prescribed_retreat_file": None,
         },
     },
     "ocean-simple": {
@@ -176,7 +174,6 @@ dists: Dict[str, Any] = {
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
             "climate_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
             "runoff_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
-            "fractures": "false",
             "salinity": 34,
             "pseudo_plastic_q": 0.7508221,
             "sia_e": 2.608046,
@@ -192,7 +189,7 @@ dists: Dict[str, Any] = {
             "z_min": -369.6359,
             "z_max": 243.8239,
             "calving.thickness_calving.threshold": 50,
-            "prescribed_retreat_file": None
+            "prescribed_retreat_file": None,
         },
     },
     "calving-simple": {
@@ -211,7 +208,6 @@ dists: Dict[str, Any] = {
             "climate_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
             "runoff_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
             "salinity": 34,
-            "fractures": "false",
             "pseudo_plastic_q": 0.7508221,
             "sia_e": 2.608046,
             "ssa_n": 3.309718,
@@ -225,7 +221,7 @@ dists: Dict[str, Any] = {
             "phi_max": 42.79528,
             "z_min": -369.6359,
             "z_max": 243.8239,
-            "prescribed_retreat_file": None
+            "prescribed_retreat_file": None,
         },
     },
     "dem": {
@@ -260,7 +256,7 @@ dists: Dict[str, Any] = {
             "phi_max": 42.79528,
             "z_min": -369.6359,
             "z_max": 243.8239,
-            "prescribed_retreat_file": None
+            "prescribed_retreat_file": None,
         },
     },
 }
