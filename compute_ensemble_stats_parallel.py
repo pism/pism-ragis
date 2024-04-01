@@ -52,15 +52,7 @@ kg2cmsle = 1 / 1e12 * 1.0 / 362.5 / 10.0
 gt2cmsle = 1 / 362.5 / 10.0
 
 
-data_dir = Path("/mnt/storstrommen/ragis/data/pism")
-obs_dir = Path("/mnt/storstrommen/data/")
-assert data_dir.exists()
 
-results_dir = "2024_03_analysis"
-o_dir = data_dir / results_dir
-o_dir.mkdir(exist_ok=True)
-fig_dir = o_dir / "figures"
-fig_dir.mkdir(exist_ok=True)
 
 def process_file(url, chunks=None):
     ds = xr.open_dataset(url, chunks=chunks)
@@ -137,7 +129,7 @@ def load_experiments(experiments, data_type: str = "spatial", engine: str = "h5n
     dss = []
     for exp in experiments:
 
-        url = data_dir / Path(exp["proj_dir"]) / Path(exp[f"{data_type}_dir"])
+        url = ensemble_dir / Path(exp["proj_dir"]) / Path(exp[f"{data_type}_dir"])
         urls = url.glob(f"""*_gris_g{exp["resolution"]}m*.nc""")
         ds = xr.open_mfdataset(urls, preprocess=preprocess_nc, concat_dim="exp_id", combine="nested", engine=engine, parallel=True, chunks=chunks)
         if "ice_mass" in ds:
@@ -171,6 +163,12 @@ if __name__ == "__main__":
         help="""Basin shapefile.""",
         type=str,
         default="data/basins/Greenland_Basins_PS_v1.4.2.shp",
+    )
+    parser.add_argument(
+        "--mouginot_url",
+        help="""Path to Mouginot 2019 excel file.""",
+        type=str,
+        default="/mnt/storstrommen/data/mouginot/pnas.1904242116.sd02.xlsx"
     )
     parser.add_argument(
         "--temporal_range",
@@ -233,7 +231,7 @@ if __name__ == "__main__":
     #     basins = pd.concat([ice_sheet, ice_caps]).reset_index(drop=True)
 
     # Load observations
-    mou = load_mouginot(url=Path("/mnt/storstrommen/data/mouginot/pnas.1904242116.sd02.xlsx"), norm_year=1980)
+    mou = load_mouginot(url=Path(options.mouginot_url), norm_year=1980)
     mou_gis = mou[mou["Basin"] == "GIS"]
 
     mb_vars = ["ice_mass", "tendency_of_ice_mass", "tendency_of_ice_mass_due_to_surface_mass_flux", "tendency_of_ice_mass_due_to_discharge", "tendency_of_ice_mass_due_to_grounding_line_flux"]
@@ -243,16 +241,11 @@ if __name__ == "__main__":
 
     chunks = {"x": -1, "y": -1, "time": -1}
     chunks = "auto"
-    import numpy as np
-
-    def func(ds):
-
-        return np.linspace(0, 100)
            
     for exp in experiments:
         ensemble_id =  exp["ensemble_id"]
         data_type="spatial"
-        url = data_dir / Path(exp["proj_dir"]) / Path(exp[f"{data_type}_dir"])
+        url = ensemble_dir / Path(exp["proj_dir"]) / Path(exp[f"{data_type}_dir"])
         urls = url.glob(f"""*_gris_g{exp["resolution"]}m*.nc""")
         result = Parallel(n_jobs=options.n_jobs)(
                 delayed(process_file)(url, chunks="auto") for url in list(urls)
