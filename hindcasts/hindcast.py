@@ -426,8 +426,9 @@ done\n\n
         pass
 
     periodicity = "daily"
+    print(os.environ.get("PISM_PREFIX"))
     tm_cmd: List[Any] = [
-        "create_timeline.py",
+        join(os.environ.get("PISM_PREFIX"), "sources/util/create_timeline.py"),
         "-a",
         start_date,
         "-e",
