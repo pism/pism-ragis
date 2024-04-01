@@ -32,3 +32,5 @@ cdo
 gsl
 requests
 aiohttp
+zarr
+flox

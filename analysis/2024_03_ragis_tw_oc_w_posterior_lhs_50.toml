@@ -1,0 +1,6 @@
+project = "RAGIS"
+proj_dir = "2024_03_ragis_tw_oc_w_posterior_lhs_50"
+ensemble_id = "RAGIS"
+scalar_dir = "scalar"
+resolution = 900
+spatial_dir = "spatial"
