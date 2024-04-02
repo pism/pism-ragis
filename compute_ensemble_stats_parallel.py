@@ -77,24 +77,6 @@ def process_file(url, chunks=None):
     ds = ds[mb_vars]
     ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
     ds.rio.write_crs("epsg:3413", inplace=True)
-    b_sums = []
-    for k, basin in basins.iterrows():
-        basin_name = [basin["SUBREGION1"]][0]
-        b_sum = ds.rio.clip([basin.geometry]).sum(dim=["x", "y"])
-        b_sum = b_sum.expand_dims("basin")
-        b_sum["basin"] = [basin_name]
-        b_sums.append(b_sum)
-    b_sum = xr.concat(b_sums, dim="basin")
-    with ProgressBar():
-        basin_file = result_dir / f"rignot_basins_ensemble_id_{ensemble_id}_exp_id_{exp_id}_sums.nc"
-        start = time.time()
-        print(f"Computing basin sums and saving to {basin_file}")
-        encoding = {var: comp for var in b_sum.data_vars}
-        b_sum.to_netcdf(basin_file, encoding=encoding)
-        end = time.time()
-        time_elapsed = end - start
-        print(f"-  Time elapsed {time_elapsed:.0f}s")
-
     with ProgressBar():
         start = time.time()
         sums_file = result_dir / f"gris_rignot_ensemble_id_{ensemble_id}_exp_id_{exp_id}_sums.nc"
@@ -120,6 +102,24 @@ def process_file(url, chunks=None):
         end = time.time()
         time_elapsed = end - start
         print(f"-  Time elapsed {time_elapsed:.0f}s")
+    b_sums = []
+    for k, basin in basins.iterrows():
+        basin_name = [basin["SUBREGION1"]][0]
+        b_sum = ds.rio.clip([basin.geometry]).sum(dim=["x", "y"])
+        b_sum = b_sum.expand_dims("basin")
+        b_sum["basin"] = [basin_name]
+        b_sums.append(b_sum)
+    b_sum = xr.concat(b_sums, dim="basin")
+    with ProgressBar():
+        basin_file = result_dir / f"rignot_basins_ensemble_id_{ensemble_id}_exp_id_{exp_id}_sums.nc"
+        start = time.time()
+        print(f"Computing basin sums and saving to {basin_file}")
+        encoding = {var: comp for var in b_sum.data_vars}
+        b_sum.to_netcdf(basin_file, encoding=encoding)
+        end = time.time()
+        time_elapsed = end - start
+        print(f"-  Time elapsed {time_elapsed:.0f}s")
+
 
 def load_experiments(experiments, data_type: str = "spatial", engine: str = "h5netcdf", chunks: Union[None, dict] = None) -> xr.Dataset:
     """
@@ -241,7 +241,7 @@ if __name__ == "__main__":
 
     chunks = {"x": -1, "y": -1, "time": -1}
     chunks = "auto"
-           
+
     for exp in experiments:
         ensemble_id =  exp["ensemble_id"]
         data_type="spatial"

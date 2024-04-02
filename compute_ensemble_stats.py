@@ -249,7 +249,7 @@ if __name__ == "__main__":
 
     cluster = LocalCluster(n_workers=n_jobs, threads_per_worker=1, memory_limit=options.memory_limit)
     client = Client(cluster)
-    print(f"Open client in browser: {client.dashboard_link}"
+    print(f"Open client in browser: {client.dashboard_link}")
 
     b_sums = []
     start = time.time()
