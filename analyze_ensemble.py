@@ -34,6 +34,8 @@ import cartopy.crs as ccrs
 from dask.distributed import Client, progress, LocalCluster
 from dask.diagnostics import ProgressBar
 from typing import Union
+import cartopy.crs as ccrs
+import cartopy
 
 import toml
 
@@ -151,15 +153,33 @@ if __name__ == "__main__":
     
     comp = dict(zlib=True, complevel=2)
 
-    urls = result_dir.glob("*_sums.nc")
+    urls = result_dir.glob("rignot_b*_sums.nc")
     # urls = ['/mnt/storstrommen/ragis/2024_03_fogss/rignot_basin_CW_ensemble_id_GrIMP_exp_id_3_sums.nc', '/mnt/storstrommen/ragis/2024_03_fogss/rignot_basin_NE_ensemble_id_GrIMP_exp_id_3_sums.nc']
 
 
-    sums = xr.open_mfdataset(urls, parallel=True)
-    print(sums)
+    basins_file = result_dir / "basins_sums.nc"
+    gris_file = result_dir / "gris_sums.nc"
+    domain_file = result_dir / "domain_sums.nc"
+    scalar_file = result_dir / "scalar_sums.nc"
 
-    sums["ice_mass"] = sums["ice_mass"] - sums.sel(time="1980-01-01", method="nearest")["ice_mass"]
+    basins_sums = xr.open_dataset(basins_file, chunks="auto")
+    basins_sums["ice_mass"] = basins_sums["ice_mass"] - basins_sums.sel(time="1980-01-01", method="nearest")["ice_mass"]
 
+    gris_sums = xr.open_dataset(gris_file, chunks="auto")
+    gris_sums["ice_mass"] = gris_sums["ice_mass"] - gris_sums.sel(time="1980-01-01", method="nearest")["ice_mass"]
+    
+    domain_sums = xr.open_dataset(domain_file, chunks="auto")
+    domain_sums["ice_mass"] = domain_sums["ice_mass"] - domain_sums.sel(time="1980-01-01", method="nearest")["ice_mass"]
+
+    scalar_sums = xr.open_dataset(scalar_file, chunks="auto")
+    scalar_sums["ice_mass"] = (scalar_sums["ice_mass"] - scalar_sums.sel(time="1980-01-01", method="nearest")["ice_mass"])
+    scalar_sums["limnsw"] = (scalar_sums["limnsw"] - scalar_sums.sel(time="1980-01-01", method="nearest")["limnsw"] ) / 1e12
+    
+    gris = basins_sums.sum(dim="basin")
+    gris.expand_dims("basin")
+    gris["basin"] = ["GIS"]
+    sums = xr.concat([basins_sums, gris], dim="basin")
+    
     plt.rc('font', size=6)
     colorblind_colors = ["#882255", "#DDCC77", "#AA4499", "#CC6677", "#DDCC77", "#88CCEE", "#44AA99", "#117733"]
 
@@ -179,33 +199,261 @@ if __name__ == "__main__":
 
     sim_colors = colorblind_colors
     obs = mou_gis
-    obs_color = ".5"
+    obs_color = "#216778"
     obs_alpha = 0.5
     sim_alpha = 0.5
 
-    fig, axs = plt.subplots(nrows=3, ncols=1, sharex="col", figsize=(6.2, 6.2), height_ratios=[16, 9, 9])
-    fig.subplots_adjust(wspace=0, hspace=0.075, bottom=0.125, top=0.975, left=0.175, right=0.96)
 
-    print(sums)
-    sums = sums.sel(basin= "CW")
+    plt.rc('font', size=9)
+    fig, ax = plt.subplots(nrows=1, ncols=1, sharex="col", figsize=(7, 4.2))
+    #fig.subplots_adjust(wspace=0, hspace=0.075, bottom=0.125, top=0.975, left=0.175, right=0.96)
+
     sim_cis = []
-    for k, (ens_id, da) in enumerate(sums.groupby("ensemble_id")):
+    obs_color = "0.5"
+    gris = sums.sel(basin="GIS")
+    for k, (ens_id, da) in enumerate(gris.groupby("ensemble_id")):
+        da = da.load()
+        s_med = scalar_sums.sel(ensemble_id=ens_id).quantile(0.50, dim="exp_id")
+        d_med = domain_sums.sel(ensemble_id=ens_id).quantile(0.50, dim="exp_id")
+        g_med = gris_sums.sel(ensemble_id=ens_id).quantile(0.50, dim="exp_id")
 
+        # sim_ci = axs[0].fill_between(da.time, q_low[sim_mass_varname], q_high[sim_mass_varname],
+        #                     alpha=sim_alpha, color=sim_colors[k], lw=0, label=ens_id)
+        #l_sim = ax.plot(da.time, q_med[sim_mass_varname], lw=1.5, color=sim_colors[0], label="Ice Sheet")
+        g_sim = ax.plot(g_med.time, g_med[sim_mass_varname], lw=2.0, color=sim_colors[3], label="Ice Sheet")
+        s_sim = ax.plot(s_med.time, s_med["limnsw"], lw=2.0, color=sim_colors[2], label="Modeling Domain VAF")
+        d_sim = ax.plot(d_med.time, d_med[sim_mass_varname], lw=2.0, color=sim_colors[1], label="Modeling Domain")
+        sim_cis.append(s_sim[0])
+        sim_cis.append(d_sim[0])
+        sim_cis.append(g_sim[0])
+        
+    obs_ci = ax.fill_between(obs["Date"], 
+                        (obs[mass_varname] + sigma * obs[mass_uncertainty_varname]), 
+                        (obs[mass_varname] - sigma * obs[mass_uncertainty_varname]), 
+                        ls="solid", color=obs_color, lw=0, alpha=obs_alpha, label="1-$\sigma$")
+    obs_ci_2 = ax.fill_between(obs["Date"], 
+                        (obs[mass_varname] + 2 * sigma * obs[mass_uncertainty_varname]), 
+                        (obs[mass_varname] - 2 * sigma * obs[mass_uncertainty_varname]), 
+                        ls="solid", color=obs_color, lw=0, alpha=obs_alpha / 2, label="2-$\sigma$")
+
+
+
+    legend_obs = ax.legend(handles=[obs_ci, obs_ci_2], loc="lower left",
+                                   title="Observed\n(Mouginot 2019)")
+    legend_obs.get_frame().set_linewidth(0.0)
+    legend_obs.get_frame().set_alpha(0.0)
+
+    legend_sim = ax.legend(handles=sim_cis, loc="upper left",
+                                   title="Simulated")
+    legend_sim.get_frame().set_linewidth(0.0)
+    legend_sim.get_frame().set_alpha(0.0)
+
+    ax.add_artist(legend_obs)
+    ax.add_artist(legend_sim)
+    #scalar_mass.sel(exp_id="BAYES-MEDIAN").plot.line(x="time", ax=ax)
+    ax.axhline(0, ls="dotted", color="k", lw=0.5) 
+    ax.set_xlim(pd.to_datetime("1980-1-1"), pd.to_datetime("2000-1-1"))
+    ax.set_ylim(-2500, 2000)
+    ax.set_ylabel("Cumulative Mass Change (Gt)")
+    fig.tight_layout()
+    fig.savefig(fig_dir / "ice_mass_scalar_1980-2000.pdf")
+    fig.savefig(fig_dir / "ice_mass_scalar_1980-2000.png", dpi=600)
+
+    fig, axs = plt.subplots(nrows=3, ncols=1, sharex="col", figsize=(7, 4.2), height_ratios=[16, 9, 9])
+    fig.subplots_adjust(wspace=0, hspace=0.005)
+
+    sim_cis = []
+
+    gris = sums.sel(basin="GIS")
+    for k, (ens_id, da) in enumerate(gris.groupby("ensemble_id")):
+        da = da.load()
+        s_med = scalar_sums.sel(ensemble_id=ens_id).quantile(0.50, dim="exp_id")
+        d_med = domain_sums.sel(ensemble_id=ens_id).quantile(0.50, dim="exp_id")
+        g_med = gris_sums.sel(ensemble_id=ens_id).quantile(0.50, dim="exp_id")
         q_low = da.quantile(0.16, dim="exp_id")
         q_med = da.quantile(0.50, dim="exp_id")
         q_high = da.quantile(0.84, dim="exp_id")
 
-        sim_ci = axs[0].fill_between(da.time, q_low[sim_mass_varname], q_high[sim_mass_varname],
-                            alpha=sim_alpha, color=sim_colors[k], lw=0, label=ens_id)
+        # sim_ci = axs[0].fill_between(da.time, q_low[sim_mass_varname], q_high[sim_mass_varname],
+        #                     alpha=sim_alpha, color=sim_colors[k], lw=0, label=ens_id)
+        g_sim = axs[0].plot(g_med.time, g_med[sim_mass_varname], lw=2.0, color=sim_colors[3], label="Ice Sheet")
+        d_sim = axs[0].plot(d_med.time, d_med[sim_mass_varname], lw=2.0, color=sim_colors[1], label="Modeling Domain")
+        axs[1].plot(g_med.time, g_med.rolling({"time": 13}).mean()[sim_discharge_varname], lw=1.5, color=sim_colors[3], label="Ice Sheet")
+        axs[1].plot(d_med.time, d_med.rolling({"time": 13}).mean()[sim_discharge_varname], lw=1.5, color=sim_colors[1], label="Modeling Domain")
+        axs[2].plot(g_med.time, g_med.rolling({"time": 13}).mean()[sim_smb_varname], lw=1.5, color=sim_colors[3], label="Ice Sheet")
+        axs[2].plot(d_med.time, d_med.rolling({"time": 13}).mean()[sim_smb_varname], lw=1.5, color=sim_colors[1], label="Modeling Domain")
+        sim_cis.append(d_sim[0])
+        sim_cis.append(g_sim[0])
+        
+
+    obs_ci = axs[0].fill_between(obs["Date"], 
+                        (obs[mass_varname] + sigma * obs[mass_uncertainty_varname]), 
+                        (obs[mass_varname] - sigma * obs[mass_uncertainty_varname]), 
+                        ls="solid", color=obs_color, lw=0, alpha=obs_alpha, label="1-$\sigma$")
+    obs_ci_2 = axs[0].fill_between(obs["Date"], 
+                        (obs[mass_varname] + 2 * sigma * obs[mass_uncertainty_varname]), 
+                        (obs[mass_varname] - 2 * sigma * obs[mass_uncertainty_varname]), 
+                        ls="solid", color=obs_color, lw=0, alpha=obs_alpha / 2, label="2-$\sigma$")
+
+    axs[1].fill_between(obs["Date"], 
+                        (obs[discharge_varname] + sigma * obs[discharge_uncertainty_varname]), 
+                        (obs[discharge_varname] - sigma * obs[discharge_uncertainty_varname]), 
+                        ls="solid", color=obs_color, lw=0, alpha=obs_alpha, label="1-$\sigma$")
+    axs[1].fill_between(obs["Date"], 
+                        (obs[discharge_varname] + 2 * sigma * obs[discharge_uncertainty_varname]), 
+                        (obs[discharge_varname] - 2* sigma * obs[discharge_uncertainty_varname]), 
+                        ls="solid", color=obs_color, lw=0, alpha=obs_alpha / 2, label="2-$\sigma$")
+    axs[2].fill_between(obs["Date"], 
+                        (obs[smb_varname] + sigma * obs[smb_uncertainty_varname]), 
+                        (obs[smb_varname] - sigma * obs[smb_uncertainty_varname]), 
+                        ls="solid", color=obs_color, lw=0, alpha=obs_alpha, label="1-$\sigma$")
+    axs[2].fill_between(obs["Date"], 
+                        (obs[smb_varname] + 2 * sigma * obs[smb_uncertainty_varname]), 
+                        (obs[smb_varname] - 2* sigma * obs[smb_uncertainty_varname]), 
+                        ls="solid", color=obs_color, lw=0, alpha=obs_alpha / 2, label="2-$\sigma$")
+    
+    legend_obs = axs[0].legend(handles=[obs_ci], loc="upper left",
+                                   title="Observed\n(Mouginot 2019)")
+    legend_obs.get_frame().set_linewidth(0.0)
+    legend_obs.get_frame().set_alpha(0.0)
+    legend_sim = axs[0].legend(handles=sim_cis, loc="lower left",
+                                   title="Simulated")
+    legend_sim.get_frame().set_linewidth(0.0)
+    legend_sim.get_frame().set_alpha(0.0)
+
+    axs[0].add_artist(legend_obs)
+    axs[0].add_artist(legend_sim)
+    #scalar_mass.sel(exp_id="BAYES-MEDIAN").plot.line(x="time", ax=ax)
+    axs[0].set_ylim(-2500, 2000)
+    axs[-1].set_xlim(pd.to_datetime("1980-1-1"), pd.to_datetime("2000-1-1"))
+    axs[1].set_ylim(-800, 0)
+    axs[0].set_ylabel("Cumulative Mass Change\n(Gt)")
+    axs[1].set_ylabel("Ice Discharge (Gt/yr)")
+    axs[2].set_ylabel("SMB (Gt/yr)")
+    fig.tight_layout()
+    fig.savefig(fig_dir / "ice_fluxes_scalar_1980-2000.pdf")
+    fig.savefig(fig_dir / "ice_fluxes_scalar_1980-2000.png", dpi=600)
+
+
+    import cartopy
+    from cartopy import crs as ccrs
+    import numpy as np
+    crs = ccrs.NorthPolarStereo(central_longitude=-45, true_scale_latitude=70, globe=None)
+
+    fig = plt.figure(figsize=(3.2, 6.2))
+    ax = fig.add_subplot(111, projection=crs)
+
+    basins.plot(color=colorblind_colors[3],ax=ax)
+    ax.coastlines(linewidth=0.25, resolution="10m")
+    ax.gridlines(
+
+            dms=True,
+            xlocs=np.arange(-60, 0, 10),
+            ylocs=np.arange(50, 85, 10),
+            x_inline=False,
+            y_inline=False,
+            rotate_labels=20,
+            ls="dotted",
+            color="0.5",
+        )
+    fig.tight_layout()
+    fig.savefig(fig_dir / "gris_domain_red.pdf")
+    fig.savefig(fig_dir / "gris_domain_red.png", dpi=600)
+
+    fig = plt.figure(figsize=(3.2, 6.2))
+    ax = fig.add_subplot(111, projection=crs)
+    ax.set_facecolor(colorblind_colors[2])
+    basins.plot(color=colorblind_colors[0],ax=ax, alpha=0)
+    ax.coastlines(linewidth=0.25, resolution="10m")
+    ax.gridlines(
+
+            dms=True,
+            xlocs=np.arange(-60, 0, 10),
+            ylocs=np.arange(50, 85, 10),
+            x_inline=False,
+            y_inline=False,
+            rotate_labels=20,
+            ls="dotted",
+            color="0.5",
+        )
+    fig.tight_layout()
+    fig.savefig(fig_dir / "modeling_domain_purple.pdf")
+    fig.savefig(fig_dir / "modeling_domain_purple.png", dpi=600)
+    
+    fig = plt.figure(figsize=(3.2, 6.2))
+    ax = fig.add_subplot(111, projection=crs)
+    ax.set_facecolor(colorblind_colors[1])
+    basins.plot(color=colorblind_colors[1],ax=ax, alpha=0)
+    ax.coastlines(linewidth=0.25, resolution="10m")
+    ax.gridlines(
+
+            dms=True,
+            xlocs=np.arange(-60, 0, 10),
+            ylocs=np.arange(50, 85, 10),
+            x_inline=False,
+            y_inline=False,
+            rotate_labels=20,
+            ls="dotted",
+            color="0.5",
+        )
+    fig.tight_layout()
+    fig.savefig(fig_dir / "modeling_domain_yellow.pdf")
+    fig.savefig(fig_dir / "modeling_domain_yellow.png", dpi=600)
+
+    fig, ax = plt.subplots(nrows=1, ncols=1, sharex="col", figsize=(8, 1.6))
+    #fig.subplots_adjust(wspace=0, hspace=0.075, bottom=0.125, top=0.975, left=0.175, right=0.96)
+
+    sim_cis = []
+    sim_colors = ["#216778"]
+    obs_alpha = 0.5
+    gris = sums.sel(basin="GIS")
+    for k, (ens_id, da) in enumerate(gris.groupby("ensemble_id")):
+        da = da.load()
+        q_low = da.quantile(0.16, dim="exp_id")
+        q_med = da.quantile(0.50, dim="exp_id")
+        q_high = da.quantile(0.84, dim="exp_id")
+
+        # sim_ci = axs[0].fill_between(da.time, q_low[sim_mass_varname], q_high[sim_mass_varname],
+        #                     alpha=sim_alpha, color=sim_colors[k], lw=0, label=ens_id)
+        l_sim = ax.plot(da.time, q_med[sim_mass_varname], lw=2.0, color=sim_colors[k])
+        sim_cis.append(l_sim[0])
+        
+
+    obs_ci = ax.fill_between(obs["Date"], 
+                        (obs[mass_varname] + sigma * obs[mass_uncertainty_varname]), 
+                        (obs[mass_varname] - sigma * obs[mass_uncertainty_varname]), 
+                        ls="solid", color=obs_color, lw=0, alpha=obs_alpha, label="1-$\sigma$")
+
+
+    ax.set_xlim(pd.to_datetime("1980-1-1"), pd.to_datetime("2000-1-1"))
+    ax.set_ylim(-2000, 500)
+    ax.set_axis_off()
+    fig.tight_layout()
+    fig.savefig(fig_dir / "ice_mass_scalar_plain_1980-2000.pdf")
+    fig.savefig(fig_dir / "ice_mass_scalar_plain_1980-2000.png", dpi=600)
+
+
+    fig, axs = plt.subplots(nrows=3, ncols=1, sharex="col", figsize=(6.2, 2.1))
+    fig.subplots_adjust(wspace=0, hspace=0.075, bottom=0.125, top=0.975, left=0.175, right=0.96)
+    gris = sums.sel(basin="GIS")
+    for k, (ens_id, da) in enumerate(gris.groupby("ensemble_id")):
+        da = da.load()
+        q_low = da.quantile(0.16, dim="exp_id")
+        q_med = da.quantile(0.50, dim="exp_id")
+        q_high = da.quantile(0.84, dim="exp_id")
+
+        # sim_ci = axs[0].fill_between(da.time, q_low[sim_mass_varname], q_high[sim_mass_varname],
+        #                     alpha=sim_alpha, color=sim_colors[k], lw=0, label=ens_id)
         axs[0].plot(da.time, q_med[sim_mass_varname], lw=0.75, color=sim_colors[k])
         
-        axs[1].fill_between(q_low["time"], q_low.rolling({"time": 13}).mean()[sim_discharge_varname], q_high.rolling({"time": 13}).mean()[sim_discharge_varname],
-                            alpha=sim_alpha, color=sim_colors[k], lw=0, label=ens_id)
+        # axs[1].fill_between(q_low["time"], q_low.rolling({"time": 13}).mean()[sim_discharge_varname], q_high.rolling({"time": 13}).mean()[sim_discharge_varname],
+        #                     alpha=sim_alpha, color=sim_colors[k], lw=0, label=ens_id)
         axs[1].plot(q_med["time"], q_med.rolling({"time": 13}).mean()[sim_discharge_varname], lw=0.75, color=sim_colors[k])
-        axs[2].fill_between(da.time, q_low.rolling({"time": 13}).mean()[sim_smb_varname], q_high.rolling({"time": 13}).mean()[sim_smb_varname],
-                            alpha=sim_alpha, color=sim_colors[k], lw=0, label=ens_id)
+        #axs[1].plot(q_med["time"], q_med.rolling({"time": 13}).mean()["tendency_of_ice_mass_due_to_grounding_line_flux"], lw=0.75, color=sim_colors[k])
+        # axs[2].fill_between(da.time, q_low.rolling({"time": 13}).mean()[sim_smb_varname], q_high.rolling({"time": 13}).mean()[sim_smb_varname],
+        #                     alpha=sim_alpha, color=sim_colors[k], lw=0, label=ens_id)
         axs[2].plot(da.time, q_med.rolling({"time": 13}).mean()[sim_smb_varname], lw=0.75, color=sim_colors[k])
-        sim_cis.append(sim_ci)
+        #sim_cis.append(sim_ci)
 
     obs_ci = axs[0].fill_between(obs["Date"], 
                         (obs[mass_varname] + sigma * obs[mass_uncertainty_varname]), 
@@ -225,16 +473,17 @@ if __name__ == "__main__":
                                    title="Observed")
     legend_obs.get_frame().set_linewidth(0.0)
     legend_obs.get_frame().set_alpha(0.0)
-    legend_sim = axs[0].legend(handles=sim_cis, loc="lower center",
-                                   title="Simulated")
-    legend_sim.get_frame().set_linewidth(0.0)
-    legend_sim.get_frame().set_alpha(0.0)
+    # legend_sim = axs[0].legend(handles=sim_cis, loc="lower center",
+    #                                title="Simulated")
+    # legend_sim.get_frame().set_linewidth(0.0)
+    # legend_sim.get_frame().set_alpha(0.0)
 
     axs[0].add_artist(legend_obs)
-    axs[0].add_artist(legend_sim)
+    #axs[0].add_artist(legend_sim)
     #scalar_mass.sel(exp_id="BAYES-MEDIAN").plot.line(x="time", ax=ax)
     axs[-1].set_xlim(pd.to_datetime("1980-1-1"), pd.to_datetime("2000-1-1"))
-    #axs[1].set_ylim(-750, 0)
+    axs[1].set_ylim(-750, 0)
+    axs[0].set_ylim(-2000, 500)
     fig.savefig(fig_dir / "ragis-comp-3_scalar_1980-2000.pdf")
     fig.savefig(fig_dir / "ragis-comp-3_scalar_1980-2000.png", dpi=600)
 
