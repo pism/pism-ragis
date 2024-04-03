@@ -55,9 +55,9 @@ gt2cmsle = 1 / 362.5 / 10.0
 
 
 
-def process_file(url, chunks=None):
+def process_file(url, chunks=None, temporal_range=None):
     ds = xr.open_dataset(url, chunks=chunks)
-    if options.temporal_range:
+    if temporal_range:
         ds = ds.sel(time=slice(*options.temporal_range))
     m_id_re = re.search("id_(.+?)_", ds.encoding["source"])
     ds = ds.expand_dims("exp_id")
@@ -122,7 +122,7 @@ def process_file(url, chunks=None):
         time_elapsed = end - start
         print(f"-  Time elapsed {time_elapsed:.0f}s")
 
-def load_experiments(experiments, data_type: str = "spatial", engine: str = "h5netcdf", chunks: Union[None, dict] = None) -> xr.Dataset:
+def load_experiments(experiments, data_type: str = "spatial", engine: str = "h5netcdf", chunks: Union[None, dict] = None, temporal_range=None) -> xr.Dataset:
     """
     Load experiments
     """
@@ -140,7 +140,12 @@ def load_experiments(experiments, data_type: str = "spatial", engine: str = "h5n
         ds["ensemble_id"] = exp["ensemble_id"]
         dss.append(ds)
 
-    return  xr.concat(dss, dim="ensemble_id")
+    ds =  xr.concat(dss, dim="ensemble_id")
+    if temporal_range:
+        return ds.sel(time=slice(*options.temporal_range))
+
+    else:
+        return ds
 
 if __name__ == "__main__":
 
@@ -235,14 +240,17 @@ if __name__ == "__main__":
 
     chunks = "auto"
     with dask.config.set(**{'array.slicing.split_large_chunks': True}):
-        spatial_ds = load_experiments(experiments, data_type="spatial", chunks=chunks)
+        spatial_ds = load_experiments(experiments, data_type="spatial", chunks=chunks, temporal_range=options.temporal_range)
     spatial_ds["tendency_of_ice_mass_due_to_grounding_line_flux"] = spatial_ds["grounding_line_flux"] * spatial_ds["thk"] * (spatial_ds["x"][1]-spatial_ds["x"][0]) / 1e12
     spatial_ds["tendency_of_ice_mass_due_to_grounding_line_flux"].attrs["units"] = "Gt year-1"
     
     spatial_ds = spatial_ds[mb_vars]
     spatial_ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
     spatial_ds.rio.write_crs("epsg:3413", inplace=True)
+    spatial_ds = spatial_ds.chunk({"time": -1, "y": -1, "x": -1, "exp_id": len(experiments)})
 
+    print("Size in memory: %.1f GB" % (spatial_ds.nbytes / 1024 ** 3))
+    
     basins_file = result_dir / "basins_sums.nc"
     gris_file = result_dir / "gris_sums.nc"
     domain_file = result_dir / "domain_sums.nc"
@@ -251,33 +259,38 @@ if __name__ == "__main__":
     client = Client(cluster)
     print(f"Open client in browser: {client.dashboard_link}")
 
+    def p(ds, filename):
+        encoding = {var: comp for var in ds.data_vars}
+        return ds.to_netcdf(filename, encoding=encoding)
+
+    gris_sums = spatial_ds.rio.clip(basins.geometry).sum(dim=["x", "y"])
+    print(f"Computing ice sheet-wide sums and saving to {gris_file}")
+    g = client.scatter(gris_sums)
+    future = client.submit(p, g, gris_file)
+    progress(future)
+    
+    domain_sums = spatial_ds.sum(dim=["x", "y"])
+    print(f"Computing domain-wide sums and saving to {domain_file}")
+    d = client.scatter(domain_sums)
+    future = client.submit(p, d, domain_file)
+    progress(future)
+
     b_sums = []
     start = time.time()
-    with client:
-        for k, basin in basins.iterrows():
-            basin_name = basin["SUBREGION1"]
-            basin_file = result_dir / f"basin_{basin_name}_sums.nc"
-            b_sum = spatial_ds.rio.clip([basin.geometry]).sum(dim=["x", "y"])
-            b_sum = b_sum.expand_dims("basin")
-            b_sum["basin"] = [basin_name]
-            b_sums.append(b_sum)
-        basins_sums = xr.concat(b_sums, dim="basin").persist()
-        print(f"Computing basin sums and saving to {basins_file}")
-        progress(basins_sums)
-        encoding = {var: comp for var in basins_sums.data_vars}
-        basins_sums.to_netcdf(basins_file, encoding=encoding)
+    for k, basin in basins.iterrows():
+        basin_name = basin["SUBREGION1"]
+        basin_file = result_dir / f"basin_{basin_name}_sums.nc"
+        b_sum = spatial_ds.rio.clip([basin.geometry]).sum(dim=["x", "y"])
+        b_sum = b_sum.expand_dims("basin")
+        b_sum["basin"] = [basin_name]
+        b_sums.append(b_sum)
+    basins_sums = xr.concat(b_sums, dim="basin")
+    print(f"Computing basin sums and saving to {basins_file}")
+    b = client.scatter(basins_sums)
+    future = client.submit(p, b, basins_file)
+    progress(future)
 
-        gris_sums = spatial_ds.rio.clip(basins.geometry).sum(dim=["x", "y"]).persist()
-        print(f"Computing ice sheet-wide sums and saving to {gris_file}")
-        encoding = {var: comp for var in gris_sums.data_vars}
-        progress(gris_sums)
-        gris_sums.to_netcdf(gris_file, encoding=encoding)
-
-        domain_sums = spatial_ds.sum(dim=["x", "y"]).persist()
-        print(f"Computing domain-wide sums and saving to {domain_file}")
-        encoding = {var: comp for var in domain_sums.data_vars}
-        progress(domain_sums)
-        progress(domain_sums.to_netcdf(domain_file, encoding=encoding))
+    
     end = time.time()
     time_elapsed = end - start
     print(f"Time elapsed {time_elapsed:.0f}s")
