@@ -77,7 +77,7 @@ def process_file(url, chunks=None, temporal_range=None):
     ds["tendency_of_ice_mass_due_to_grounding_line_flux"].attrs["units"] = "Gt year-1"
     ds = ds[mb_vars]
     ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
-    ds.rio.write_crs("epsg:3413", inplace=True)
+    ds.rio.write_crs(crs, inplace=True)
     b_sums = []
     for k, basin in basins.iterrows():
         basin_name = [basin["SUBREGION1"]][0]
@@ -246,7 +246,7 @@ if __name__ == "__main__":
     
     spatial_ds = spatial_ds[mb_vars]
     spatial_ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
-    spatial_ds.rio.write_crs("epsg:3413", inplace=True)
+    spatial_ds.rio.write_crs(crs, inplace=True)
     spatial_ds = spatial_ds.chunk({"time": -1, "y": -1, "x": -1, "exp_id": len(experiments)})
 
     print("Size in memory: %.1f GB" % (spatial_ds.nbytes / 1024 ** 3))
@@ -255,24 +255,18 @@ if __name__ == "__main__":
     gris_file = result_dir / "gris_sums.nc"
     domain_file = result_dir / "domain_sums.nc"
 
-    cluster = LocalCluster(n_workers=n_jobs, threads_per_worker=1, memory_limit=options.memory_limit)
-    client = Client(cluster)
+    client = Client()
     print(f"Open client in browser: {client.dashboard_link}")
 
-    def p(ds, filename):
+    def compute_netcdf(ds, filename):
         encoding = {var: comp for var in ds.data_vars}
         return ds.to_netcdf(filename, encoding=encoding)
-
+    
+    
     gris_sums = spatial_ds.rio.clip(basins.geometry).sum(dim=["x", "y"])
     print(f"Computing ice sheet-wide sums and saving to {gris_file}")
-    g = client.scatter(gris_sums)
-    future = client.submit(p, g, gris_file)
-    progress(future)
-    
-    domain_sums = spatial_ds.sum(dim=["x", "y"])
-    print(f"Computing domain-wide sums and saving to {domain_file}")
-    d = client.scatter(domain_sums)
-    future = client.submit(p, d, domain_file)
+    g = client.scatter(gris_sums, broadcast=True)
+    future = client.submit(compute_netcdf, g, gris_file)
     progress(future)
 
     b_sums = []
@@ -283,15 +277,23 @@ if __name__ == "__main__":
         b_sum = spatial_ds.rio.clip([basin.geometry]).sum(dim=["x", "y"])
         b_sum = b_sum.expand_dims("basin")
         b_sum["basin"] = [basin_name]
-        b_sums.append(b_sum)
+        b_sums.append(b_sum)        
+    
     basins_sums = xr.concat(b_sums, dim="basin")
     print(f"Computing basin sums and saving to {basins_file}")
-    b = client.scatter(basins_sums)
-    future = client.submit(p, b, basins_file)
+    b = client.scatter(basins_sums, broadcast=True)
+    future = client.submit(compute_netcdf, b, basins_file)
     progress(future)
-
+    
+    
+    # domain_sums = spatial_ds.sum(dim=["x", "y"])
+    # print(f"Computing domain-wide sums and saving to {domain_file}")
+    # d = client.scatter(domain_sums, broadcast=True)
+    # future = client.submit(p, d, domain_file)
+    # progress(future)
     
     end = time.time()
     time_elapsed = end - start
     print(f"Time elapsed {time_elapsed:.0f}s")
 
+    client.close()

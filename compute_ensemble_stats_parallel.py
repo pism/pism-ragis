@@ -52,8 +52,6 @@ kg2cmsle = 1 / 1e12 * 1.0 / 362.5 / 10.0
 gt2cmsle = 1 / 362.5 / 10.0
 
 
-
-
 def process_file(url, chunks=None):
     ds = xr.open_dataset(url, chunks=chunks)
     if options.temporal_range:
@@ -79,45 +77,28 @@ def process_file(url, chunks=None):
     ds.rio.write_crs("epsg:3413", inplace=True)
     with ProgressBar():
         start = time.time()
-        sums_file = result_dir / f"gris_rignot_ensemble_id_{ensemble_id}_exp_id_{exp_id}_sums.nc"
+        basin_name = "GIS"
+        sums_file = result_dir / f"basin_{basin_name}_ensemble_id_{ensemble_id}_exp_id_{exp_id}_sums.nc"
         print(f"Computing ice sheet-wide sums and saving to {sums_file}")
         sums = ds.rio.clip(basins.geometry).sum(dim=["x", "y"])
         sums = sums.expand_dims("basin")
-        sums["basin"] = ["GIS"]
+        sums["basin"] = [basin_name]
         encoding = {var: comp for var in ds.data_vars}
-        ds.to_netcdf(sums_file, encoding=encoding)
-        end = time.time()
-        time_elapsed = end - start
-        print(f"-  Time elapsed {time_elapsed:.0f}s")
+        sums.to_netcdf(sums_file, encoding=encoding)
+        for k, basin in basins.iterrows():
+            basin_name = [basin["SUBREGION1"]][0]
+            b_sum = ds.rio.clip([basin.geometry]).sum(dim=["x", "y"])
+            b_sum = b_sum.expand_dims("basin")
+            b_sum["basin"] = [basin_name]
+            basin_file = result_dir / f"basin_{basin_name}_ensemble_id_{ensemble_id}_exp_id_{exp_id}_sums.nc"
+            start = time.time()
+            print(f"Computing basin sums and saving to {basin_file}")
+            encoding = {var: comp for var in b_sum.data_vars}
+            with ProgressBar():
+                b_sum.to_netcdf(basin_file, encoding=encoding)
+            end = time.time()
+            time_elapsed = end - start
 
-    with ProgressBar():
-        start = time.time()
-        sums_file = result_dir / f"domain_ensemble_id_{ensemble_id}_exp_id_{exp_id}_sums.nc"
-        print(f"Computing domain-wide sums and saving to {sums_file}")
-        sums = ds.sum(dim=["x", "y"])
-        sums = sums.expand_dims("basin")
-        sums["basin"] = ["MD"]
-        encoding = {var: comp for var in ds.data_vars}
-        ds.to_netcdf(sums_file, encoding=encoding)
-        end = time.time()
-        time_elapsed = end - start
-        print(f"-  Time elapsed {time_elapsed:.0f}s")
-    b_sums = []
-    for k, basin in basins.iterrows():
-        basin_name = [basin["SUBREGION1"]][0]
-        b_sum = ds.rio.clip([basin.geometry]).sum(dim=["x", "y"])
-        b_sum = b_sum.expand_dims("basin")
-        b_sum["basin"] = [basin_name]
-        b_sums.append(b_sum)
-    b_sum = xr.concat(b_sums, dim="basin")
-    with ProgressBar():
-        basin_file = result_dir / f"rignot_basins_ensemble_id_{ensemble_id}_exp_id_{exp_id}_sums.nc"
-        start = time.time()
-        print(f"Computing basin sums and saving to {basin_file}")
-        encoding = {var: comp for var in b_sum.data_vars}
-        b_sum.to_netcdf(basin_file, encoding=encoding)
-        end = time.time()
-        time_elapsed = end - start
         print(f"-  Time elapsed {time_elapsed:.0f}s")
 
 
@@ -248,7 +229,7 @@ if __name__ == "__main__":
         url = ensemble_dir / Path(exp["proj_dir"]) / Path(exp[f"{data_type}_dir"])
         urls = url.glob(f"""*_gris_g{exp["resolution"]}m*.nc""")
         result = Parallel(n_jobs=options.n_jobs)(
-                delayed(process_file)(url, chunks="auto") for url in list(urls)
+                delayed(process_file)(url, chunks=chunks) for url in list(urls)
             )
     # basins_file = result_dir / "basins_sums.nc"
     # gris_file = result_dir / "gris_sums.nc"
