@@ -20,9 +20,14 @@ Optionally create Conda environment named *pism-ragis*:
     $ conda env create -f environment.yml
     $ conda activate pism-ragis
 
+or using Mamba instead:
+
+    $ mamba env create -f environment.yml
+    $ mamba activate pism-ragis
+
 Install pism-ragis:
 
-    $ pip install -e .
+    $ pip install .
 
 
 

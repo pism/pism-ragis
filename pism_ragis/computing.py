@@ -133,7 +133,7 @@ spatial_ts_vars["paleo_tracer"] = [
     "effective_air_temp",
     "effective_precipitation",
     "dHdt",
-    "grounding_line_flux",
+    "ice_mass_transport_across_grounding_line",
     "ice_mass",
     "mask",
     "mass_fluxes",
@@ -155,7 +155,7 @@ spatial_ts_vars["paleo_tracer"] = [
 
 spatial_ts_vars["ragis"] = [
     "dHdt",
-    "grounding_line_flux",
+    "ice_mass_transport_across_grounding_line",
     "ice_mass",
     "mask",
     "mass_fluxes",
@@ -163,12 +163,6 @@ spatial_ts_vars["ragis"] = [
     "usurf",
     "velsurf_mag",
     "flux_divergence",
-    "frontal_melt_rate",
-    "frontal_melt_retreat_rate",
-    "vonmises_calving_rate",
-    "tendency_of_ice_mass_due_to_calving",
-    "tendency_of_ice_mass_due_to_frontal_melt",
-    "tendency_of_ice_mass_due_to_forced_retreat",
 ]
 
 spatial_ts_vars["dem"] = [
