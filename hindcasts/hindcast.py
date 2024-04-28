@@ -283,6 +283,11 @@ if __name__ == "__main__":
             "2023_RAGIS",
             "2023-12_RAGIS",
             "2024-02_RAGIS",
+            "1_GrIMP",
+            "2_GrIMP",
+            "3_GrIMP",
+            "4_GrIMP",
+            "5_GrIMP",
         ],
         help="input data set version",
         default="2023_GRIMP",
@@ -426,9 +431,14 @@ done\n\n
         pass
 
     periodicity = "daily"
+    if os.environ.get("PISM_PREFIX") == "":
+        pism_path = "~/pism"
+    else:
+        pism_path = os.environ.get("PISM_PREFIX")  # type: ignore
+
     print(os.environ.get("PISM_PREFIX"))
     tm_cmd: List[Any] = [
-        join(os.environ.get("PISM_PREFIX"), "sources/util/create_timeline.py"),
+        join(pism_path, "sources/util/create_timeline.py"),
         "-a",
         start_date,
         "-e",
