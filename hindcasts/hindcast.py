@@ -281,6 +281,7 @@ if __name__ == "__main__":
             "2023_GIMP",
             "2023_GRIMP",
             "2023_RAGIS",
+            "2024_KRIG",
             "2023-12_RAGIS",
             "2024-02_RAGIS",
             "1_GrIMP",
@@ -438,7 +439,7 @@ done\n\n
 
     print(os.environ.get("PISM_PREFIX"))
     tm_cmd: List[Any] = [
-        join(pism_path, "sources/util/create_timeline.py"),
+        join(pism_path, "bin/create_timeline.py"),
         "-a",
         start_date,
         "-e",
