@@ -20,6 +20,7 @@
 Module provides functions to deal with observations
 """
 
+from functools import reduce
 from pathlib import Path
 from typing import Union
 
@@ -120,131 +121,196 @@ def load_mouginot(
         str, Path
     ] = "https://www.pnas.org/doi/suppl/10.1073/pnas.1904242116/suppl_file/pnas.1904242116.sd02.xlsx",
     norm_year: Union[None, float] = None,
-):
+) -> pd.DataFrame:
     """
-    Load the Mouginot et al (2019) data set
+    Load the Mouginot et al (2019) data set.
+
+    This function loads the Mouginot et al (2019) data set from the provided URL. The data set is an Excel file with two sheets, "(2) MB_GIS" for the main data and "(2) MB_GIS" for the uncertainty data. The function processes the data and returns a pandas DataFrame.
+
+    Parameters
+    ----------
+    url : str or Path, optional
+        The URL or local path of the Excel file to load, by default "https://www.pnas.org/doi/suppl/10.1073/pnas.1904242116/suppl_file/pnas.1904242116.sd02.xlsx".
+    norm_year : None or float, optional
+        The year to normalize the data to, by default None.
+
+    Returns
+    -------
+    pd.DataFrame
+        The processed data as a pandas DataFrame.
+
+    Examples
+    --------
+    >>> df = load_mouginot()
     """
-
-    # req = Request(url)
-    # req.add_header('User-Agent', 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:77.0) Gecko/20100101 Firefox/124.0')
-    # content = urlopen(req)
-
+    # Load the main data and the uncertainty data
     df_m = pd.read_excel(
-        url,
-        sheet_name="(2) MB_GIS",
-        header=8,
-        usecols="B,P:BJ",
-        engine="openpyxl",
+        url, sheet_name="(2) MB_GIS", header=8, usecols="B,P:BJ", engine="openpyxl"
     )
-
     df_u = pd.read_excel(
-        url,
-        sheet_name="(2) MB_GIS",
-        header=8,
-        usecols="B,CE:DY",
-        engine="openpyxl",
+        url, sheet_name="(2) MB_GIS", header=8, usecols="B,CE:DY", engine="openpyxl"
     )
 
+    # Process the main data
     dfs = []
-    for basin, idx in zip(
-        ["GIS", "SE", "CE", "NE", "NW", "CW", "SW"],
+    for k, m_var in zip(
+        [0, 12, 22, 34, 45, 57],
         [
-            [7, 19, 29, 41, 52, 64],
-            [6, 18, 28, 40, 51, 63],
-            [5, 17, 27, 39, 50, 62],
-            [4, 16, 26, 38, 49, 61],
-            [3, 15, 25, 37, 48, 60],
-            [2, 14, 24, 36, 47, 59],
-            [1, 13, 23, 35, 46, 58],
-            [0, 12, 22, 34, 45, 57],
+            "Rate of ice discharge (Gt/yr)",
+            "Rate of surface mass balance (Gt/yr)",
+            "Rate of ice sheet mass change (Gt/yr)",
+            "Cumulative ice sheet mass change (Gt)",
+            "Cumulative ice discharge anomaly (Gt)",
+            "Cumulative surface mass balance anomaly (Gt)",
         ],
     ):
-        d_rate = df_m.iloc[idx[0]]
-        smb_rate = df_m.iloc[idx[1]]
-        mass_rate = df_m.iloc[idx[2]]
-        mass_cumulative = df_m.iloc[idx[3]]
-        d_cumulative_anomaly = df_m.iloc[idx[4]]
-        smb_cumulative_anomaly = df_m.iloc[idx[5]]
+        p_dfs = [
+            process_row(row, m_var, norm_year)
+            for _, row in df_m.loc[k : k + 7].iterrows()
+        ]
+        dfs.append(pd.concat(p_dfs).reset_index(drop=True))
 
-        d_rate_u = df_u.iloc[idx[0]]
-        smb_rate_u = df_u.iloc[idx[1]]
-        mass_rate_u = df_u.iloc[idx[2]]
-        mass_cumulative_u = df_u.iloc[idx[3]]
-        d_cumulative_u = df_u.iloc[idx[4]]
-        smb_cumulative_u = df_u.iloc[idx[5]]
+    df = reduce(
+        lambda left, right: pd.merge(
+            left, right, on=["Basin", "Year", "Date"], how="outer"
+        ),
+        dfs,
+    )
 
-        df = pd.DataFrame(
-            data=np.hstack(
-                [
-                    df_m.columns[1::].values.reshape(-1, 1),
-                    mass_cumulative.values[1::].reshape(-1, 1),
-                    smb_cumulative_anomaly.values[1::].reshape(-1, 1),
-                    d_cumulative_anomaly.values[1::].reshape(-1, 1),
-                    mass_cumulative_u.values[1::].reshape(-1, 1),
-                    smb_cumulative_u.values[1::].reshape(-1, 1),
-                    d_cumulative_u.values[1::].reshape(-1, 1),
-                    mass_rate.values[1::].reshape(-1, 1),
-                    smb_rate.values[1::].reshape(-1, 1),
-                    -d_rate.values[1::].reshape(-1, 1),
-                    mass_rate_u.values[1::].reshape(-1, 1),
-                    smb_rate_u.values[1::].reshape(-1, 1),
-                    d_rate_u.values[1::].reshape(-1, 1),
-                ]
-            ),
-            columns=[
-                "Year",
-                "Cumulative ice sheet mass change (Gt)",
-                "Cumulative surface mass balance anomaly (Gt)",
-                "Cumulative ice discharge anomaly (Gt)",
-                "Cumulative ice sheet mass change uncertainty (Gt)",
-                "Cumulative surface mass balance anomaly uncertainty (Gt)",
-                "Cumulative ice discharge anomaly uncertainty (Gt)",
-                "Rate of ice sheet mass change (Gt/yr)",
-                "Rate of surface mass balance (Gt/yr)",
-                "Rate of ice discharge (Gt/yr)",
-                "Rate of ice sheet mass change uncertainty (Gt/yr)",
-                "Rate of surface mass balance uncertainty (Gt/yr)",
-                "Rate of ice discharge uncertainty (Gt/yr)",
-            ],
-        )
-        df = df.astype(
-            {
-                "Year": float,
-                "Cumulative ice sheet mass change (Gt)": float,
-                "Cumulative surface mass balance anomaly (Gt)": float,
-                "Cumulative ice discharge anomaly (Gt)": float,
-                "Cumulative ice sheet mass change uncertainty (Gt)": float,
-                "Cumulative surface mass balance anomaly uncertainty (Gt)": float,
-                "Cumulative ice discharge anomaly uncertainty (Gt)": float,
-                "Rate of ice sheet mass change (Gt/yr)": float,
-                "Rate of ice sheet mass change uncertainty (Gt/yr)": float,
-                "Rate of surface mass balance (Gt/yr)": float,
-                "Rate of surface mass balance uncertainty (Gt/yr)": float,
-                "Rate of ice discharge (Gt/yr)": float,
-                "Rate of ice discharge uncertainty (Gt/yr)": float,
-            }
-        )
+    # Process the uncertainty data
+    dfs_u = []
+    for k, m_var in zip(
+        [0, 12, 22, 34, 45, 57],
+        [
+            "Rate of ice discharge uncertainty (Gt/yr)",
+            "Rate of surface mass balance uncertainty (Gt/yr)",
+            "Rate of ice sheet mass change uncertainty (Gt/yr)",
+            "Cumulative ice sheet mass change uncertainty (Gt)",
+            "Cumulative ice discharge anomaly uncertainty (Gt)",
+            "Cumulative surface mass balance anomaly uncertainty (Gt)",
+        ],
+    ):
+        p_dfs = [
+            process_row(row, m_var, norm_year)
+            for _, row in df_u.loc[k : k + 7].iterrows()
+        ]
+        dfs_u.append(pd.concat(p_dfs).reset_index(drop=True))
 
-        df["Date"] = pd.date_range(start="1972-1-1", end="2018-1-1", freq="YS")
+    df_u = reduce(
+        lambda left, right: pd.merge(
+            left, right, on=["Basin", "Year", "Date"], how="outer"
+        ),
+        dfs_u,
+    )
 
-        # Normalize
-        if norm_year:
-            for v in [
-                "Cumulative ice sheet mass change (Gt)",
-                "Cumulative ice discharge anomaly (Gt)",
-                "Cumulative surface mass balance anomaly (Gt)",
-            ]:
-                df[v] -= df[df["Year"] == norm_year][v].values
+    return pd.merge(df, df_u)
 
-        cmSLE = 1.0 / 362.5 / 10.0
-        df["SLE (cm)"] = df["Cumulative ice sheet mass change (Gt)"] * cmSLE
-        df["SLE uncertainty (cm)"] = (
-            -df["Cumulative ice sheet mass change uncertainty (Gt)"] * cmSLE
-        )
-        df["Basin"] = basin
-        dfs.append(df)
-    df = pd.concat(dfs).reset_index(drop=True)
+
+def process_row(
+    row,
+    m_var,
+    norm_year,
+    norm_vars=[
+        "Cumulative ice sheet mass change (Gt)",
+        "Cumulative surface mass balance anomaly (Gt)",
+        "Cumulative ice discharge anomaly (Gt)",
+        "Cumulative ice sheet mass change uncertainty (Gt)",
+        "Cumulative surface mass balance anomaly uncertainty (Gt)",
+        "Cumulative ice discharge anomaly uncertainty (Gt)",
+    ],
+):
+    """
+    Helper function to process a row of the data.
+
+    This function takes a row of the data and a variable name, and returns a DataFrame with the processed data for that row.
+
+    Parameters
+    ----------
+    row : pd.Series
+        The row of the data to process.
+    m_var : str
+        The variable name for the data in the row.
+
+    Returns
+    -------
+    pd.DataFrame
+        The processed data for the row as a DataFrame.
+    """
+    df = pd.DataFrame(row.values[1::], columns=[m_var], dtype=float)
+    df["Year"] = range(1972, 2019)
+    df["Basin"] = row.values[0]
+    df["Date"] = pd.date_range(start="1972-1-1", end="2018-1-1", freq="YS")
+    if (norm_year is not None) & (m_var in norm_vars):
+        df[m_var] -= df[df["Year"] == norm_year][m_var].values
+
     return df
+
+
+# def load_mouginot(
+#     url: Union[
+#         str, Path
+#     ] = "https://www.pnas.org/doi/suppl/10.1073/pnas.1904242116/suppl_file/pnas.1904242116.sd02.xlsx",
+#     norm_year: Union[None, float] = None,
+# ):
+#     """
+#     Load the Mouginot et al (2019) data set
+#     """
+
+#     # req = Request(url)
+#     # req.add_header('User-Agent', 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:77.0) Gecko/20100101 Firefox/124.0')
+#     # content = urlopen(req)
+
+#     df_m = pd.read_excel(
+#         url,
+#         sheet_name="(2) MB_GIS",
+#         header=8,
+#         usecols="B,P:BJ",
+#         engine="openpyxl",
+#     )
+
+#     df_u = pd.read_excel(
+#         url,
+#         sheet_name="(2) MB_GIS",
+#         header=8,
+#         usecols="B,CE:DY",
+#         engine="openpyxl",
+#     )
+
+#     dfs = []
+#     for k, m_var in zip([0, 12, 22, 34, 45, 57], ["Rate of ice discharge (Gt/yr)",
+#                                                   "Rate of surface mass balance (Gt/yr)",
+#                                                   "Rate of ice sheet mass change (Gt/yr)",
+#                                                   "Cumulative ice sheet mass change (Gt)",
+#                                                   "Cumulative ice discharge anomaly (Gt)",
+#                                                   "Cumulative surface mass balance anomaly (Gt)"]):
+#         p_dfs = []
+#         for _, row in df_m.loc[k:k+7].iterrows():
+#             p_df = pd.DataFrame(row.values[1::], columns=[m_var], dtype=float)
+#             p_df["Year"] = range(1972, 2019)
+#             p_df["Basin"] = row.values[0]
+#             p_df["Date"] = pd.date_range(start="1972-1-1", end="2018-1-1", freq="YS")
+#             p_dfs.append(p_df)
+#         dfs.append(pd.concat(p_dfs).reset_index(drop=True))
+#     df = reduce(lambda  left,right: pd.merge(left, right,on=["Basin", "Year", "Date"],
+#                                             how='outer'), dfs)
+#     dfs_u = []
+#     for k, m_var in zip([0, 12, 22, 34, 45, 57], ["Rate of ice discharge uncertainty (Gt/yr)",
+#                                                   "Rate of surface mass balance uncertainty (Gt/yr)",
+#                                                   "Rate of ice sheet mass change uncertainty (Gt/yr)",
+#                                                   "Cumulative ice sheet mass change uncertainty (Gt)",
+#                                                   "Cumulative ice discharge anomaly uncertainty (Gt)",
+#                                                   "Cumulative surface mass balance anomaly uncertainty (Gt)"]):
+#         p_dfs = []
+#         for _, row in df_u.loc[k:k+7].iterrows():
+#             p_df = pd.DataFrame(row.values[1::], columns=[m_var], dtype=float)
+#             p_df["Year"] = range(1972, 2019)
+#             p_df["Basin"] = row.values[0]
+#             p_df["Date"] = pd.date_range(start="1972-1-1", end="2018-1-1", freq="YS")
+#             p_dfs.append(p_df)
+#         dfs_u.append(pd.concat(p_dfs).reset_index(drop=True))
+#     df_u = reduce(lambda  left,right: pd.merge(left, right,on=["Basin", "Year", "Date"],
+#                                             how='outer'), dfs_u)
+#     return pd.merge(df, df_u)
 
 
 def load_mankoff(
