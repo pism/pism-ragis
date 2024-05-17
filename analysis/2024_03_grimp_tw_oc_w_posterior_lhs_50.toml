@@ -1,6 +1,0 @@
-project = "GrIMP"
-proj_dir = "2024_03_grimp_tw_oc_w_posterior_lhs_50"
-ensemble_id = "GrIMP"
-scalar_dir = "scalar"
-resolution = 900
-spatial_dir = "spatial"

@@ -154,6 +154,7 @@ spatial_ts_vars["paleo_tracer"] = [
 
 
 spatial_ts_vars["ragis"] = [
+    "flux",
     "dHdt",
     "ice_mass_transport_across_grounding_line",
     "ice_mass",

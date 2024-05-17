@@ -19,6 +19,7 @@
 Compute basins.
 """
 
+# pylint: disable=redefined-outer-name
 
 import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
@@ -110,6 +111,7 @@ def load_experiments(
         if "ice_mass" in ds:
             ds["ice_mass"] /= 1e12
             ds["ice_mass"].attrs["units"] = "Gt"
+
         ds.expand_dims("ensemble_id")
         ds["ensemble_id"] = exp["ensemble_id"]
         dss.append(ds)
@@ -202,25 +204,39 @@ if __name__ == "__main__":
 
     mb_vars = [
         "ice_mass",
-        "tendency_of_ice_mass",
-        "tendency_of_ice_mass_due_to_surface_mass_flux",
         "ice_mass_transport_across_grounding_line",
+        "tendency_of_ice_mass",
+        "tendency_of_ice_mass_due_to_basal_mass_flux",
+        "tendency_of_ice_mass_due_to_basal_mass_flux_grounded",
+        "tendency_of_ice_mass_due_to_basal_mass_flux_floating",
+        "tendency_of_ice_mass_due_to_discharge",
+        "tendency_of_ice_mass_due_to_surface_mass_flux",
+        "tendency_of_ice_mass_due_to_conservation_error",
+        "tendency_of_ice_mass_due_to_flow",
     ]
 
     project_chunks = "auto"
     with dask.config.set(**{"array.slicing.split_large_chunks": True}):
-        spatial_ds = load_experiments(
+        ds = load_experiments(
             project_experiments,
             data_type="spatial",
             chunks=project_chunks,
             temporal_range=options.temporal_range,
         )
 
-    spatial_ds = spatial_ds[mb_vars]
-    spatial_ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
-    spatial_ds.rio.write_crs(crs, inplace=True)
+    bmb_var = "tendency_of_ice_mass_due_to_basal_mass_flux"
+    if bmb_var in ds:
+        bmb_grounded_da = ds[bmb_var].where(ds["mask"] == 2)
+        bmb_grounded_da.name = "tendency_of_ice_mass_due_to_basal_mass_flux_grounded"
+        bmb_floating_da = ds[bmb_var].where(ds["mask"] == 3)
+        bmb_floating_da.name = "tendency_of_ice_mass_due_to_basal_mass_flux_floating"
+        ds = xr.merge([ds, bmb_grounded_da, bmb_floating_da])
 
-    print(f"Size in memory: {(spatial_ds.nbytes / 1024**3):.1f} GB")
+    ds = ds[mb_vars]
+    ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
+    ds.rio.write_crs(crs, inplace=True)
+
+    print(f"Size in memory: {(ds.nbytes / 1024**3):.1f} GB")
 
     basins_file = result_dir / "basins_sums.nc"
 
@@ -231,7 +247,7 @@ if __name__ == "__main__":
         start = time.time()
 
         basins_ds_scattered = client.scatter(
-            [spatial_ds.rio.clip([basin.geometry]) for _, basin in basins.iterrows()]
+            [ds.rio.clip([basin.geometry]) for _, basin in basins.iterrows()]
         )
         basin_names = [basin["SUBREGION1"] for _, basin in basins.iterrows()]
         futures = client.map(compute_basin, basins_ds_scattered, basin_names)
