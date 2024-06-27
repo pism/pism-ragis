@@ -242,7 +242,7 @@ if __name__ == "__main__":
     basins_file = result_dir / "basins_sums.nc"
 
     initialize(nthreads=options.n_jobs)
-    with Client(cluster, asynchronous=True) as client:
+    with Client() as client:
         print(f"Open client in browser: {client.dashboard_link}")
 
         start = time.time()
