@@ -116,9 +116,7 @@ def load_experiment(
         ds["ice_mass"] /= 1e12
         ds["ice_mass"].attrs["units"] = "Gt"
 
-    ds.expand_dims(ensemble_id=[ensemble_id]).drop_vars(
-        drop_vars, errors="ignore"
-    ).drop_dims(drop_dims, errors="ignore")
+    ds.expand_dims(ensemble_id=[ensemble_id])
 
     if temporal_range:
         return ds.sel(time=slice(temporal_range))
@@ -190,6 +188,7 @@ if __name__ == "__main__":
 
     ensemble_dir = Path(options.ensemble_dir)
     assert ensemble_dir.exists()
+    ensemble_id = options.ensemble_id
     result_dir = Path(options.result_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
 
@@ -213,15 +212,29 @@ if __name__ == "__main__":
         "tendency_of_ice_mass_due_to_flow",
     ]
 
-    project_chunks = "auto"
-    print(options.temporal_range)
+    regexp: str = "id_(.+?)_"
+
     with dask.config.set(**{"array.slicing.split_large_chunks": True}):
-        ds = load_experiment(
+        ds = xr.open_dataset(
             options.FILE[-1],
-            ensemble_id=options.ensemble_id,
-            chunks=project_chunks,
-            temporal_range=options.temporal_range,
+            chunks="auto",
         )
+        m_id_re = re.search(regexp, ds.encoding["source"])
+        assert m_id_re is not None
+        m_id: Union[str, int]
+        try:
+            m_id = int(m_id_re.group(1))
+        except:
+            m_id = str(m_id_re.group(1))
+
+        ds = ds.expand_dims({"ensemble_id": [ensemble_id], "exp_id": [m_id]})
+        
+        if "ice_mass" in ds:
+            ds["ice_mass"] /= 1e12
+            ds["ice_mass"].attrs["units"] = "Gt"
+
+        if options.temporal_range:
+            ds = ds.sel(time=slice(temporal_range))
 
     bmb_var = "tendency_of_ice_mass_due_to_basal_mass_flux"
     if bmb_var in ds:
@@ -237,7 +250,7 @@ if __name__ == "__main__":
 
     print(f"Size in memory: {(ds.nbytes / 1024**3):.1f} GB")
 
-    basins_file = result_dir / f"basins_sums_{options.ensemble_id}.nc"
+    basins_file = result_dir / f"basins_sums_ensemble_{ensemble_id}_id_{m_id}.nc"
 
     cluster = LocalCluster(n_workers=options.n_jobs, threads_per_worker=1)
     with Client(cluster, asynchronous=True) as client:
