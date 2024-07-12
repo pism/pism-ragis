@@ -388,8 +388,8 @@ def generate_stress_balance(stress_balance, additional_params_dict):
         params_dict["bp_pc_mg_levels"] = 3
         params_dict["bp_mg_levels_ksp_type"] = "richardson"
         params_dict["bp_mg_levels_pc_type"] = "sor"
-        params_dict["bp_mg_coarse_ksp_type"] = "gmres"
-        params_dict["bp_mg_coarse_pc_type"] = "bjacobi"
+        params_dict["bp_mg_coarse_ksp_type"] = "preonly"
+        params_dict["bp_mg_coarse_pc_type"] = "lu"
         params_dict["bp_snes_monitor_ratio"] = ""
         params_dict["bp_ksp_monitor"] = ""
         params_dict["bp_ksp_view_singularvalues"] = ""
@@ -450,9 +450,10 @@ def generate_calving(calving, **kwargs):
     ):
         params_dict["calving.methods"] = f"{calving},thickness_calving"
     elif calving in ("hybrid_calving"):
-        params_dict[
-            "calving.methods"
-        ] = "eigen_calving,vonmises_calving,thickness_calving"
+        params_dict["calving.methods"] = (
+            "eigen_calving,vonmises_calving,thickness_calving"
+        )
+
     elif calving in ("float_kill",):
         params_dict["calving.models"] = calving
     else:
