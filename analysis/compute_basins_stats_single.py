@@ -25,7 +25,7 @@ import re
 import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from pathlib import Path
-from typing import List, Union
+from typing import Union
 
 import dask
 import geopandas as gp
@@ -57,71 +57,6 @@ def compute_basin(ds: xr.Dataset, name: str) -> xr.Dataset:
     ds = ds.sum(dim=["x", "y"]).expand_dims("basin")
     ds["basin"] = [name]
     return ds.compute()
-
-
-def load_experiment(
-    url: Union[str, Path],
-    ensemble_id: Union[float, str] = "RAGIS",
-    regexp: str = "id_(.+?)_",
-    engine: str = "h5netcdf",
-    chunks: Union[None, dict, str] = None,
-    temporal_range: Union[None, List[str]] = None,
-    dim: str = "exp_id",
-    drop_vars: Union[List[str], None] = None,
-    drop_dims: List[str] = ["nv4"],
-) -> xr.Dataset:
-    """
-    Load experiment from netCDF file and return xarray Dataset.
-
-    Parameters
-    ----------
-    experiments : list of dict
-        A list of dictionaries, each containing the details of an experiment.
-    data_type : str, optional
-        The type of data to load, by default "spatial".
-    engine : str, optional
-        The engine to use for reading the files, by default "h5netcdf".
-    chunks : None, dict, or str, optional
-        Chunking sizes to use for dask, by default None.
-    temporal_range : None or list of str, optional
-        The temporal range to select from the data, by default None.
-
-    Returns
-    -------
-    xr.Dataset
-        The concatenated dataset.
-
-    Examples
-    --------
-    >>> experiments = [{'proj_dir': 'proj1', 'spatial_dir': 'spatial1', 'resolution': 'res1', 'ensemble_id': 'ens1'}]
-    >>> load_experiments(experiments)
-    """
-
-    ds = xr.open_dataset(
-        url,
-        engine=engine,
-        chunks=chunks,
-    )
-    m_id_re = re.search(regexp, ds.encoding["source"])
-    ds.expand_dims(dim)
-    assert m_id_re is not None
-    m_id: Union[str, int]
-    try:
-        m_id = int(m_id_re.group(1))
-    except:
-        m_id = str(m_id_re.group(1))
-    ds[dim] = m_id
-
-    if "ice_mass" in ds:
-        ds["ice_mass"] /= 1e12
-        ds["ice_mass"].attrs["units"] = "Gt"
-
-    ds.expand_dims(ensemble_id=[ensemble_id])
-
-    if temporal_range:
-        return ds.sel(time=slice(temporal_range))
-    else:
-        return ds
 
 
 if __name__ == "__main__":
@@ -228,13 +163,13 @@ if __name__ == "__main__":
             m_id = str(m_id_re.group(1))
 
         ds = ds.expand_dims({"ensemble_id": [ensemble_id], "exp_id": [m_id]})
-        
+
         if "ice_mass" in ds:
             ds["ice_mass"] /= 1e12
             ds["ice_mass"].attrs["units"] = "Gt"
 
         if options.temporal_range:
-            ds = ds.sel(time=slice(temporal_range))
+            ds = ds.sel(time=slice(options.temporal_range))
 
     bmb_var = "tendency_of_ice_mass_due_to_basal_mass_flux"
     if bmb_var in ds:

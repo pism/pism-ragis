@@ -450,9 +450,9 @@ def generate_calving(calving, **kwargs):
     ):
         params_dict["calving.methods"] = f"{calving},thickness_calving"
     elif calving in ("hybrid_calving"):
-        params_dict["calving.methods"] = (
-            "eigen_calving,vonmises_calving,thickness_calving"
-        )
+        params_dict[
+            "calving.methods"
+        ] = "eigen_calving,vonmises_calving,thickness_calving"
 
     elif calving in ("float_kill",):
         params_dict["calving.models"] = calving
@@ -617,6 +617,17 @@ systems["frontera"] = {
     },
 }
 
+systems["anvil"] = {
+    "mpido": "mpirun -np {cores}",
+    "submit": "sbatch",
+    "work_dir": "SLURM_SUBMIT_DIR",
+    "job_id": "SLURM_JOBID",
+    "queue": {
+        "wide": 128,
+        "debug": 128,
+    },
+}
+
 
 systems["pleiades_haswell"] = systems["pleiades"].copy()
 systems["pleiades_haswell"]["queue"] = {"long": 24, "normal": 24, "debug": 24}
@@ -730,6 +741,36 @@ systems["frontera"][
 ] = """#!/bin/sh
 #SBATCH -n {cores}
 #SBATCH -N {nodes}
+#SBATCH --time={walltime}
+#SBATCH -p {queue}
+#SBATCH --mail-type=BEGIN
+#SBATCH --mail-type=END
+#SBATCH --mail-type=FAIL
+#SBATCH --output=pism.%j
+
+module list
+
+umask 007
+
+cd $SLURM_SUBMIT_DIR
+
+# Generate a list of compute node hostnames reserved for this job,
+# this ./nodes file is necessary for slurm to spawn mpi processes
+# across multiple compute nodes
+srun -l /bin/hostname | sort -n | awk '{{print $2}}' > ./nodes_$SLURM_JOBID
+
+ulimit -l unlimited
+ulimit -s unlimited
+ulimit
+
+"""
+
+systems["anvil"][
+    "header"
+] = """#!/bin/sh
+#SBATCH -A ees240003
+#SBATCH -ntasks {cores}
+#SBATCH --ndoes {nodes}
 #SBATCH --time={walltime}
 #SBATCH -p {queue}
 #SBATCH --mail-type=BEGIN
