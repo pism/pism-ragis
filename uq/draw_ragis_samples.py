@@ -129,6 +129,38 @@ dists: Dict[str, Any] = {
             "prescribed_retreat_file": None,
         },
     },
+    "ragis": {
+        "uq": {
+            "vcm": uniform(loc=0.35, scale=0.30),
+            "gamma_T": uniform(loc=0.75e-4, scale=0.75e-4),
+            "ocean_file": randint(0, len(gcms)),
+            "calving_file": randint(0, 7),
+        },
+        "default_values": {
+            "climate": "given_smb",
+            "hydrology": "routing",
+            "frontal_melt": "routing",
+            "ocean": "th",
+            "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
+            "climate_file": "DMI-HIRHAM5_ERA_1975_2021_EPSG3413_4500M_DM.nc",
+            "runoff_file": "DMI-HIRHAM5_ERA_1975_2021_EPSG3413_4500M_DM.nc",
+            "pseudo_plastic_q": 0.7508221,
+            "sia_e": 2.608046,
+            "ssa_n": 3.309718,
+            "fractures": "false",
+            "vcm": 1,
+            "gamma_T": 1e-4,
+            "surface.pdd.refreeze": 0.6,
+            "till_effective_fraction_overburden": 0.01845403,
+            "sliding_law": "pseudo_plastic",
+            "phi_min": 7.193718,
+            "phi_max": 42.79528,
+            "z_min": -369.6359,
+            "z_max": 243.8239,
+            "calving.thickness_calving.threshold": 50,
+            "prescribed_retreat_file": None,
+        },
+    },
     "ocean-calving": {
         "uq": {
             "vcm": uniform(loc=0.35, scale=0.30),
@@ -343,7 +375,7 @@ sb_dict = {0: "ssa+sia", 1: "blatter"}
 for i, key in enumerate(keys_prior):
     if key == "calving_rate_scaling_file":
         dist_sample[:, i] = [
-            f"seasonal_calving_{int(id)}_1975_2020.nc"
+            f"seasonal_calving_{int(id)}_1975_2025.nc"
             for id in distributions[key].ppf(unif_sample[:, i])
         ]
     elif key == "calving.thickness_calving.file":
