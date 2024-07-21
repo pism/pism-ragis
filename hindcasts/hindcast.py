@@ -674,6 +674,17 @@ done\n\n
                     "frontal_melt.discharge_given.file": ocean_file_p,
                 }
 
+            for fm_param in [
+                "frontal_melt.routing.parameter_a",
+                "frontal_melt.routing.parameter_b",
+                "frontal_melt.routing.power_alpha",
+                "frontal_melt.routing.power_beta",
+            ]:
+                if hasattr(combination, fm_param):
+                    frontalmelt_parameters[
+                        "constants.sea_water.salinity"
+                    ] = combination[fm_param]
+
             frontalmelt_params_dict = frontalmelt_parameters
 
             ocean_parameters = {

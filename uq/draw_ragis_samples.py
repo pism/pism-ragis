@@ -24,6 +24,10 @@ short2long: Dict[str, str] = {
     "ZMAX": "z_max",
 }
 
+climate: Dict[int, str] = {
+    0: "DMI-HIRHAM5_ERA_1975_2021_EPSG3413_4500M_MM.nc",
+    1: "MARv3.14-monthly-ERA5-1975_2023.nc",
+}
 gcms: Dict[int, str] = {
     0: "ACCESS1-3_rcp85",
     1: "CNRM-CM6_ssp126",
@@ -135,6 +139,7 @@ dists: Dict[str, Any] = {
             "gamma_T": uniform(loc=0.75e-4, scale=0.75e-4),
             "ocean_file": randint(0, len(gcms)),
             "calving_file": randint(0, 7),
+            "climate_file": randint(0, 2),
         },
         "default_values": {
             "climate": "given_smb",
@@ -158,7 +163,11 @@ dists: Dict[str, Any] = {
             "z_min": -369.6359,
             "z_max": 243.8239,
             "calving.thickness_calving.threshold": 50,
-            "prescribed_retreat_file": None,
+            "prescribed_retreat_file": "pism_g450m_frontretreat_calfin_1972_2019.nc",
+            "frontal_melt.routing.parameter_a": 3e-4,
+            "frontal_melt.routing.parameter_b": 0.15,
+            "frontal_melt.routing.power_alpha": 0.39,
+            "frontal_melt.routing.power_beta": 1.18,
         },
     },
     "ocean-calving": {
@@ -377,6 +386,14 @@ for i, key in enumerate(keys_prior):
         dist_sample[:, i] = [
             f"seasonal_calving_{int(id)}_1975_2025.nc"
             for id in distributions[key].ppf(unif_sample[:, i])
+        ]
+    elif key == "climate_file":
+        dist_sample[:, i] = [
+            climate[id] for id in distributions[key].ppf(unif_sample[:, i])
+        ]
+    elif key == "runoff_file":
+        dist_sample[:, i] = [
+            climate[id] for id in distributions[key].ppf(unif_sample[:, i])
         ]
     elif key == "calving.thickness_calving.file":
         dist_sample[:, i] = [
