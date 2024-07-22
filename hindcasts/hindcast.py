@@ -645,7 +645,7 @@ done\n\n
                 combination["climate"], **climate_parameters
             )
 
-            runoff_file_p = f"""$data_dir/climate/{combination["runoff_file"]}"""
+            runoff_file_p = f"""$data_dir/climate/{combination["climate_file"]}"""
             hydrology_parameters: Dict[str, Union[str, int, float]] = {
                 "hydrology.routing.include_floating_ice": True,
                 "hydrology.surface_input.file": runoff_file_p,
@@ -673,6 +673,17 @@ done\n\n
                     "frontal_melt.models": "discharge_given",
                     "frontal_melt.discharge_given.file": ocean_file_p,
                 }
+
+            for fm_param in [
+                "frontal_melt.routing.parameter_a",
+                "frontal_melt.routing.parameter_b",
+                "frontal_melt.routing.power_alpha",
+                "frontal_melt.routing.power_beta",
+            ]:
+                if hasattr(combination, fm_param):
+                    frontalmelt_parameters[
+                        "constants.sea_water.salinity"
+                    ] = combination[fm_param]
 
             frontalmelt_params_dict = frontalmelt_parameters
 
