@@ -30,8 +30,8 @@ import dask
 import geopandas as gp
 import toml
 import xarray as xr
+from dask.distributed import Client, progress
 from dask_mpi import initialize
-from dask.distributed import Client
 
 from pism_ragis.processing import preprocess_nc
 
