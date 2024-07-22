@@ -142,7 +142,7 @@ dists: Dict[str, Any] = {
             "climate_file": randint(0, 2),
             "frontal_melt.routing.parameter_a": uniform(loc=2.4e-4, scale=1.2e-4),
             "frontal_melt.routing.parameter_b": uniform(loc=1.0, scale=0.70),
-            "frontal_melt.routing.power_alpha": uniform(loc=0.3, scale=0.45),
+            "frontal_melt.routing.power_alpha": uniform(loc=0.3, scale=0.4),
             "frontal_melt.routing.power_beta": uniform(loc=1.1, scale=1.7),
         },
         "default_values": {
