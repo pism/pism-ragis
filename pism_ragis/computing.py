@@ -585,6 +585,34 @@ systems["chinook-rl8"] = {
     },
 }
 
+systems["chinook-rl8-24"] = {
+    "mpido": "mpirun -np {cores}",
+    "submit": "sbatch",
+    "work_dir": "SLURM_SUBMIT_DIR",
+    "job_id": "SLURM_JOBID",
+    "queue": {
+        "t1standard": 24,
+        "t1small": 24,
+        "t2standard": 24,
+        "t2small": 24,
+        "debug": 24,
+    },
+}
+
+systems["chinook-rl8-40"] = {
+    "mpido": "mpirun -np {cores}",
+    "submit": "sbatch",
+    "work_dir": "SLURM_SUBMIT_DIR",
+    "job_id": "SLURM_JOBID",
+    "queue": {
+        "t1standard": 40,
+        "t1small": 40,
+        "t2standard": 40,
+        "t2small": 40,
+        "debug": 40,
+    },
+}
+
 systems["pleiades"] = {
     "mpido": "mpiexec -n {cores}",
     "submit": "qsub",
@@ -678,6 +706,64 @@ ulimit
 """
 
 systems["chinook-rl8"][
+    "header"
+] = """#!/bin/sh
+#SBATCH --partition={queue}
+#SBATCH --ntasks={cores}
+#SBATCH --tasks-per-node={ppn}
+#SBATCH --time={walltime}
+#SBATCH --mail-type=BEGIN
+#SBATCH --mail-type=END
+#SBATCH --mail-type=FAIL
+#SBATCH --output=pism.%j
+
+module list
+
+umask 007
+
+cd $SLURM_SUBMIT_DIR
+
+# Generate a list of compute node hostnames reserved for this job,
+# this ./nodes file is necessary for slurm to spawn mpi processes
+# across multiple compute nodes
+srun -l /bin/hostname | sort -n | awk '{{print $2}}' > ./nodes_$SLURM_JOBID
+
+ulimit -l unlimited
+ulimit -s unlimited
+ulimit
+
+"""
+
+systems["chinook-rl8-40"][
+    "header"
+] = """#!/bin/sh
+#SBATCH --partition={queue}
+#SBATCH --ntasks={cores}
+#SBATCH --tasks-per-node={ppn}
+#SBATCH --time={walltime}
+#SBATCH --mail-type=BEGIN
+#SBATCH --mail-type=END
+#SBATCH --mail-type=FAIL
+#SBATCH --output=pism.%j
+
+module list
+
+umask 007
+
+cd $SLURM_SUBMIT_DIR
+
+# Generate a list of compute node hostnames reserved for this job,
+# this ./nodes file is necessary for slurm to spawn mpi processes
+# across multiple compute nodes
+srun -l /bin/hostname | sort -n | awk '{{print $2}}' > ./nodes_$SLURM_JOBID
+
+ulimit -l unlimited
+ulimit -s unlimited
+ulimit
+
+"""
+
+systems["chinook-rl8-24"][
     "header"
 ] = """#!/bin/sh
 #SBATCH --partition={queue}
@@ -803,6 +889,20 @@ rm -rf ./nodes_$SLURM_JOBID
 """
 
 systems["chinook-rl8"][
+    "footer"
+] = """
+# clean up the list of hostnames
+rm -rf ./nodes_$SLURM_JOBID
+"""
+
+systems["chinook-rl8-40"][
+    "footer"
+] = """
+# clean up the list of hostnames
+rm -rf ./nodes_$SLURM_JOBID
+"""
+
+systems["chinook-rl8-24"][
     "footer"
 ] = """
 # clean up the list of hostnames
@@ -1033,7 +1133,7 @@ def make_batch_post_header(system):
     ):
         post_header = post_headers["pbs"] + v
 
-    elif system in ("chinook", "chinook-rl8", "stampede2"):
+    elif system in ("chinook", "chinook-rl8", "chinook-rl8-40", "chinook-rl8-24", "stampede2"):
         post_header = post_headers["slurm"] + v
     else:
         post_header = post_headers["default"] + v
