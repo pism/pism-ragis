@@ -645,7 +645,7 @@ done\n\n
                 combination["climate"], **climate_parameters
             )
 
-            runoff_file_p = f"""$data_dir/climate/{combination["runoff_file"]}"""
+            runoff_file_p = f"""$data_dir/climate/{combination["climate_file"]}"""
             hydrology_parameters: Dict[str, Union[str, int, float]] = {
                 "hydrology.routing.include_floating_ice": True,
                 "hydrology.surface_input.file": runoff_file_p,

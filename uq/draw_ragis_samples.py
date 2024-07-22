@@ -64,7 +64,6 @@ dists: Dict[str, Any] = {
             "ocean": "th",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
             "climate_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
-            "runoff_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
             "gamma_T": 1.00e-4,
             "salinity": 34,
             "pseudo_plastic_q": 0.6,
@@ -91,7 +90,6 @@ dists: Dict[str, Any] = {
             "ocean": "th",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
             "climate_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
-            "runoff_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
             "gamma_T": 1.00e-4,
             "calving.thickness_calving.threshold": 100,
             "pseudo_plastic_q": 0.7508221,
@@ -121,7 +119,6 @@ dists: Dict[str, Any] = {
             "ocean": "th",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
             "climate_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
-            "runoff_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
             "gamma_T": 1.00e-4,
             "salinity": 34,
             "pseudo_plastic_q": 0.6,
@@ -152,7 +149,6 @@ dists: Dict[str, Any] = {
             "ocean": "th",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
             "climate_file": "DMI-HIRHAM5_ERA_1975_2021_EPSG3413_4500M_DM.nc",
-            "runoff_file": "DMI-HIRHAM5_ERA_1975_2021_EPSG3413_4500M_DM.nc",
             "pseudo_plastic_q": 0.7508221,
             "sia_e": 2.608046,
             "ssa_n": 3.309718,
@@ -187,7 +183,6 @@ dists: Dict[str, Any] = {
             "ocean": "th",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
             "climate_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
-            "runoff_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
             "pseudo_plastic_q": 0.7508221,
             "sia_e": 2.608046,
             "ssa_n": 3.309718,
@@ -218,7 +213,6 @@ dists: Dict[str, Any] = {
             "ocean": "th",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
             "climate_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
-            "runoff_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
             "salinity": 34,
             "pseudo_plastic_q": 0.7508221,
             "sia_e": 2.608046,
@@ -251,7 +245,6 @@ dists: Dict[str, Any] = {
             "ocean": "th",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
             "climate_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
-            "runoff_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
             "salinity": 34,
             "pseudo_plastic_q": 0.7508221,
             "sia_e": 2.608046,
@@ -286,7 +279,6 @@ dists: Dict[str, Any] = {
             "ocean": "constant",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
             "climate_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
-            "runoff_file": "DMI-HIRHAM5_ERA_1975_2020_EPSG3413_4500M_MM.nc",
             "salinity": 34,
             "pseudo_plastic_q": 0.7508221,
             "sia_e": 2.608046,
@@ -392,10 +384,6 @@ for i, key in enumerate(keys_prior):
             for id in distributions[key].ppf(unif_sample[:, i])
         ]
     elif key == "climate_file":
-        dist_sample[:, i] = [
-            climate[id] for id in distributions[key].ppf(unif_sample[:, i])
-        ]
-    elif key == "runoff_file":
         dist_sample[:, i] = [
             climate[id] for id in distributions[key].ppf(unif_sample[:, i])
         ]
