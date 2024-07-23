@@ -21,11 +21,9 @@ Compute basins.
 
 # pylint: disable=redefined-outer-name
 
-import re
 import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from pathlib import Path
-from typing import Union
 
 import dask
 import geopandas as gp
@@ -129,7 +127,7 @@ if __name__ == "__main__":
     basin_url = Path(options.basin_url)
     basins = gp.read_file(basin_url).to_crs(crs)
     basins.to_file("b_rot.gpkg")
-    
+
     with dask.config.set(**{"array.slicing.split_large_chunks": True}):
         ds = xr.open_dataset(
             options.FILE[-1],

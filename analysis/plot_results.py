@@ -48,7 +48,7 @@ if __name__ == "__main__":
         "--basin_url",
         help="""Basin shapefile.""",
         type=str,
-        default="data/basins/Greenland_Basins_PS_v1.4.2.shp",
+        default="~/base/pism-ragis/data/basins/Greenland_Basins_PS_v1.4.2.shp",
     )
     parser.add_argument(
         "--imbie_url",
@@ -117,6 +117,8 @@ if __name__ == "__main__":
     smb_flux_uncertainty_varname = "Rate of surface mass balance uncertainty (Gt/yr)"
 
     basal_flux_varname = "tendency_of_ice_mass_due_to_basal_mass_flux"
+    basal_grounded_flux_varname = "tendency_of_ice_mass_due_to_basal_mass_flux_grounded"
+    basal_floating_flux_varname = "tendency_of_ice_mass_due_to_basal_mass_flux_floating"
 
     sim_mass_cumulative_varname = "ice_mass"
     sim_mass_flux_varname = "tendency_of_ice_mass"

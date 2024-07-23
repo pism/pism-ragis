@@ -26,6 +26,7 @@ from typing import Union
 
 import numpy as np
 import pandas as pd
+import xarray as xr
 from joblib import Parallel, delayed
 from pandas.api.types import is_string_dtype
 from SALib.analyze import delta
@@ -262,6 +263,60 @@ def compute_sensitivity_indices(
 
 
 def resample_ensemble_by_data(
+    observed: xr.Dataset,
+    simulated: xr.Dataset,
+    start_date="1992-01-01",
+    end_date="2020-01-01",
+    id_var: str = "exp_id",
+    fudge_factor: float = 3,
+    n_samples: int = 100,
+    obs_mean_var: str = "ice_discharge",
+    obs_std_var: str = "ice_discharge_uncertainty",
+    sim_var: str = "grounding_line_flux",
+) -> np.ndarray:
+    """
+    Resampling algorithm by Douglas C. Brinkerhoff
+
+
+    Parameters
+    ----------
+    observed : pandas.DataFrame
+        A dataframe with observations
+    simulated : pandas.DataFrame
+        A dataframe with simulations
+    calibration_start : float
+        Start year for calibration
+    calibration_end : float
+        End year for calibration
+    fudge_factor : float
+        Tolerance for simulations. Calculated as fudge_factor * standard deviation of observed
+    n_samples : int
+        Number of samples to draw.
+
+    """
+
+    observed = observed.sel(time=slice(start_date, end_date))
+    simulated = simulated.sel(time=slice(start_date, end_date))
+    simulated = simulated.interp_calendar(observed.time)
+
+    obs_mean = observed[obs_mean_var]
+    obs_std = fudge_factor * observed[obs_std_var]
+    sim = simulated[sim_var]
+
+    log_likes = 0.5 * ((sim - obs_mean) / obs_std) ** 2 + 0.5 * np.log(
+        2 * np.pi * obs_std**2
+    )
+    log_likes = log_likes.sum(dim="time")
+
+    w = log_likes
+    w -= w.mean()
+    weights = np.exp(w)
+    weights /= weights.sum()
+
+    return np.random.choice(sim[id_var], n_samples, p=weights)
+
+
+def resample_ensemble_by_data_df(
     observed: pd.DataFrame,
     simulated: pd.DataFrame,
     id_var: str = "id",

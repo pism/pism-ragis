@@ -1133,7 +1133,13 @@ def make_batch_post_header(system):
     ):
         post_header = post_headers["pbs"] + v
 
-    elif system in ("chinook", "chinook-rl8", "chinook-rl8-40", "chinook-rl8-24", "stampede2"):
+    elif system in (
+        "chinook",
+        "chinook-rl8",
+        "chinook-rl8-40",
+        "chinook-rl8-24",
+        "stampede2",
+    ):
         post_header = post_headers["slurm"] + v
     else:
         post_header = post_headers["default"] + v
