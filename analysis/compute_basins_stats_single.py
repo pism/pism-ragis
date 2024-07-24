@@ -155,6 +155,7 @@ if __name__ == "__main__":
             m_id = str(m_id_re.group(1))
 
         ds = ds.expand_dims({"ensemble_id": [ensemble_id], "exp_id": [m_id]})
+        
 
         if "ice_mass" in ds:
             ds["ice_mass"] /= 1e12
@@ -171,9 +172,19 @@ if __name__ == "__main__":
         bmb_floating_da.name = "tendency_of_ice_mass_due_to_basal_mass_flux_floating"
         ds = xr.merge([ds, bmb_grounded_da, bmb_floating_da])
 
+    config = ds["pism_config"]
+    ds = ds[mb_vars]
     ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
     ds.rio.write_crs(crs, inplace=True)
 
+    pism_config = xr.DataArray(
+        [c for c in config.attrs.values()],
+        dims=["config_axis"],
+        coords={"config_axis": [c for c in config.attrs.keys()]},
+        name="config",
+    )
+    ds = xr.merge([ds, pism_config])
+    
     print(f"Size in memory: {(ds.nbytes / 1024**3):.1f} GB")
 
     basins_file = result_dir / f"basins_sums_ensemble_{ensemble_id}_id_{m_id}.nc"
