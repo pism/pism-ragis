@@ -144,7 +144,7 @@ if __name__ == "__main__":
         "--basin_url",
         help="""Basin shapefile.""",
         type=str,
-        default="data/basins/Greenland_Basins_PS_v1.4.2.shp",
+        default="data/Greenland_Basins_PS_v1.4.2_w_shelves.gpkg",
     )
     parser.add_argument(
         "--temporal_range",
@@ -234,7 +234,7 @@ if __name__ == "__main__":
 
     if "pism_config" in ds.data_vars():
         mb_vars += "pism_config"
-        
+
     ds = ds[mb_vars]
     ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
     ds.rio.write_crs(crs, inplace=True)

@@ -145,7 +145,7 @@ if __name__ == "__main__":
         "--basin_url",
         help="""Basin shapefile.""",
         type=str,
-        default="data/basins/Greenland_Basins_PS_v1.4.2.shp",
+        default="data/Greenland_Basins_PS_v1.4.2_w_shelves.gpkg",
     )
     parser.add_argument(
         "--temporal_range",
