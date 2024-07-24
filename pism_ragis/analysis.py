@@ -265,56 +265,83 @@ def compute_sensitivity_indices(
 def resample_ensemble_by_data(
     observed: xr.Dataset,
     simulated: xr.Dataset,
-    start_date="1992-01-01",
-    end_date="2020-01-01",
+    start_date: str = "1992-01-01",
+    end_date: str = "2020-01-01",
     id_var: str = "exp_id",
-    fudge_factor: float = 3,
+    fudge_factor: float = 3.0,
     n_samples: int = 100,
-    obs_mean_var: str = "ice_discharge",
-    obs_std_var: str = "ice_discharge_uncertainty",
-    sim_var: str = "grounding_line_flux",
+    obs_mean_var: str = "mass_balance",
+    obs_std_var: str = "mass_balance_uncertainty",
+    sim_var: str = "ice_mass",
 ) -> np.ndarray:
     """
-    Resampling algorithm by Douglas C. Brinkerhoff
-
+    Resample an ensemble of simulated data to match observed data using a likelihood-based approach.
 
     Parameters
     ----------
-    observed : pandas.DataFrame
-        A dataframe with observations
-    simulated : pandas.DataFrame
-        A dataframe with simulations
-    calibration_start : float
-        Start year for calibration
-    calibration_end : float
-        End year for calibration
-    fudge_factor : float
-        Tolerance for simulations. Calculated as fudge_factor * standard deviation of observed
-    n_samples : int
-        Number of samples to draw.
+    observed : xr.Dataset
+        An xarray Dataset containing the observed data.
+    simulated : xr.Dataset
+        An xarray Dataset containing the simulated data.
+    start_date : str, optional
+        The start date for the period over which to perform the resampling, by default "1992-01-01".
+    end_date : str, optional
+        The end date for the period over which to perform the resampling, by default "2020-01-01".
+    id_var : str, optional
+        The variable name in `simulated` that identifies each ensemble member, by default "exp_id".
+    fudge_factor : float, optional
+        A multiplicative factor applied to the observed standard deviation to widen the likelihood function, 
+        allowing for greater tolerance in the matching process, by default 3.0.
+    n_samples : int, optional
+        The number of samples to draw from the simulated ensemble, by default 100.
+    obs_mean_var : str, optional
+        The variable name in `observed` that represents the mean observed data, by default "mass_balance".
+    obs_std_var : str, optional
+        The variable name in `observed` that represents the observed data's standard deviation, 
+        by default "mass_balance_uncertainty".
+    sim_var : str, optional
+        The variable name in `simulated` that represents the simulated data to be resampled, 
+        by default "ice_mass".
 
+    Returns
+    -------
+    np.ndarray
+        An array of ensemble member IDs selected through the resampling process.
+
+    Notes
+    -----
+    This function implements a resampling algorithm that uses a likelihood-based approach to select ensemble members
+    from the simulated dataset that are most consistent with the observed data. The likelihood is computed based on
+    the difference between the simulated and observed means, scaled by the observed standard deviation (adjusted by
+    the fudge factor). This method allows for the incorporation of observational uncertainty into the ensemble
+    selection process.
     """
-
+    # Select the observed and simulated data within the specified date range
     observed = observed.sel(time=slice(start_date, end_date))
     simulated = simulated.sel(time=slice(start_date, end_date))
-    simulated = simulated.interp_calendar(observed.time)
 
+    # Interpolate simulated data to match the observed data's calendar
+    simulated = simulated.interp_like(observed, method="nearest")
+
+    # Calculate the observed mean and adjusted standard deviation
     obs_mean = observed[obs_mean_var]
     obs_std = fudge_factor * observed[obs_std_var]
+
+    # Extract the simulated data
     sim = simulated[sim_var]
 
-    log_likes = 0.5 * ((sim - obs_mean) / obs_std) ** 2 + 0.5 * np.log(
-        2 * np.pi * obs_std**2
-    )
+    # Compute the log-likelihood of each simulated data point
+    log_likes = -0.5 * ((sim - obs_mean) / obs_std) ** 2 - np.log(np.sqrt(2 * np.pi) * obs_std)
     log_likes = log_likes.sum(dim="time")
 
-    w = log_likes
-    w -= w.mean()
-    weights = np.exp(w)
+    # Convert log-likelihoods to weights
+    weights = np.exp(log_likes - log_likes.max())
     weights /= weights.sum()
 
-    return np.random.choice(sim[id_var], n_samples, p=weights)
+    # Draw samples based on the computed weights
+    sampled_ids = np.random.choice(sim[id_var].values, size=n_samples, p=weights.values)
 
+    return sampled_ids
 
 def resample_ensemble_by_data_df(
     observed: pd.DataFrame,
