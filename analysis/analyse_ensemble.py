@@ -30,6 +30,7 @@ import seaborn as sns
 import xarray as xr
 
 from pism_ragis.observations import load_imbie, load_imbie_2021, load_mouginot
+from pism_ragis.analysis import resample_ensemble_by_data
 
 kg2cmsle = 1 / 1e12 * 1.0 / 362.5 / 10.0
 gt2cmsle = 1 / 362.5 / 10.0
@@ -90,6 +91,23 @@ if __name__ == "__main__":
         "#117733",
     ]
 
+    params = ["calving.vonmises_calving.sigma_max",
+          "ocean.th.gamma_T",
+          "frontal_melt.routing.file",
+          "surface.given.file",
+          "frontal_melt.routing.parameter_a",
+          "frontal_melt.routing.parameter_b",
+          "frontal_melt.routing.power_alpha",
+          "frontal_melt.routing.power_beta",
+          "stress_balance.sia.enhancement_factor",
+          "stress_balance.ssa.Glen_exponent",
+          "basal_resistance.pseudo_plastic.q",
+          "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden",
+          "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min",
+          "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min",
+          "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min",
+          "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max"]
+
     result_dir = Path(options.result_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
 
@@ -144,6 +162,10 @@ if __name__ == "__main__":
     )
     basins_sums.load()
 
+    observed = imbie_2021
+    simulated = basins_sums.sel(basin="GIS")
+    resample_ensemble_by_data(observed, simulated, fudge_factor=20)
+    
     obs_cmap = sns.color_palette("crest", n_colors=4)
     obs_cmap = ["0.4", "0.0", "0.6", "0.0"]
     sim_cmap = sns.color_palette("flare", n_colors=4)
@@ -224,7 +246,7 @@ if __name__ == "__main__":
 
     quantiles = {}
     for q in [0.05, 0.16, 0.5, 0.84, 0.95]:
-        quantiles[q] = da.quantile(q, dim="exp_id", skipna=False)
+        quantiles[q] = da.drop_vars("config").quantile(q, dim="exp_id", skipna=False)
 
     for k, m_var in enumerate(
         [sim_mass_cumulative_varname, sim_discharge_flux_varname, sim_smb_flux_varname]
