@@ -232,8 +232,6 @@ if __name__ == "__main__":
         bmb_floating_da.name = "tendency_of_ice_mass_due_to_basal_mass_flux_floating"
         ds = xr.merge([ds, bmb_grounded_da, bmb_floating_da])
 
-    if "pism_config" in ds.data_vars:
-        mb_vars += "pism_config"
 
     ds = ds[mb_vars]
     ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
