@@ -29,8 +29,8 @@ import pylab as plt
 import seaborn as sns
 import xarray as xr
 
-from pism_ragis.observations import load_imbie, load_imbie_2021, load_mouginot
 from pism_ragis.analysis import resample_ensemble_by_data
+from pism_ragis.observations import load_imbie, load_imbie_2021, load_mouginot
 
 kg2cmsle = 1 / 1e12 * 1.0 / 362.5 / 10.0
 gt2cmsle = 1 / 362.5 / 10.0
@@ -50,13 +50,13 @@ if __name__ == "__main__":
         "--basin_url",
         help="""Basin shapefile.""",
         type=str,
-        default="~/base/pism-ragis/data/basins/Greenland_Basins_PS_v1.4.2.shp",
+        default="~/base/pism-ragis/data/mouginot/Greenland_Basins_PS_v1.4.2_w_shelves.gpkg",
     )
     parser.add_argument(
         "--imbie_url",
         help="""Path to IMBIE excel file.""",
         type=str,
-        default="/mnt/storstrommen/data/imbie/imbie_dataset_greenland_dynamics-2020_02_28.xlsx",
+        default=None,
     )
     parser.add_argument(
         "--mouginot_url",
@@ -91,22 +91,23 @@ if __name__ == "__main__":
         "#117733",
     ]
 
-    params = ["calving.vonmises_calving.sigma_max",
-          "ocean.th.gamma_T",
-          "frontal_melt.routing.file",
-          "surface.given.file",
-          "frontal_melt.routing.parameter_a",
-          "frontal_melt.routing.parameter_b",
-          "frontal_melt.routing.power_alpha",
-          "frontal_melt.routing.power_beta",
-          "stress_balance.sia.enhancement_factor",
-          "stress_balance.ssa.Glen_exponent",
-          "basal_resistance.pseudo_plastic.q",
-          "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden",
-          "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min",
-          "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min",
-          "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min",
-          "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max"]
+    params = [
+        "calving.vonmises_calving.sigma_max",
+        "ocean.th.gamma_T",
+        "surface.given.file",
+        "frontal_melt.routing.parameter_a",
+        "frontal_melt.routing.parameter_b",
+        "frontal_melt.routing.power_alpha",
+        "frontal_melt.routing.power_beta",
+        "stress_balance.sia.enhancement_factor",
+        "stress_balance.ssa.Glen_exponent",
+        "basal_resistance.pseudo_plastic.q",
+        "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden",
+        "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min",
+        "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min",
+        "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min",
+        "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max",
+    ]
 
     result_dir = Path(options.result_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
@@ -140,7 +141,10 @@ if __name__ == "__main__":
     basins = gp.read_file(basin_url).to_crs(crs)
 
     # Load observations
-    imbie = load_imbie(url=Path(options.imbie_url))
+    if options.imbie_url is not None:
+        imbie = load_imbie(url=Path(options.imbie_url))
+    else:
+        imbie = load_imbie()
     imbie_2021 = load_imbie_2021()
 
     mou = load_mouginot(url=Path(options.mouginot_url), norm_year=reference_year)
@@ -164,8 +168,8 @@ if __name__ == "__main__":
 
     observed = imbie_2021
     simulated = basins_sums.sel(basin="GIS")
-    resample_ensemble_by_data(observed, simulated, fudge_factor=20)
-    
+    resampled_ensemble = resample_ensemble_by_data(observed, simulated, fudge_factor=20)
+
     obs_cmap = sns.color_palette("crest", n_colors=4)
     obs_cmap = ["0.4", "0.0", "0.6", "0.0"]
     sim_cmap = sns.color_palette("flare", n_colors=4)
