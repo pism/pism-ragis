@@ -25,6 +25,7 @@ from typing import List
 
 import geopandas as gp
 import numpy as np
+import pandas as pd
 import pylab as plt
 import seaborn as sns
 import xarray as xr
@@ -169,6 +170,22 @@ if __name__ == "__main__":
     observed = imbie_2021
     simulated = basins_sums.sel(basin="GIS")
     resampled_ensemble = resample_ensemble_by_data(observed, simulated, fudge_factor=20)
+
+    cc = basins_sums.sel(basin="CE").sel(config_axis=params).config
+    uq_df = cc.to_dataframe()
+
+    def mdf(df):
+        """
+        Transpose dataframe.
+        """
+        param_names = df["config_axis"]
+        df = df[["config"]].T
+        df.columns = param_names
+        return df
+
+    f = pd.concat(
+        [mdf(df) for df in uq_df.reset_index().groupby(by="exp_id")]
+    ).reset_index(drop=True)
 
     obs_cmap = sns.color_palette("crest", n_colors=4)
     obs_cmap = ["0.4", "0.0", "0.6", "0.0"]
