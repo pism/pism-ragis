@@ -291,7 +291,7 @@ if __name__ == "__main__":
             "5_GrIMP",
         ],
         help="input data set version",
-        default="2023_GRIMP",
+        default="2024-02_RAGIS",
     )
     parser.add_argument("--start", help="Simulation start year", default="1980-1-1")
     parser.add_argument("--end", help="Simulation end year", default="2020-1-1")
@@ -556,20 +556,20 @@ done\n\n
             grid_params_dict = computing.generate_grid_description(grid, domain)
 
             sb_params_dict: Dict[str, Union[str, int, float]] = {
-                "stress_balance.sia.enhancement_factor": combination["sia_e"],
+                "stress_balance.sia.enhancement_factor": combination["stress_balance.sia.enhancement_factor"],
                 "stress_balance.ssa.enhancement_factor": ssa_e,
-                "stress_balance.ssa.Glen_exponent": ssa_n,
-                "basal_resistance.pseudo_plastic.q": combination["pseudo_plastic_q"],
+                "stress_balance.ssa.Glen_exponent": combination["stress_balance.ssa.Glen_exponent"],
+                "basal_resistance.pseudo_plastic.q": combination["basal_resistance.pseudo_plastic.q"],
                 "basal_yield_stress.mohr_coulomb.topg_to_phi.enabled": "yes",
                 "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden": combination[
-                    "till_effective_fraction_overburden"
+                    "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden"
                 ],
-                "stress_balance.blatter.enhancement_factor": combination["sia_e"],
+                "stress_balance.blatter.enhancement_factor": combination["stress_balance.sia.enhancement_factor"],
             }
-            phi_min = combination["phi_min"]
-            phi_max = combination["phi_max"]
-            z_min = combination["z_min"]
-            z_max = combination["z_max"]
+            phi_min = combination["basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min"]
+            phi_max = combination["basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max"]
+            z_min = combination["basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min"]
+            z_max = combination["basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max"]
 
             sb_params_dict[
                 "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max"
@@ -659,7 +659,7 @@ done\n\n
             ocean_file_p = f"""$data_dir/ocean/{combination["ocean_file"]}"""
             frontal_melt = combination["frontal_melt"]
             if frontal_melt == "discharge_routing":
-                hydrology_parameters["hydrology.surface_input.file"] = ocean_file_p
+                hydrology_parameters["hydrology.surface_input.file"] = runoff_file_p
 
                 frontalmelt_parameters = {
                     "frontal_melt.models": "routing",
@@ -690,7 +690,7 @@ done\n\n
             ocean_parameters = {
                 "ocean.th.file": ocean_file_p,
                 "ocean.th.clip_salinity": False,
-                "ocean.th.gamma_T": combination["gamma_T"],
+                "ocean.th.gamma_T": combination["ocean.th.gamma_T"],
             }
             if hasattr(combination, "salinity"):
                 if combination["salinity"] is not False:
@@ -699,7 +699,7 @@ done\n\n
                     ]
 
             ocean_params_dict = computing.generate_ocean(
-                combination["ocean"], **ocean_parameters
+                combination["ocean.models"], **ocean_parameters
             )
 
             calving_parameters: Dict[str, Union[str, int, float]] = {
@@ -716,15 +716,7 @@ done\n\n
                     "geometry.front_retreat.prescribed.file"
                 ] = f"""$data_dir/front_retreat/{combination["prescribed_retreat_file"]}"""
 
-            vcm = combination["vcm"]
-            try:
-                vcm = float(vcm)
-                calving_parameters["calving.vonmises_calving.sigma_max"] = vcm * 1e6
-            except:  # pylint: disable=W0702
-                vonmises_calving_threshold_file_p = "$data_dir/calving/{vcm}"
-                calving_parameters[
-                    "calving.vonmises_calving.threshold_file"
-                ] = vonmises_calving_threshold_file_p
+            calving_parameters["calving.vonmises_calving.sigma_max"] = combination["calving.vonmises_calving.sigma_max"]
             if "calving.thickness_calving.threshold" in combination:
                 calving_parameters["calving.thickness_calving.threshold"] = combination[
                     "calving.thickness_calving.threshold"

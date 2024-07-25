@@ -174,17 +174,17 @@ if __name__ == "__main__":
     cc = basins_sums.sel(basin="CE").sel(config_axis=params).config
     uq_df = cc.to_dataframe()
 
-    def mdf(df):
+    def mdf(df, exp_id):
         """
         Transpose dataframe.
         """
         param_names = df["config_axis"]
-        df = df[["config"]].T
+        df = df[["config", exp_id]].T
         df.columns = param_names
         return df
 
     f = pd.concat(
-        [mdf(df) for df in uq_df.reset_index().groupby(by="exp_id")]
+        [mdf(df) for exp_id, df in uq_df.reset_index().groupby(by="exp_id")]
     ).reset_index(drop=True)
 
     obs_cmap = sns.color_palette("crest", n_colors=4)
