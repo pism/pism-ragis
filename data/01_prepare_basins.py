@@ -66,14 +66,19 @@ def prepare_basin(basin_dict: Dict, col: str = "SUBREGION1"):
     archive.extractall(path=path)
     p = path / f"{name}.shp"
     basin_gp = gp.read_file(p).to_crs(crs)
-    shelves = gp.read_file("basins/GRE_Basins_shelf_extensions.gpkg").to_crs(crs)
+    shelves = gp.read_file("../data/basins/GRE_Basins_shelf_extensions.gpkg").to_crs(crs)
     basin_dissolved_by_basin = basin_gp.dissolve(col)
     shelves_dissolved_by_basin = shelves.dissolve(col)
     basin_plus_shelves_geom = basin_dissolved_by_basin.union(shelves_dissolved_by_basin)
     basin_plus_shelves = gp.GeoDataFrame(
         basin_dissolved_by_basin, geometry=basin_plus_shelves_geom
     )
-    m = pd.concat([basin_dissolved_by_basin, basin_plus_shelves]).dissolve(col)
+    m = pd.concat([basin_dissolved_by_basin, basin_plus_shelves]).dissolve(col).reset_index()
+    m_no_periphery = m[m[col] != "ICE_CAP"]
+    gis = gp.GeoDataFrame(m_no_periphery.dissolve())
+
+    gis["SUBREGION1"] = "GIS"
+    m = pd.concat([m, gis])
     m.to_file(path / f"{name}_w_shelves.gpkg")
     print("Done.\n")
 

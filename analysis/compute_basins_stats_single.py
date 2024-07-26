@@ -60,6 +60,8 @@ def compute_basin(ds: xr.Dataset, name: str) -> xr.Dataset:
 
 
 if __name__ == "__main__":
+    __spec__ = None
+
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Compute ensemble statistics."
@@ -156,7 +158,6 @@ if __name__ == "__main__":
 
         ds = ds.expand_dims({"ensemble_id": [ensemble_id], "exp_id": [m_id]})
         
-
         if "ice_mass" in ds:
             ds["ice_mass"] /= 1e12
             ds["ice_mass"].attrs["units"] = "Gt"
@@ -202,9 +203,6 @@ if __name__ == "__main__":
         futures = client.map(compute_basin, basins_ds_scattered, basin_names)
         progress(futures)
         basin_sums = xr.concat(client.gather(futures), dim="basin")
-        gris_sums = basin_sums.sum(dim="basin").expand_dims("basin")
-        gris_sums["basin"] = ["GIS"]
-        basin_sums = xr.concat([basin_sums, gris_sums], dim="basin")
         basin_sums.to_netcdf(basins_file)
 
         end = time.time()

@@ -32,6 +32,8 @@ import seaborn as sns
 import toml
 import xarray as xr
 
+from SALib.analyze import delta
+
 from pism_ragis.analysis import resample_ensemble_by_data
 from pism_ragis.observations import load_imbie, load_imbie_2021, load_mouginot
 
@@ -189,7 +191,7 @@ if __name__ == "__main__":
     observed = imbie_2021
     simulated = basins_sums.sel(basin="GIS")
     resampled_ensemble = resample_ensemble_by_data(
-        observed, simulated, fudge_factor=20, n_samples=len(simulated.exp_id)
+        observed, simulated, fudge_factor=25, n_samples=len(simulated.exp_id)
     )
     basins_sums_resampled = xr.concat(
         [
@@ -200,7 +202,7 @@ if __name__ == "__main__":
     )
     print("Done")
 
-    config = basins_sums.sel(basin="CE").sel(config_axis=params).config
+    config = basins_sums.sel(basin="GIS").sel(config_axis=params).config
     uq_df = config.to_dataframe()
 
     def transpose_dataframe(df, exp_id):
@@ -236,29 +238,62 @@ if __name__ == "__main__":
         except ValueError:
             return column
 
+    def simplify_climate(my_str: str):
+        """
+        Simplify climate
+        """
+        if "MAR" in my_str:
+            return "MAR"
+        else:
+            return "HIRHAM"
+    def simplify_ocean(my_str: str):
+        """
+        Simplify ocean
+        """
+        return "-".join(my_str.split("_")[1:2])
+
     # Apply the conversion function to each column
     ragis = ragis.apply(convert_column_to_float)
     for col in ["surface.given.file", "ocean.th.file"]:
         ragis[col] = ragis[col].apply(simplify)
+    ragis["surface.given.file"] = ragis["surface.given.file"].apply(simplify_climate)
+    ragis["ocean.th.file"] = ragis["ocean.th.file"].apply(simplify_ocean)
 
     ragis["Ensemble"] = "Prior"
     resampled_df = [ragis[ragis["exp_id"] == k] for k in resampled_ensemble]
 
     ragis_resampled = pd.concat(resampled_df)
     ragis_resampled["Ensemble"] = "Posterior"
-
-    def simplify_climate(my_str: str):
-        if "MAR" in my_str:
-            return "MAR"
-        else:
-            return "HIRHAM"
-    def simplify_ocean(my_str: str):
-        return "-".join(my_str.split("_")[1:2])
     
     posterior_df = pd.concat([ragis, ragis_resampled]).rename(columns=params_short_dict)
-    posterior_df["Climate"] = posterior_df["Climate"].apply(simplify_climate)
-    posterior_df["Ocean"] = posterior_df["Ocean"].apply(simplify_ocean)
-    
+
+
+    ensemble_df = ragis.drop(columns=["Ensemble", "exp_id"], errors="ignore")
+    climate_dict = {v: k for k,v in enumerate(ensemble_df["surface.given.file"].unique())}
+    ocean_dict = {v: k for k,v in enumerate(ensemble_df["ocean.th.file"].unique())}
+    ensemble_df["surface.given.file"] = ensemble_df["surface.given.file"].map(climate_dict)
+    ensemble_df["ocean.th.file"] = ensemble_df["ocean.th.file"].map(ocean_dict)
+    problem = {
+        "num_vars": len(ensemble_df.columns),
+        "names": ensemble_df.columns,  # Parameter names
+        "bounds": zip(
+            ensemble_df.min().values,
+            ensemble_df.max().values,
+        ),  # Parameter bounds
+    }
+    def get_delta(ds, k, problem, ensemble_df):
+        response_matrix = ds.sel(basin="GIS").isel(time=k).ice_mass.to_numpy()
+        print(response_matrix)
+        delta_analysis = delta.analyze(
+                problem,
+                ensemble_df.values,
+                response_matrix,
+                num_resamples=10,
+                seed=0,
+                print_to_console=False,
+            )
+        return xr.Dataset.from_dataframe(delta_analysis.to_df())
+
     plt.rcParams["font.size"] = 6
     obs_cmap = sns.color_palette("crest", n_colors=4)
     obs_cmap = ["0.4", "0.0", "0.6", "0.0"]
@@ -343,7 +378,7 @@ if __name__ == "__main__":
         mou_gis["time"],
         mou_gis[discharge_flux_varname] - mou_gis[discharge_flux_uncertainty_varname],
         mou_gis[discharge_flux_varname] + mou_gis[discharge_flux_uncertainty_varname],
-        color=obs_cmap[2],
+        color=obs_cmap[0],
         alpha=0.5,
         lw=0,
     )
@@ -351,23 +386,7 @@ if __name__ == "__main__":
         imbie["time"],
         imbie[discharge_flux_varname] - imbie[discharge_flux_uncertainty_varname],
         imbie[discharge_flux_varname] + imbie[discharge_flux_uncertainty_varname],
-        color=obs_cmap[0],
-        alpha=0.5,
-        lw=0,
-    )
-    axs[1].fill_between(
-        mou_gis["time"],
-        mou_gis[discharge_flux_varname] - mou_gis[discharge_flux_uncertainty_varname],
-        mou_gis[discharge_flux_varname] + mou_gis[discharge_flux_uncertainty_varname],
-        color=obs_cmap[0],
-        alpha=0.5,
-        lw=0,
-    )
-    axs[2].fill_between(
-        imbie["time"],
-        imbie[smb_flux_varname] - imbie[smb_flux_uncertainty_varname],
-        imbie[smb_flux_varname] + imbie[smb_flux_uncertainty_varname],
-        color=obs_cmap[0],
+        color=obs_cmap[2],
         alpha=0.5,
         lw=0,
     )
@@ -376,6 +395,14 @@ if __name__ == "__main__":
         mou_gis[smb_flux_varname] - mou_gis[smb_flux_uncertainty_varname],
         mou_gis[smb_flux_varname] + mou_gis[smb_flux_uncertainty_varname],
         color=obs_cmap[0],
+        alpha=0.5,
+        lw=0,
+    )
+    axs[2].fill_between(
+        imbie["time"],
+        imbie[smb_flux_varname] - imbie[smb_flux_uncertainty_varname],
+        imbie[smb_flux_varname] + imbie[smb_flux_uncertainty_varname],
+        color=obs_cmap[2],
         alpha=0.5,
         lw=0,
     )
