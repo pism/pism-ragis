@@ -20,15 +20,16 @@ Analyze RAGIS ensemble
 """
 
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from importlib.resources import files
 from pathlib import Path
 from typing import List
-from importlib.resources import files
-import toml
+
 import geopandas as gp
 import numpy as np
 import pandas as pd
 import pylab as plt
 import seaborn as sns
+import toml
 import xarray as xr
 
 from pism_ragis.analysis import resample_ensemble_by_data
@@ -92,9 +93,11 @@ if __name__ == "__main__":
         "#44AA99",
         "#117733",
     ]
-    ragis_config_file = Path(str(files("pism_ragis.data").joinpath("ragis_config.toml")))
+    ragis_config_file = Path(
+        str(files("pism_ragis.data").joinpath("ragis_config.toml"))
+    )
     all_params_dict = toml.load(ragis_config_file)["Parameters"]
-    
+
     params = [
         "calving.vonmises_calving.sigma_max",
         "ocean.th.gamma_T",
@@ -114,7 +117,7 @@ if __name__ == "__main__":
         "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max",
     ]
     params_short_dict = {key: all_params_dict[key] for key in params}
-    
+
     result_dir = Path(options.result_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
 
@@ -158,8 +161,9 @@ if __name__ == "__main__":
 
     comp = {"zlib": True, "complevel": 2}
 
+    print("Loading files")
     basins_files = result_dir.glob("basin*.nc")
-    basins_sums = xr.open_mfdataset(basins_files, parallel=True, chunks="auto")
+    basins_sums = xr.open_mfdataset(basins_files, parallel=True, chunks=None)
     basins_sums = basins_sums.sel(ensemble_id="RAGIS").sel(
         time=slice("1980-01-01", "2020-01-01")
     )
@@ -171,18 +175,29 @@ if __name__ == "__main__":
         + basins_sums["tendency_of_ice_mass_due_to_basal_mass_flux_grounded"]
     )
     basins_sums.load()
+    print("Done")
 
+    def select_experiment(ds, exp_id, n):
+        """
+        Reset the experiment id.
+        """
+        exp = ds.sel(exp_id=exp_id)
+        exp["exp_id"] = n
+        return exp
+
+    print("Particle Filtering")
     observed = imbie_2021
     simulated = basins_sums.sel(basin="GIS")
     resampled_ensemble = resample_ensemble_by_data(observed, simulated, fudge_factor=20)
+    basins_sums_resampled = xr.concat(
+        [
+            select_experiment(basins_sums, exp_id, k)
+            for k, exp_id in enumerate(resampled_ensemble)
+        ],
+        dim="exp_id",
+    )
+    print("Done")
 
-    basins_sums_resampled = []
-    for k, exp_id in enumerate(resampled_ensemble):
-        b = basins_sums.sel(exp_id=exp_id)
-        b["exp_id"] = k
-        basins_sums_resampled.append(b)
-    basins_sums_resampled = xr.concat(basins_sums_resampled, dim="exp_id")
-    
     config = basins_sums.sel(basin="CE").sel(config_axis=params).config
     uq_df = config.to_dataframe()
 
@@ -197,31 +212,38 @@ if __name__ == "__main__":
         return df
 
     ragis = pd.concat(
-        [transpose_dataframe(df, exp_id) for exp_id, df in uq_df.reset_index().groupby(by="exp_id")]
+        [
+            transpose_dataframe(df, exp_id)
+            for exp_id, df in uq_df.reset_index().groupby(by="exp_id")
+        ]
     ).reset_index(drop=True)
-    
+
     def simplify(my_str: str) -> str:
+        """
+        Simplify string
+        """
         return Path(my_str).name
-    
+
     # Function to convert column to float if possible
     def convert_column_to_float(column):
+        """
+        Convert column to numeric if possible.
+        """
         try:
-            return pd.to_numeric(column, errors='raise')
+            return pd.to_numeric(column, errors="raise")
         except ValueError:
             return column
 
     # Apply the conversion function to each column
     ragis = ragis.apply(convert_column_to_float)
-    for col in ["surface.given.file", "ocean.th.file"]:
-        ragis[col] = ragis[col].apply(simplify)
+    # for col in ["surface.given.file", "ocean.th.file"]:
+    #     ragis[col] = ragis[col].apply(simplify)
     ragis["Ensemble"] = "Prior"
-    
-    resampled_df = []
-    for k in resampled_ensemble:
-        resampled_df.append(ragis[ragis["exp_id"] == k])
+    resampled_df = [ragis[ragis["exp_id"] == k] for k in resampled_ensemble]
+
     ragis_resampled = pd.concat(resampled_df)
     ragis_resampled["Ensemble"] = "Posterior"
-    
+
     posterior_df = pd.concat([ragis, ragis_resampled]).rename(columns=params_short_dict)
 
     n_params = len(params_short_dict)
@@ -249,7 +271,7 @@ if __name__ == "__main__":
         except:
             pass
     fig.savefig("hist.pdf")
-        
+
     obs_cmap = sns.color_palette("crest", n_colors=4)
     obs_cmap = ["0.4", "0.0", "0.6", "0.0"]
     sim_cmap = sns.color_palette("flare", n_colors=4)
@@ -264,8 +286,18 @@ if __name__ == "__main__":
     sim_lines: List = []
     sim_alpha = 0.5
 
-    gris = basins_sums.sel(basin="GIS").rolling(time=13).mean()
-    gris_resampled = basins_sums_resampled.sel(basin="GIS").rolling(time=13).mean()
+    gris = basins_sums.sel(basin="GIS").drop_vars("config").rolling(time=13).mean()
+    gris["ensemble_id"] = "Prior"
+    gris_resampled = (
+        basins_sums_resampled.sel(basin="GIS")
+        .drop_vars("config")
+        .rolling(time=13)
+        .mean()
+    )
+    gris_resampled["ensemble_id"] = "Posterior"
+
+    gris["config"] = basins_sums["config"]
+    gris_resampled["config"] = basins_sums["config"]
 
     mou_ci = axs[0].fill_between(
         mou_gis["time"],
@@ -329,6 +361,7 @@ if __name__ == "__main__":
         lw=0,
     )
 
+    sim_cis = []
     quantiles = {}
     for q in [0.16, 0.5, 0.84]:
         quantiles[q] = gris.drop_vars("config").quantile(q, dim="exp_id", skipna=False)
@@ -342,11 +375,16 @@ if __name__ == "__main__":
             quantiles[0.84][m_var],
             alpha=0.3,
             color=sim_cmap[1],
+            label=gris["ensemble_id"].values,
             lw=0,
         )
+        if k == 0:
+            sim_cis.append(sim_ci)
     quantiles = {}
     for q in [0.16, 0.5, 0.84]:
-        quantiles[q] = gris_resampled.drop_vars("config").quantile(q, dim="exp_id", skipna=False)
+        quantiles[q] = gris_resampled.drop_vars("config").quantile(
+            q, dim="exp_id", skipna=False
+        )
 
     for k, m_var in enumerate(
         [sim_mass_cumulative_varname, sim_discharge_flux_varname, sim_smb_flux_varname]
@@ -357,8 +395,11 @@ if __name__ == "__main__":
             quantiles[0.84][m_var],
             alpha=0.3,
             color=sim_cmap[3],
+            label=gris_resampled["ensemble_id"].values,
             lw=0,
         )
+        if k == 0:
+            sim_cis.append(sim_ci)
 
     legend_obs = axs[0].legend(
         handles=[mou_ci, imbie_ci], loc="lower left", title="Observed"
@@ -367,7 +408,7 @@ if __name__ == "__main__":
     legend_obs.get_frame().set_alpha(0.0)
 
     legend_sim = axs[0].legend(
-        handles=sim_lines, loc="upper left", title="Simulated (13-month rolling mean)"
+        handles=sim_cis, loc="upper left", title="Simulated (13-month rolling mean)"
     )
     legend_sim.get_frame().set_linewidth(0.0)
     legend_sim.get_frame().set_alpha(0.0)
