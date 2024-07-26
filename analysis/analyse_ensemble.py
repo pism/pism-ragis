@@ -22,7 +22,8 @@ Analyze RAGIS ensemble
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from pathlib import Path
 from typing import List
-
+from importlib.resources import files
+import toml
 import geopandas as gp
 import numpy as np
 import pandas as pd
@@ -91,11 +92,14 @@ if __name__ == "__main__":
         "#44AA99",
         "#117733",
     ]
-
+    ragis_config_file = Path(str(files("pism_ragis.data").joinpath("ragis_config.toml")))
+    all_params_dict = toml.load(ragis_config_file)["Parameters"]
+    
     params = [
         "calving.vonmises_calving.sigma_max",
         "ocean.th.gamma_T",
         "surface.given.file",
+        "ocean.th.file",
         "frontal_melt.routing.parameter_a",
         "frontal_melt.routing.parameter_b",
         "frontal_melt.routing.power_alpha",
@@ -105,11 +109,12 @@ if __name__ == "__main__":
         "basal_resistance.pseudo_plastic.q",
         "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden",
         "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min",
-        "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min",
+        "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max",
         "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min",
         "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max",
     ]
-
+    params_short_dict = {key: all_params_dict[key] for key in params}
+    
     result_dir = Path(options.result_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
 
@@ -171,22 +176,80 @@ if __name__ == "__main__":
     simulated = basins_sums.sel(basin="GIS")
     resampled_ensemble = resample_ensemble_by_data(observed, simulated, fudge_factor=20)
 
-    cc = basins_sums.sel(basin="CE").sel(config_axis=params).config
-    uq_df = cc.to_dataframe()
+    basins_sums_resampled = []
+    for k, exp_id in enumerate(resampled_ensemble):
+        b = basins_sums.sel(exp_id=exp_id)
+        b["exp_id"] = k
+        basins_sums_resampled.append(b)
+    basins_sums_resampled = xr.concat(basins_sums_resampled, dim="exp_id")
+    
+    config = basins_sums.sel(basin="CE").sel(config_axis=params).config
+    uq_df = config.to_dataframe()
 
-    def mdf(df, exp_id):
+    def transpose_dataframe(df, exp_id):
         """
         Transpose dataframe.
         """
         param_names = df["config_axis"]
-        df = df[["config", exp_id]].T
+        df = df[["config"]].T
         df.columns = param_names
+        df["exp_id"] = exp_id
         return df
 
-    f = pd.concat(
-        [mdf(df) for exp_id, df in uq_df.reset_index().groupby(by="exp_id")]
+    ragis = pd.concat(
+        [transpose_dataframe(df, exp_id) for exp_id, df in uq_df.reset_index().groupby(by="exp_id")]
     ).reset_index(drop=True)
+    
+    def simplify(my_str: str) -> str:
+        return Path(my_str).name
+    
+    # Function to convert column to float if possible
+    def convert_column_to_float(column):
+        try:
+            return pd.to_numeric(column, errors='raise')
+        except ValueError:
+            return column
 
+    # Apply the conversion function to each column
+    ragis = ragis.apply(convert_column_to_float)
+    for col in ["surface.given.file", "ocean.th.file"]:
+        ragis[col] = ragis[col].apply(simplify)
+    ragis["Ensemble"] = "Prior"
+    
+    resampled_df = []
+    for k in resampled_ensemble:
+        resampled_df.append(ragis[ragis["exp_id"] == k])
+    ragis_resampled = pd.concat(resampled_df)
+    ragis_resampled["Ensemble"] = "Posterior"
+    
+    posterior_df = pd.concat([ragis, ragis_resampled]).rename(columns=params_short_dict)
+
+    n_params = len(params_short_dict)
+    fig, axs = plt.subplots(
+        5,
+        3,
+        figsize=[6.2, 11],
+    )
+    fig.subplots_adjust(hspace=1.0, wspace=1.0)
+
+    for k, v in enumerate(params_short_dict.values()):
+        try:
+            sns.histplot(
+                data=posterior_df,
+                x=v,
+                hue="Ensemble",
+                common_norm=False,
+                stat="density",
+                multiple="dodge",
+                alpha=0.8,
+                linewidth=0.2,
+                ax=axs.ravel()[k],
+                legend=False,
+            )
+        except:
+            pass
+    fig.savefig("hist.pdf")
+        
     obs_cmap = sns.color_palette("crest", n_colors=4)
     obs_cmap = ["0.4", "0.0", "0.6", "0.0"]
     sim_cmap = sns.color_palette("flare", n_colors=4)
@@ -201,7 +264,8 @@ if __name__ == "__main__":
     sim_lines: List = []
     sim_alpha = 0.5
 
-    da = basins_sums.sel(basin="GIS").rolling(time=13).mean()
+    gris = basins_sums.sel(basin="GIS").rolling(time=13).mean()
+    gris_resampled = basins_sums_resampled.sel(basin="GIS").rolling(time=13).mean()
 
     mou_ci = axs[0].fill_between(
         mou_gis["time"],
@@ -266,26 +330,33 @@ if __name__ == "__main__":
     )
 
     quantiles = {}
-    for q in [0.05, 0.16, 0.5, 0.84, 0.95]:
-        quantiles[q] = da.drop_vars("config").quantile(q, dim="exp_id", skipna=False)
+    for q in [0.16, 0.5, 0.84]:
+        quantiles[q] = gris.drop_vars("config").quantile(q, dim="exp_id", skipna=False)
 
     for k, m_var in enumerate(
         [sim_mass_cumulative_varname, sim_discharge_flux_varname, sim_smb_flux_varname]
     ):
         sim_ci = axs[k].fill_between(
             quantiles[0.5].time,
-            quantiles[0.05][m_var],
-            quantiles[0.95][m_var],
-            alpha=0.1,
-            color=sim_cmap[0],
+            quantiles[0.16][m_var],
+            quantiles[0.84][m_var],
+            alpha=0.3,
+            color=sim_cmap[1],
             lw=0,
         )
+    quantiles = {}
+    for q in [0.16, 0.5, 0.84]:
+        quantiles[q] = gris_resampled.drop_vars("config").quantile(q, dim="exp_id", skipna=False)
+
+    for k, m_var in enumerate(
+        [sim_mass_cumulative_varname, sim_discharge_flux_varname, sim_smb_flux_varname]
+    ):
         sim_ci = axs[k].fill_between(
             quantiles[0.5].time,
             quantiles[0.16][m_var],
             quantiles[0.84][m_var],
             alpha=0.3,
-            color=sim_cmap[2],
+            color=sim_cmap[3],
             lw=0,
         )
 

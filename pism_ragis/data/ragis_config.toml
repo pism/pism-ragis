@@ -1,0 +1,20 @@
+[Parameters]
+
+'calving.vonmises_calving.sigma_max' = '$\sigma_{\mathrm{max}}$'
+'ocean.th.gamma_T' = '$\gamma$'
+'surface.given.file' = 'Climate'
+'ocean.th.file' = 'Ocean'
+'frontal_melt.routing.parameter_a' = '$a$'
+'frontal_melt.routing.parameter_b' = '$b$'
+'frontal_melt.routing.power_alpha' = '$\alpha$'
+'frontal_melt.routing.power_beta' = '$\beta$'
+'stress_balance.sia.enhancement_factor' = '$E_{\mathrm{SIA}}$'
+'stress_balance.ssa.Glen_exponent' = '$n_{\mathrm{SSA}}$'
+'basal_resistance.pseudo_plastic.q' = '$q$'
+'basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden' = '$\delta$'
+'basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min' = '$\phi_{\mathrm{min}}$'
+'basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max' = '$\phi_{\mathrm{max}}$'
+'basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min' = '$z_{\mathrm{min}}$'
+'basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max' = '$z_{\mathrm{min}}$'
+
+
