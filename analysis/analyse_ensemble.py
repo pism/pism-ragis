@@ -247,8 +247,18 @@ if __name__ == "__main__":
     ragis_resampled = pd.concat(resampled_df)
     ragis_resampled["Ensemble"] = "Posterior"
 
+    def simplify_climate(my_str: str):
+        if "MAR" in my_str:
+            return "MAR"
+        else:
+            return "HIRHAM"
+    def simplify_ocean(my_str: str):
+        return "-".join(my_str.split("_")[1:2])
+    
     posterior_df = pd.concat([ragis, ragis_resampled]).rename(columns=params_short_dict)
-
+    posterior_df["Climate"] = posterior_df["Climate"].apply(simplify_climate)
+    posterior_df["Ocean"] = posterior_df["Ocean"].apply(simplify_ocean)
+    
     plt.rcParams["font.size"] = 6
     obs_cmap = sns.color_palette("crest", n_colors=4)
     obs_cmap = ["0.4", "0.0", "0.6", "0.0"]
@@ -257,11 +267,11 @@ if __name__ == "__main__":
 
     n_params = len(params_short_dict)
     fig, axs = plt.subplots(
-        5,
-        3,
-        figsize=[6.2, 11],
+        7,
+        2,
+        figsize=[6.2, 9.2],
     )
-    fig.subplots_adjust(hspace=1.0, wspace=1.0)
+    fig.subplots_adjust(hspace=0.75, wspace=0.25)
 
     for k, v in enumerate(params_short_dict.values()):
         try:
@@ -280,6 +290,10 @@ if __name__ == "__main__":
             )
         except:
             pass
+    for ax in axs.flatten():
+        ticklabels = ax.get_xticklabels()
+        for tick in ticklabels:
+            tick.set_rotation(45)
     fig.savefig("hist.pdf")
 
     fig, axs = plt.subplots(
