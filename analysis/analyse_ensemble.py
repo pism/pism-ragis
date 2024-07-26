@@ -188,7 +188,9 @@ if __name__ == "__main__":
     print("Particle Filtering")
     observed = imbie_2021
     simulated = basins_sums.sel(basin="GIS")
-    resampled_ensemble = resample_ensemble_by_data(observed, simulated, fudge_factor=20)
+    resampled_ensemble = resample_ensemble_by_data(
+        observed, simulated, fudge_factor=20, n_samples=len(simulated.exp_id)
+    )
     basins_sums_resampled = xr.concat(
         [
             select_experiment(basins_sums, exp_id, k)
@@ -236,8 +238,9 @@ if __name__ == "__main__":
 
     # Apply the conversion function to each column
     ragis = ragis.apply(convert_column_to_float)
-    # for col in ["surface.given.file", "ocean.th.file"]:
-    #     ragis[col] = ragis[col].apply(simplify)
+    for col in ["surface.given.file", "ocean.th.file"]:
+        ragis[col] = ragis[col].apply(simplify)
+
     ragis["Ensemble"] = "Prior"
     resampled_df = [ragis[ragis["exp_id"] == k] for k in resampled_ensemble]
 
@@ -245,6 +248,12 @@ if __name__ == "__main__":
     ragis_resampled["Ensemble"] = "Posterior"
 
     posterior_df = pd.concat([ragis, ragis_resampled]).rename(columns=params_short_dict)
+
+    plt.rcParams["font.size"] = 6
+    obs_cmap = sns.color_palette("crest", n_colors=4)
+    obs_cmap = ["0.4", "0.0", "0.6", "0.0"]
+    sim_cmap = sns.color_palette("flare", n_colors=4)
+    hist_cmap = ["#a6cee3", "#1f78b4", "#b2df8a", "#33a02c"]
 
     n_params = len(params_short_dict)
     fig, axs = plt.subplots(
@@ -260,6 +269,7 @@ if __name__ == "__main__":
                 data=posterior_df,
                 x=v,
                 hue="Ensemble",
+                palette=hist_cmap,
                 common_norm=False,
                 stat="density",
                 multiple="dodge",
@@ -271,11 +281,6 @@ if __name__ == "__main__":
         except:
             pass
     fig.savefig("hist.pdf")
-
-    obs_cmap = sns.color_palette("crest", n_colors=4)
-    obs_cmap = ["0.4", "0.0", "0.6", "0.0"]
-    sim_cmap = sns.color_palette("flare", n_colors=4)
-    plt.rcParams["font.size"] = 6
 
     fig, axs = plt.subplots(
         3, 1, sharex=True, figsize=(6.2, 4.2), height_ratios=[2, 1, 1]
@@ -408,7 +413,7 @@ if __name__ == "__main__":
     legend_obs.get_frame().set_alpha(0.0)
 
     legend_sim = axs[0].legend(
-        handles=sim_cis, loc="upper left", title="Simulated (13-month rolling mean)"
+        handles=sim_cis, loc="center left", title="Simulated (13-month rolling mean)"
     )
     legend_sim.get_frame().set_linewidth(0.0)
     legend_sim.get_frame().set_alpha(0.0)
@@ -430,36 +435,3 @@ if __name__ == "__main__":
     axs[-1].set_xlim(np.datetime64("1980-01-01"), np.datetime64("2021-01-01"))
     fig.tight_layout()
     fig.savefig("GIS_mass_accounting.pdf")
-
-    # basins_sums = basins_sums.rolling(time=13).mean()
-    # basins_sums = basins_sums.rename(
-    #     {
-    #         sim_mass_cumulative_varname: mass_cumulative_varname,
-    #         sim_mass_flux_varname: mass_flux_varname,
-    #         sim_discharge_flux_varname: discharge_flux_varname,
-    #         sim_smb_flux_varname: smb_flux_varname,
-    #     }
-    # )
-    # basins_sums[mass_cumulative_varname] -= basins_sums.sel(
-    #     time="1980-01-01", method="nearest"
-    # )[mass_cumulative_varname]
-    # basins_sums[discharge_cumulative_varname] = basins_sums[
-    #     discharge_flux_varname
-    # ].cumsum(dim="time")
-    # basins_sums[discharge_cumulative_varname] -= basins_sums.sel(
-    #     time="1980-01-01", method="nearest"
-    # )[discharge_cumulative_varname]
-    # basins_sums[smb_cumulative_varname] = basins_sums[smb_flux_varname].cumsum(
-    #     dim="time"
-    # )
-    # basins_sums[smb_cumulative_varname] -= basins_sums.sel(
-    #     time="1980-01-01", method="nearest"
-    # )[smb_cumulative_varname]
-
-    sim_colors = colorblind_colors
-    obs = mou_gis
-    obs_color = "#216778"
-    obs_alpha = 1.0
-    sim_alpha = 0.1
-
-    plt.rc("font", size=6)
