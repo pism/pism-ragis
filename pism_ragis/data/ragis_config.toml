@@ -16,5 +16,3 @@
 'basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max' = '$\phi_{\mathrm{max}}$'
 'basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min' = '$z_{\mathrm{min}}$'
 'basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max' = '$z_{\mathrm{min}}$'
-
-

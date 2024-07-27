@@ -556,15 +556,23 @@ done\n\n
             grid_params_dict = computing.generate_grid_description(grid, domain)
 
             sb_params_dict: Dict[str, Union[str, int, float]] = {
-                "stress_balance.sia.enhancement_factor": combination["stress_balance.sia.enhancement_factor"],
+                "stress_balance.sia.enhancement_factor": combination[
+                    "stress_balance.sia.enhancement_factor"
+                ],
                 "stress_balance.ssa.enhancement_factor": ssa_e,
-                "stress_balance.ssa.Glen_exponent": combination["stress_balance.ssa.Glen_exponent"],
-                "basal_resistance.pseudo_plastic.q": combination["basal_resistance.pseudo_plastic.q"],
+                "stress_balance.ssa.Glen_exponent": combination[
+                    "stress_balance.ssa.Glen_exponent"
+                ],
+                "basal_resistance.pseudo_plastic.q": combination[
+                    "basal_resistance.pseudo_plastic.q"
+                ],
                 "basal_yield_stress.mohr_coulomb.topg_to_phi.enabled": "yes",
                 "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden": combination[
                     "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden"
                 ],
-                "stress_balance.blatter.enhancement_factor": combination["stress_balance.sia.enhancement_factor"],
+                "stress_balance.blatter.enhancement_factor": combination[
+                    "stress_balance.sia.enhancement_factor"
+                ],
             }
             phi_min = combination["basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min"]
             phi_max = combination["basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max"]
@@ -716,7 +724,9 @@ done\n\n
                     "geometry.front_retreat.prescribed.file"
                 ] = f"""$data_dir/front_retreat/{combination["prescribed_retreat_file"]}"""
 
-            calving_parameters["calving.vonmises_calving.sigma_max"] = combination["calving.vonmises_calving.sigma_max"]
+            calving_parameters["calving.vonmises_calving.sigma_max"] = combination[
+                "calving.vonmises_calving.sigma_max"
+            ]
             if "calving.thickness_calving.threshold" in combination:
                 calving_parameters["calving.thickness_calving.threshold"] = combination[
                     "calving.thickness_calving.threshold"

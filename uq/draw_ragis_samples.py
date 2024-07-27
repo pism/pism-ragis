@@ -68,30 +68,30 @@ dists: Dict[str, Any] = {
             "frontal_melt.routing.power_beta": uniform(loc=1.1, scale=1.7),
         },
         "default_values": {
-            'basal_resistance.pseudo_plastic.q': 0.7508221,
-            'basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden': 0.01845403,
-            'basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max': 42.79528,
-            'basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min': 7.193718,
-            'basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max': 243.8239,
-            'basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min': -369.6359,
-            'calving.thickness_calving.threshold': 50,
-            'calving.vonmises_calving.sigma_max': 750000,
-            'climate': 'given_smb',
-            'climate_file': 'DMI-HIRHAM5_ERA_1975_2021_EPSG3413_4500M_DM.nc',
-            'fractures': 'false',
-            'frontal_melt': 'routing',
-            'frontal_melt.routing.parameter_a': 0.0003,
-            'frontal_melt.routing.parameter_b': 0.15,
-            'frontal_melt.routing.power_alpha': 0.39,
-            'frontal_melt.routing.power_beta': 1.18,
-            'hydrology': 'routing',
-            'ocean.models': 'th',
-            'ocean.th.gamma_T': 0.0001,
-            'ocean_file': 'MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc',
-            'prescribed_retreat_file': 'pism_g450m_frontretreat_calfin_1972_2019.nc',
-            'sliding_law': 'pseudo_plastic',
-            'stress_balance.sia.enhancement_factor': 2.608046,
-            'stress_balance.ssa.Glen_exponent': 3.309718
+            "basal_resistance.pseudo_plastic.q": 0.7508221,
+            "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden": 0.01845403,
+            "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max": 42.79528,
+            "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min": 7.193718,
+            "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max": 243.8239,
+            "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min": -369.6359,
+            "calving.thickness_calving.threshold": 50,
+            "calving.vonmises_calving.sigma_max": 750000,
+            "climate": "given_smb",
+            "climate_file": "DMI-HIRHAM5_ERA_1975_2021_EPSG3413_4500M_DM.nc",
+            "fractures": "false",
+            "frontal_melt": "routing",
+            "frontal_melt.routing.parameter_a": 0.0003,
+            "frontal_melt.routing.parameter_b": 0.15,
+            "frontal_melt.routing.power_alpha": 0.39,
+            "frontal_melt.routing.power_beta": 1.18,
+            "hydrology": "routing",
+            "ocean.models": "th",
+            "ocean.th.gamma_T": 0.0001,
+            "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
+            "prescribed_retreat_file": "pism_g450m_frontretreat_calfin_1972_2019.nc",
+            "sliding_law": "pseudo_plastic",
+            "stress_balance.sia.enhancement_factor": 2.608046,
+            "stress_balance.ssa.Glen_exponent": 3.309718,
         },
     },
     "dem": {
@@ -254,7 +254,7 @@ if posterior_file:
     keys = list(set(keys_prior + keys_mc))
     print(f"Prior: {keys_prior}")
     print(f"Posterior: {keys_mc}")
-    
+
     print(keys_prior, keys_mc)
     if len(keys_prior) + len(keys_mc) != len(keys):
         print("Duplicate keys, exciting.")

@@ -290,17 +290,17 @@ def resample_ensemble_by_data(
     id_var : str, optional
         The variable name in `simulated` that identifies each ensemble member, by default "exp_id".
     fudge_factor : float, optional
-        A multiplicative factor applied to the observed standard deviation to widen the likelihood function, 
+        A multiplicative factor applied to the observed standard deviation to widen the likelihood function,
         allowing for greater tolerance in the matching process, by default 3.0.
     n_samples : int, optional
         The number of samples to draw from the simulated ensemble, by default 100.
     obs_mean_var : str, optional
         The variable name in `observed` that represents the mean observed data, by default "mass_balance".
     obs_std_var : str, optional
-        The variable name in `observed` that represents the observed data's standard deviation, 
+        The variable name in `observed` that represents the observed data's standard deviation,
         by default "mass_balance_uncertainty".
     sim_var : str, optional
-        The variable name in `simulated` that represents the simulated data to be resampled, 
+        The variable name in `simulated` that represents the simulated data to be resampled,
         by default "ice_mass".
 
     Returns
@@ -331,7 +331,9 @@ def resample_ensemble_by_data(
     sim = simulated[sim_var]
 
     # Compute the log-likelihood of each simulated data point
-    log_likes = -0.5 * ((sim - obs_mean) / obs_std) ** 2 - np.log(np.sqrt(2 * np.pi) * obs_std)
+    log_likes = -0.5 * ((sim - obs_mean) / obs_std) ** 2 - np.log(
+        np.sqrt(2 * np.pi) * obs_std
+    )
     log_likes = log_likes.sum(dim="time")
 
     # Convert log-likelihoods to weights
@@ -342,6 +344,7 @@ def resample_ensemble_by_data(
     sampled_ids = np.random.choice(sim[id_var].values, size=n_samples, p=weights.values)
 
     return sampled_ids
+
 
 def resample_ensemble_by_data_df(
     observed: pd.DataFrame,

@@ -157,7 +157,7 @@ if __name__ == "__main__":
             m_id = str(m_id_re.group(1))
 
         ds = ds.expand_dims({"ensemble_id": [ensemble_id], "exp_id": [m_id]})
-        
+
         if "ice_mass" in ds:
             ds["ice_mass"] /= 1e12
             ds["ice_mass"].attrs["units"] = "Gt"
@@ -179,13 +179,13 @@ if __name__ == "__main__":
     ds.rio.write_crs(crs, inplace=True)
 
     pism_config = xr.DataArray(
-        [c for c in config.attrs.values()],
+        list(config.attrs.values()),
         dims=["config_axis"],
-        coords={"config_axis": [c for c in config.attrs.keys()]},
+        coords={"config_axis": list(config.attrs.keys())},
         name="config",
     )
     ds = xr.merge([ds, pism_config])
-    
+
     print(f"Size in memory: {(ds.nbytes / 1024**3):.1f} GB")
 
     basins_file = result_dir / f"basins_sums_ensemble_{ensemble_id}_id_{m_id}.nc"

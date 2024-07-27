@@ -19,15 +19,29 @@
 Prepare CALFIN front retreat.
 """
 
-from typing import Union
-import earthaccess
 from pathlib import Path
+from typing import Union
 
-def download_calfin(doi: str = "10.5067/7FILV218JZA2", filter_str: str = "Greenland_polygons", result_dir: Union[Path, str] = "."):
+import earthaccess
+
+
+def download_calfin(
+    doi: str = "10.5067/7FILV218JZA2",
+    filter_str: str = "Greenland_polygons",
+    result_dir: Union[Path, str] = ".",
+):
+    """
+    Download CALFIN.
+    """
     earthaccess.login()
     result = earthaccess.search_data(doi=doi)
-    result_filtered = [granule for granule in result if filter_str in granule["umm"]["DataGranule"]["Identifiers"][0]["Identifier"]]
-    files = earthaccess.download(result_filtered, result_dir)
-    
+    result_filtered = [
+        granule
+        for granule in result
+        if filter_str in granule["umm"]["DataGranule"]["Identifiers"][0]["Identifier"]
+    ]
+    earthaccess.download(result_filtered, result_dir)
+
+
 if __name__ == "__main__":
     download_calfin()

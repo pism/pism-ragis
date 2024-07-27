@@ -31,7 +31,7 @@ import pylab as plt
 import seaborn as sns
 import toml
 import xarray as xr
-
+from dask.distributed import Client, LocalCluster
 from SALib.analyze import delta
 
 from pism_ragis.analysis import resample_ensemble_by_data
@@ -42,6 +42,7 @@ gt2cmsle = 1 / 362.5 / 10.0
 
 
 if __name__ == "__main__":
+    __spec__ = None
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Compute ensemble statistics."
@@ -165,7 +166,7 @@ if __name__ == "__main__":
 
     print("Loading files")
     basins_files = result_dir.glob("basin*.nc")
-    basins_sums = xr.open_mfdataset(basins_files, parallel=True, chunks=None)
+    basins_sums = xr.open_mfdataset(basins_files, parallel=True, chunks="auto")
     basins_sums = basins_sums.sel(ensemble_id="RAGIS").sel(
         time=slice("1980-01-01", "2020-01-01")
     )
@@ -176,7 +177,7 @@ if __name__ == "__main__":
         basins_sums["ice_mass_transport_across_grounding_line"]
         + basins_sums["tendency_of_ice_mass_due_to_basal_mass_flux_grounded"]
     )
-    basins_sums.load()
+    # basins_sums.load()
     print("Done")
 
     def select_experiment(ds, exp_id, n):
@@ -246,6 +247,7 @@ if __name__ == "__main__":
             return "MAR"
         else:
             return "HIRHAM"
+
     def simplify_ocean(my_str: str):
         """
         Simplify ocean
@@ -264,14 +266,17 @@ if __name__ == "__main__":
 
     ragis_resampled = pd.concat(resampled_df)
     ragis_resampled["Ensemble"] = "Posterior"
-    
+
     posterior_df = pd.concat([ragis, ragis_resampled]).rename(columns=params_short_dict)
 
-
     ensemble_df = ragis.drop(columns=["Ensemble", "exp_id"], errors="ignore")
-    climate_dict = {v: k for k,v in enumerate(ensemble_df["surface.given.file"].unique())}
-    ocean_dict = {v: k for k,v in enumerate(ensemble_df["ocean.th.file"].unique())}
-    ensemble_df["surface.given.file"] = ensemble_df["surface.given.file"].map(climate_dict)
+    climate_dict = {
+        v: k for k, v in enumerate(ensemble_df["surface.given.file"].unique())
+    }
+    ocean_dict = {v: k for k, v in enumerate(ensemble_df["ocean.th.file"].unique())}
+    ensemble_df["surface.given.file"] = ensemble_df["surface.given.file"].map(
+        climate_dict
+    )
     ensemble_df["ocean.th.file"] = ensemble_df["ocean.th.file"].map(ocean_dict)
     problem = {
         "num_vars": len(ensemble_df.columns),
@@ -281,18 +286,45 @@ if __name__ == "__main__":
             ensemble_df.max().values,
         ),  # Parameter bounds
     }
-    def get_delta(ds, k, problem, ensemble_df):
-        response_matrix = ds.sel(basin="GIS").isel(time=k).ice_mass.to_numpy()
-        print(response_matrix)
+
+    def get_delta(response, problem, ensemble_df):
+        """
+        Perform SALib delta analysis.
+        """
         delta_analysis = delta.analyze(
-                problem,
-                ensemble_df.values,
-                response_matrix,
-                num_resamples=10,
-                seed=0,
-                print_to_console=False,
-            )
+            problem,
+            ensemble_df.values,
+            response,
+            num_resamples=10,
+            seed=0,
+            print_to_console=False,
+        )
         return xr.Dataset.from_dataframe(delta_analysis.to_df())
+
+    to_analyze = basins_sums.sel(time=slice("1980-01-01", "1990-01-01"))
+    print("Calculating Sensitivity Indices")
+    cluster = LocalCluster(n_workers=4, threads_per_worker=1)
+    with Client(cluster, asynchronous=True) as client:
+        print(f"Open client in browser: {client.dashboard_link}")
+        dim = "time"
+        all_delta_indices = []
+        for response_var in ["ice_mass", "ice_mass_transport_across_grounding_line"]:
+            responses = to_analyze.sel(basin="GIS")[response_var]
+            responses_scattered = client.scatter(
+                [responses.isel(time=k).to_numpy() for k in range(len(responses[dim]))]
+            )
+
+            futures = client.map(
+                get_delta, responses_scattered, problem=problem, ensemble_df=ensemble_df
+            )
+            result = client.gather(futures)
+
+            delta_indices = xr.concat([r.expand_dims(dim) for r in result], dim=dim)
+            delta_indices[dim] = responses[dim]
+            delta_indices.expand_dims("name", axis=1)
+            delta_indices["responses"] = [response_var]
+            all_delta_indices.append(delta_indices)
+        all_delta_indices = xr.concat(all_delta_indices, dim="name")
 
     plt.rcParams["font.size"] = 6
     obs_cmap = sns.color_palette("crest", n_colors=4)
@@ -340,10 +372,17 @@ if __name__ == "__main__":
     sim_lines: List = []
     sim_alpha = 0.5
 
-    gris = basins_sums.sel(basin="GIS").drop_vars("config").rolling(time=13).mean()
+    gris = (
+        basins_sums.chunk({"exp_id": -1})
+        .sel(basin="GIS")
+        .drop_vars("config")
+        .rolling(time=13)
+        .mean()
+    )
     gris["ensemble_id"] = "Prior"
     gris_resampled = (
         basins_sums_resampled.sel(basin="GIS")
+        .chunk({"exp_id": -1})
         .drop_vars("config")
         .rolling(time=13)
         .mean()
