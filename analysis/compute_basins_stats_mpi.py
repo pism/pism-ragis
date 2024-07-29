@@ -233,9 +233,18 @@ if __name__ == "__main__":
         bmb_floating_da.name = "tendency_of_ice_mass_due_to_basal_mass_flux_floating"
         ds = xr.merge([ds, bmb_grounded_da, bmb_floating_da])
 
+    config = ds["pism_config"]
     ds = ds[mb_vars]
     ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
     ds.rio.write_crs(crs, inplace=True)
+
+    pism_config = xr.DataArray(
+        list(config.attrs.values()),
+        dims=["config_axis"],
+        coords={"config_axis": list(config.attrs.keys())},
+        name="config",
+    )
+    ds = xr.merge([ds, pism_config])
 
     print(f"Size in memory: {(ds.nbytes / 1024**3):.1f} GB")
 
@@ -254,9 +263,6 @@ if __name__ == "__main__":
         futures = client.map(compute_basin, basins_ds_scattered, basin_names)
         progress(futures)
         basin_sums = xr.concat(client.gather(futures), dim="basin")
-        gris_sums = basin_sums.sum(dim="basin").expand_dims("basin")
-        gris_sums["basin"] = ["GIS"]
-        basin_sums = xr.concat([basin_sums, gris_sums], dim="basin")
         basin_sums.to_netcdf(basins_file)
 
         end = time.time()

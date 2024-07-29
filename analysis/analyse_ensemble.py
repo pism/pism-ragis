@@ -22,8 +22,8 @@ Analyze RAGIS ensemble
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from importlib.resources import files
 from pathlib import Path
-from typing import List
 
+import dask
 import geopandas as gp
 import numpy as np
 import pandas as pd
@@ -31,7 +31,7 @@ import pylab as plt
 import seaborn as sns
 import toml
 import xarray as xr
-from dask.distributed import Client, LocalCluster
+from dask.distributed import Client, LocalCluster, progress
 from SALib.analyze import delta
 
 from pism_ragis.analysis import resample_ensemble_by_data
@@ -166,171 +166,228 @@ if __name__ == "__main__":
 
     print("Loading files")
     basins_files = result_dir.glob("basin*.nc")
-    basins_sums = xr.open_mfdataset(basins_files, parallel=True, chunks="auto")
-    basins_sums = basins_sums.sel(ensemble_id="RAGIS").sel(
-        time=slice("1980-01-01", "2020-01-01")
-    )
-    basins_sums[sim_mass_cumulative_varname] -= basins_sums.sel(
-        time=f"{reference_year}-01-01", method="nearest"
-    )[sim_mass_cumulative_varname]
-    basins_sums[sim_discharge_flux_varname] = (
-        basins_sums["ice_mass_transport_across_grounding_line"]
-        + basins_sums["tendency_of_ice_mass_due_to_basal_mass_flux_grounded"]
-    )
-    # basins_sums.load()
-    print("Done")
-
-    def select_experiment(ds, exp_id, n):
-        """
-        Reset the experiment id.
-        """
-        exp = ds.sel(exp_id=exp_id)
-        exp["exp_id"] = n
-        return exp
-
-    print("Particle Filtering")
-    observed = imbie_2021
-    simulated = basins_sums.sel(basin="GIS")
-    resampled_ensemble = resample_ensemble_by_data(
-        observed, simulated, fudge_factor=25, n_samples=len(simulated.exp_id)
-    )
-    basins_sums_resampled = xr.concat(
-        [
-            select_experiment(basins_sums, exp_id, k)
-            for k, exp_id in enumerate(resampled_ensemble)
-        ],
-        dim="exp_id",
-    )
-    print("Done")
-
-    config = basins_sums.sel(basin="GIS").sel(config_axis=params).config
-    uq_df = config.to_dataframe()
-
-    def transpose_dataframe(df, exp_id):
-        """
-        Transpose dataframe.
-        """
-        param_names = df["config_axis"]
-        df = df[["config"]].T
-        df.columns = param_names
-        df["exp_id"] = exp_id
-        return df
-
-    ragis = pd.concat(
-        [
-            transpose_dataframe(df, exp_id)
-            for exp_id, df in uq_df.reset_index().groupby(by="exp_id")
-        ]
-    ).reset_index(drop=True)
-
-    def simplify(my_str: str) -> str:
-        """
-        Simplify string
-        """
-        return Path(my_str).name
-
-    # Function to convert column to float if possible
-    def convert_column_to_float(column):
-        """
-        Convert column to numeric if possible.
-        """
-        try:
-            return pd.to_numeric(column, errors="raise")
-        except ValueError:
-            return column
-
-    def simplify_climate(my_str: str):
-        """
-        Simplify climate
-        """
-        if "MAR" in my_str:
-            return "MAR"
-        else:
-            return "HIRHAM"
-
-    def simplify_ocean(my_str: str):
-        """
-        Simplify ocean
-        """
-        return "-".join(my_str.split("_")[1:2])
-
-    # Apply the conversion function to each column
-    ragis = ragis.apply(convert_column_to_float)
-    for col in ["surface.given.file", "ocean.th.file"]:
-        ragis[col] = ragis[col].apply(simplify)
-    ragis["surface.given.file"] = ragis["surface.given.file"].apply(simplify_climate)
-    ragis["ocean.th.file"] = ragis["ocean.th.file"].apply(simplify_ocean)
-
-    ragis["Ensemble"] = "Prior"
-    resampled_df = [ragis[ragis["exp_id"] == k] for k in resampled_ensemble]
-
-    ragis_resampled = pd.concat(resampled_df)
-    ragis_resampled["Ensemble"] = "Posterior"
-
-    posterior_df = pd.concat([ragis, ragis_resampled]).rename(columns=params_short_dict)
-
-    ensemble_df = ragis.drop(columns=["Ensemble", "exp_id"], errors="ignore")
-    climate_dict = {
-        v: k for k, v in enumerate(ensemble_df["surface.given.file"].unique())
-    }
-    ocean_dict = {v: k for k, v in enumerate(ensemble_df["ocean.th.file"].unique())}
-    ensemble_df["surface.given.file"] = ensemble_df["surface.given.file"].map(
-        climate_dict
-    )
-    ensemble_df["ocean.th.file"] = ensemble_df["ocean.th.file"].map(ocean_dict)
-    problem = {
-        "num_vars": len(ensemble_df.columns),
-        "names": ensemble_df.columns,  # Parameter names
-        "bounds": zip(
-            ensemble_df.min().values,
-            ensemble_df.max().values,
-        ),  # Parameter bounds
-    }
-
-    def get_delta(response, problem, ensemble_df):
-        """
-        Perform SALib delta analysis.
-        """
-        delta_analysis = delta.analyze(
-            problem,
-            ensemble_df.values,
-            response,
-            num_resamples=10,
-            seed=0,
-            print_to_console=False,
+    with dask.config.set(**{"array.slicing.split_large_chunks": True}):
+        basins_sums = xr.open_mfdataset(basins_files, parallel=True, chunks="auto")
+        if "time" in basins_sums["config"].coords:
+            basins_sums["config"] = basins_sums["config"].isel(time=0).drop_vars("time")
+        basins_sums = basins_sums.sel(ensemble_id="RAGIS").sel(
+            time=slice("1980-01-01", "2020-01-01")
         )
-        return xr.Dataset.from_dataframe(delta_analysis.to_df())
+        basins_sums[sim_mass_cumulative_varname] -= basins_sums.sel(
+            time=f"{reference_year}-01-01", method="nearest"
+        )[sim_mass_cumulative_varname]
+        basins_sums[sim_discharge_flux_varname] = (
+            basins_sums["ice_mass_transport_across_grounding_line"]
+            + basins_sums["tendency_of_ice_mass_due_to_basal_mass_flux_grounded"]
+        )
+        # basins_sums.load()
+        print("Done")
 
-    to_analyze = basins_sums.sel(time=slice("1980-01-01", "1990-01-01"))
-    print("Calculating Sensitivity Indices")
-    cluster = LocalCluster(n_workers=4, threads_per_worker=1)
-    with Client(cluster, asynchronous=True) as client:
-        print(f"Open client in browser: {client.dashboard_link}")
-        dim = "time"
-        all_delta_indices = []
-        for response_var in ["ice_mass", "ice_mass_transport_across_grounding_line"]:
-            responses = to_analyze.sel(basin="GIS")[response_var]
-            responses_scattered = client.scatter(
-                [responses.isel(time=k).to_numpy() for k in range(len(responses[dim]))]
+        def select_experiment(ds, exp_id, n):
+            """
+            Reset the experiment id.
+            """
+            exp = ds.sel(exp_id=exp_id)
+            exp["exp_id"] = n
+            return exp
+
+        print("Particle Filtering")
+
+        observed = imbie
+        simulated = basins_sums.sel(basin="GIS").rolling(time=13).mean()
+        simulated_resampled_all = {}
+        for obs_mean_var, obs_std_var, sim_var in zip(
+            ["mass_balance", "ice_discharge"],
+            ["mass_balance_uncertainty", "ice_discharge_uncertainty"],
+            ["ice_mass", "ice_mass_transport_across_grounding_line"],
+        ):
+            print(obs_mean_var)
+            resampled_ensemble = resample_ensemble_by_data(
+                observed,
+                simulated,
+                fudge_factor=3,
+                n_samples=len(simulated.exp_id),
+                obs_mean_var=obs_mean_var,
+                obs_std_var=obs_std_var,
+                sim_var=sim_var,
             )
-
-            futures = client.map(
-                get_delta, responses_scattered, problem=problem, ensemble_df=ensemble_df
+            simulated_resampled = xr.concat(
+                [
+                    select_experiment(simulated, exp_id, k)
+                    for k, exp_id in enumerate(resampled_ensemble)
+                ],
+                dim="exp_id",
             )
-            result = client.gather(futures)
+            simulated_resampled_all[obs_mean_var] = simulated_resampled
+            print(resampled_ensemble)
 
-            delta_indices = xr.concat([r.expand_dims(dim) for r in result], dim=dim)
-            delta_indices[dim] = responses[dim]
-            delta_indices.expand_dims("name", axis=1)
-            delta_indices["responses"] = [response_var]
-            all_delta_indices.append(delta_indices)
-        all_delta_indices = xr.concat(all_delta_indices, dim="name")
+        observed = imbie_2021
+        simulated = basins_sums.sel(basin="GIS").rolling(time=13).mean()
+        resampled_ensemble = resample_ensemble_by_data(
+            observed, simulated, fudge_factor=3, n_samples=len(simulated.exp_id)
+        )
+        simulated_resampled = xr.concat(
+            [
+                select_experiment(simulated, exp_id, k)
+                for k, exp_id in enumerate(resampled_ensemble)
+            ],
+            dim="exp_id",
+        )
+        print("Done")
+
+        config = basins_sums.sel(basin="GIS").sel(config_axis=params).config
+        uq_df = config.to_dataframe()
+
+        def transpose_dataframe(df, exp_id):
+            """
+            Transpose dataframe.
+            """
+            param_names = df["config_axis"]
+            df = df[["config"]].T
+            df.columns = param_names
+            df["exp_id"] = exp_id
+            return df
+
+        ragis = pd.concat(
+            [
+                transpose_dataframe(df, exp_id)
+                for exp_id, df in uq_df.reset_index().groupby(by="exp_id")
+            ]
+        ).reset_index(drop=True)
+
+        def simplify(my_str: str) -> str:
+            """
+            Simplify string
+            """
+            return Path(my_str).name
+
+        # Function to convert column to float if possible
+        def convert_column_to_float(column):
+            """
+            Convert column to numeric if possible.
+            """
+            try:
+                return pd.to_numeric(column, errors="raise")
+            except ValueError:
+                return column
+
+        def simplify_climate(my_str: str):
+            """
+            Simplify climate
+            """
+            if "MAR" in my_str:
+                return "MAR"
+            else:
+                return "HIRHAM"
+
+        def simplify_ocean(my_str: str):
+            """
+            Simplify ocean
+            """
+            return "-".join(my_str.split("_")[1:2])
+
+        # Apply the conversion function to each column
+        ragis = ragis.apply(convert_column_to_float)
+        for col in ["surface.given.file", "ocean.th.file"]:
+            ragis[col] = ragis[col].apply(simplify)
+        ragis["surface.given.file"] = ragis["surface.given.file"].apply(
+            simplify_climate
+        )
+        ragis["ocean.th.file"] = ragis["ocean.th.file"].apply(simplify_ocean)
+
+        ragis["Ensemble"] = "Prior"
+        resampled_df = [ragis[ragis["exp_id"] == k] for k in resampled_ensemble]
+
+        ragis_resampled = pd.concat(resampled_df)
+        ragis_resampled["Ensemble"] = "Posterior"
+
+        posterior_df = pd.concat([ragis, ragis_resampled]).rename(
+            columns=params_short_dict
+        )
+
+        ensemble_df = ragis.drop(columns=["Ensemble", "exp_id"], errors="ignore")
+        climate_dict = {
+            v: k for k, v in enumerate(ensemble_df["surface.given.file"].unique())
+        }
+        ocean_dict = {v: k for k, v in enumerate(ensemble_df["ocean.th.file"].unique())}
+        ensemble_df["surface.given.file"] = ensemble_df["surface.given.file"].map(
+            climate_dict
+        )
+        ensemble_df["ocean.th.file"] = ensemble_df["ocean.th.file"].map(ocean_dict)
+        problem = {
+            "num_vars": len(ensemble_df.columns),
+            "names": ensemble_df.columns,  # Parameter names
+            "bounds": zip(
+                ensemble_df.min().values,
+                ensemble_df.max().values,
+            ),  # Parameter bounds
+        }
+
+        def get_delta(response, problem, ensemble_df):
+            """
+            Perform SALib delta analysis.
+            """
+            try:
+                delta_analysis = delta.analyze(
+                    problem,
+                    ensemble_df.values,
+                    response,
+                    num_resamples=10,
+                    seed=0,
+                    print_to_console=False,
+                )
+                df = delta_analysis.to_df()
+            except:
+                delta_analysis = {
+                    key: np.empty(problem["num_vars"]) + np.nan
+                    for key in ["delta", "delta_conf", "S1", "S1_conf"]
+                }
+                df = pd.DataFrame.from_dict(delta_analysis)
+                df["config_axis"] = problem["names"]
+                df.set_index("config_axis", inplace=True)
+            return xr.Dataset.from_dataframe(df)
+
+        to_analyze = basins_sums.sel(time=slice("1980-01-01", "2020-01-01"))
+        print("Calculating Sensitivity Indices")
+        cluster = LocalCluster(n_workers=4, threads_per_worker=1)
+        with Client(cluster, asynchronous=True) as client:
+            print(f"Open client in browser: {client.dashboard_link}")
+            dim = "time"
+            all_delta_indices = []
+            for response_var in [
+                "ice_mass",
+                "ice_mass_transport_across_grounding_line",
+            ]:
+                responses = to_analyze.sel(basin="GIS")[response_var]
+                responses_scattered = client.scatter(
+                    [
+                        responses.isel(time=k).to_numpy()
+                        for k in range(len(responses[dim]))
+                    ]
+                )
+
+                futures = client.map(
+                    get_delta,
+                    responses_scattered,
+                    problem=problem,
+                    ensemble_df=ensemble_df,
+                )
+                progress(futures)
+                result = client.gather(futures)
+
+                delta_indices = xr.concat([r.expand_dims(dim) for r in result], dim=dim)
+                delta_indices[dim] = responses[dim]
+                delta_indices.expand_dims("name", axis=1)
+                delta_indices["name"] = [response_var]
+                all_delta_indices.append(delta_indices)
+            all_delta_indices = xr.concat(all_delta_indices, dim="name")
 
     plt.rcParams["font.size"] = 6
     obs_cmap = sns.color_palette("crest", n_colors=4)
     obs_cmap = ["0.4", "0.0", "0.6", "0.0"]
     sim_cmap = sns.color_palette("flare", n_colors=4)
     hist_cmap = ["#a6cee3", "#1f78b4", "#b2df8a", "#33a02c"]
+    hist_cmap = ["#a6cee3", "#1f78b4"]
 
     n_params = len(params_short_dict)
     fig, axs = plt.subplots(
@@ -367,25 +424,12 @@ if __name__ == "__main__":
         3, 1, sharex=True, figsize=(6.2, 4.2), height_ratios=[2, 1, 1]
     )
 
-    sim_labels: List = []
-    exp_labels = ["Forced Retreat", "Control"]
-    sim_lines: List = []
     sim_alpha = 0.5
 
-    gris = (
-        basins_sums.chunk({"exp_id": -1})
-        .sel(basin="GIS")
-        .drop_vars("config")
-        .rolling(time=13)
-        .mean()
-    )
+    gris = simulated.load().drop_vars("config").rolling(time=13).mean()
     gris["ensemble_id"] = "Prior"
     gris_resampled = (
-        basins_sums_resampled.sel(basin="GIS")
-        .chunk({"exp_id": -1})
-        .drop_vars("config")
-        .rolling(time=13)
-        .mean()
+        simulated_resampled.load().drop_vars("config").rolling(time=13).mean()
     )
     gris_resampled["ensemble_id"] = "Posterior"
 
@@ -449,16 +493,19 @@ if __name__ == "__main__":
     sim_cis = []
     quantiles = {}
     for q in [0.16, 0.5, 0.84]:
-        quantiles[q] = gris.drop_vars("config").quantile(q, dim="exp_id", skipna=False)
+        quantiles[q] = gris.drop_vars("config").quantile(q, dim="exp_id", skipna=True)
 
     for k, m_var in enumerate(
         [sim_mass_cumulative_varname, sim_discharge_flux_varname, sim_smb_flux_varname]
     ):
+        gris[m_var].plot(
+            hue="exp_id", color=sim_cmap[1], ax=axs[k], lw=0.2, add_legend=False
+        )
         sim_ci = axs[k].fill_between(
             quantiles[0.5].time,
             quantiles[0.16][m_var],
             quantiles[0.84][m_var],
-            alpha=0.3,
+            alpha=0.5,
             color=sim_cmap[1],
             label=gris["ensemble_id"].values,
             lw=0,
@@ -468,7 +515,7 @@ if __name__ == "__main__":
     quantiles = {}
     for q in [0.16, 0.5, 0.84]:
         quantiles[q] = gris_resampled.drop_vars("config").quantile(
-            q, dim="exp_id", skipna=False
+            q, dim="exp_id", skipna=True
         )
 
     for k, m_var in enumerate(
@@ -478,7 +525,7 @@ if __name__ == "__main__":
             quantiles[0.5].time,
             quantiles[0.16][m_var],
             quantiles[0.84][m_var],
-            alpha=0.3,
+            alpha=0.5,
             color=sim_cmap[3],
             label=gris_resampled["ensemble_id"].values,
             lw=0,
@@ -501,7 +548,7 @@ if __name__ == "__main__":
     axs[0].add_artist(legend_obs)
     axs[0].add_artist(legend_sim)
 
-    # axs[0].set_ylim(-6000, 1500)
+    axs[0].set_ylim(-6000, 3000)
     axs[1].set_ylim(-750, 0)
     axs[2].set_ylim(0, 750)
     axs[0].xaxis.set_tick_params(labelbottom=False)

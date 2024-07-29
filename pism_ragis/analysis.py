@@ -332,12 +332,11 @@ def resample_ensemble_by_data(
 
     # Compute the log-likelihood of each simulated data point
     log_likes = -0.5 * ((sim - obs_mean) / obs_std) ** 2 - np.log(
-        np.sqrt(2 * np.pi) * obs_std
+        np.sqrt(2 * np.pi) * obs_std**2
     )
-    log_likes = log_likes.sum(dim="time")
-
+    log_likes_sum = log_likes.sum(dim="time")
     # Convert log-likelihoods to weights
-    weights = np.exp(log_likes - log_likes.max())
+    weights = np.exp((log_likes_sum - log_likes_sum.mean()))
     weights /= weights.sum()
 
     # Draw samples based on the computed weights
