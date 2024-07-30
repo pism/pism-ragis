@@ -150,6 +150,15 @@ def load_ensemble(
         return ds
 
 
+def select_experiment(ds, exp_id, n):
+    """
+    Reset the experiment id.
+    """
+    exp = ds.sel(exp_id=exp_id)
+    exp["exp_id"] = n
+    return exp
+
+
 def simplify(my_str: str) -> str:
     """
     Simplify string
@@ -301,36 +310,14 @@ if __name__ == "__main__":
 
     comp = {"zlib": True, "complevel": 2}
 
-    def select_experiment(ds, exp_id, n):
-        """
-        Reset the experiment id.
-        """
-        exp = ds.sel(exp_id=exp_id)
-        exp["exp_id"] = n
-        return exp
-
     flux_vars = ragis_config["Flux Variables"]
     flux_uncertainty_vars = {
         k + "_uncertainty": v + "_uncertainty" for k, v in flux_vars.items()
     }
 
     observed = imbie
-    simulated = ds.sel(basin="GIS", ensemble_id="RAGIS").rolling(time=13).mean()
+    simulated = ds.sel(basin="GIS", ensemble_id="RAGIS")
     simulated["ensemble_id"] = "Prior"
-
-    # observed_days_in_month = observed["time"].dt.days_in_month
-    # observed_wgts = (
-    #     observed_days_in_month.groupby("time.year")
-    #     / observed_days_in_month.groupby("time.year").sum()
-    # )
-    # observed_sum = (observed * observed_wgts).resample(time="YS").sum(dim="time")
-
-    # simulated_days_in_month = simulated["time"].dt.days_in_month
-    # simulated_wgts = (
-    #     simulated_days_in_month.groupby("time.year")
-    #     / simulated_days_in_month.groupby("time.year").sum()
-    # )
-    # simulated_sum = (simulated * simulated_wgts).resample(time="YS").sum(dim="time")
 
     # Apply the conversion function to each column
     ragis = ragis.apply(convert_column_to_float)
@@ -648,3 +635,17 @@ if __name__ == "__main__":
             delta_indices["name"] = [response_var]
             all_delta_indices.append(delta_indices)
         all_delta_indices = xr.concat(all_delta_indices, dim="name")
+
+    # observed_days_in_month = observed["time"].dt.days_in_month
+    # observed_wgts = (
+    #     observed_days_in_month.groupby("time.year")
+    #     / observed_days_in_month.groupby("time.year").sum()
+    # )
+    # observed_sum = (observed * observed_wgts).resample(time="YS").sum(dim="time")
+
+    # simulated_days_in_month = simulated["time"].dt.days_in_month
+    # simulated_wgts = (
+    #     simulated_days_in_month.groupby("time.year")
+    #     / simulated_days_in_month.groupby("time.year").sum()
+    # )
+    # simulated_sum = (simulated * simulated_wgts).resample(time="YS").sum(dim="time")

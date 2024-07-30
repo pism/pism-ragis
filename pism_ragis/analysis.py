@@ -316,11 +316,18 @@ def resample_ensemble_by_data(
     the fudge factor). This method allows for the incorporation of observational uncertainty into the ensemble
     selection process.
     """
+
+    # Interpolate simulated data to match the observed data's calendar
+    # Note: This needs to happen before selecting the time slice to avoid nans.
+    simulated = simulated.interp_like(observed, method="linear")
+
     # Select the observed and simulated data within the specified date range
     observed = observed.sel(time=slice(start_date, end_date))
     simulated = simulated.sel(time=slice(start_date, end_date))
 
-    # Interpolate simulated data to match the observed data's calendar
+    observed = observed.sel(time=slice(start_date, end_date))
+    simulated = simulated.sel(time=slice(start_date, end_date))
+
     simulated = simulated.interp_like(observed, method="nearest")
 
     # Calculate the observed mean and adjusted standard deviation
@@ -328,8 +335,7 @@ def resample_ensemble_by_data(
     obs_std = fudge_factor * observed[obs_std_var]
 
     # Extract the simulated data
-    sim = simulated[sim_var]
-
+    sim = simulated[sim_var].dropna(dim="exp_id")
     # Compute the log-likelihood of each simulated data point
     n = len(obs_mean["time"])
     log_likes = -0.5 * ((sim - obs_mean) / obs_std) ** 2 - n * 0.5 * np.log(
@@ -337,6 +343,7 @@ def resample_ensemble_by_data(
     )
     log_likes_sum = log_likes.sum(dim="time")
     log_likes_scaled = log_likes_sum - log_likes_sum.mean()
+
     # Convert log-likelihoods to weights
     weights = np.exp(log_likes_scaled)
     weights /= weights.sum()

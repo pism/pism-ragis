@@ -163,6 +163,9 @@ spatial_ts_vars["ragis"] = [
     "thk",
     "usurf",
     "velsurf_mag",
+    "tendency_of_ice_mass_due_to_calving",
+    "tendency_of_ice_mass_due_to_frontal_melt",
+    "tendency_of_ice_mass_due_to_forced_retreat",
 ]
 
 spatial_ts_vars["dem"] = [
