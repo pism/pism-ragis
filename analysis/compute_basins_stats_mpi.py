@@ -25,10 +25,10 @@ import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from pathlib import Path
 from typing import Any, Dict, List, Union
+import re
 
 import dask
 import geopandas as gp
-import toml
 import xarray as xr
 from dask.distributed import Client, progress
 from dask_mpi import initialize
@@ -62,78 +62,15 @@ def compute_basin(ds: xr.Dataset, name: str) -> xr.Dataset:
     return ds.compute()
 
 
-def load_experiments(
-    experiments: List[Dict[str, Any]],
-    data_type: str = "spatial",
-    engine: str = "h5netcdf",
-    chunks: Union[None, dict, str] = None,
-    temporal_range: Union[None, List[str]] = None,
-) -> xr.Dataset:
-    """
-    Load experiments from multiple netCDF files and concatenate them into a single xarray Dataset.
-
-    Parameters
-    ----------
-    experiments : list of dict
-        A list of dictionaries, each containing the details of an experiment.
-    data_type : str, optional
-        The type of data to load, by default "spatial".
-    engine : str, optional
-        The engine to use for reading the files, by default "h5netcdf".
-    chunks : None, dict, or str, optional
-        Chunking sizes to use for dask, by default None.
-    temporal_range : None or list of str, optional
-        The temporal range to select from the data, by default None.
-
-    Returns
-    -------
-    xr.Dataset
-        The concatenated dataset.
-
-    Examples
-    --------
-    >>> experiments = [{'proj_dir': 'proj1', 'spatial_dir': 'spatial1', 'resolution': 'res1', 'ensemble_id': 'ens1'}]
-    >>> load_experiments(experiments)
-    """
-
-    dss = []
-    for exp in experiments:
-        url = ensemble_dir / Path(exp["proj_dir"]) / Path(exp[f"{data_type}_dir"])
-        urls = url.glob(f"""*_gris_g{exp["resolution"]}m*.nc""")
-        ds = xr.open_mfdataset(
-            urls,
-            preprocess=preprocess_nc,
-            concat_dim="exp_id",
-            combine="nested",
-            engine=engine,
-            parallel=True,
-            chunks=chunks,
-        )
-        if "ice_mass" in ds:
-            ds["ice_mass"] /= 1e12
-            ds["ice_mass"].attrs["units"] = "Gt"
-
-        ds.expand_dims("ensemble_id")
-        ds["ensemble_id"] = exp["ensemble_id"]
-        dss.append(ds)
-
-    ds = xr.concat(dss, dim="ensemble_id")
-    if temporal_range:
-        return ds.sel(time=slice(*options.temporal_range))
-
-    else:
-        return ds
-
-
 if __name__ == "__main__":
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Compute ensemble statistics."
     parser.add_argument(
-        "--ensemble_dir",
-        help="""Base directory of ensemble.""",
+        "--ensemble_id",
+        help="""Name of the ensemble. Default=RAGIS.""",
         type=str,
-        default="/mnt/storstrommen/ragis/data/pism",
+        default="RAGIS",
     )
     parser.add_argument(
         "--result_dir",
@@ -145,7 +82,7 @@ if __name__ == "__main__":
         "--basin_url",
         help="""Basin shapefile.""",
         type=str,
-        default="data/mouginot/Greenland_Basins_PS_v1.4.2_w_shelves.gpkg",
+        default="data/imbie/GRE_Basins_IMBIE2_v1.3_w_shelves.gpkg",
     )
     parser.add_argument(
         "--temporal_range",
@@ -167,41 +104,22 @@ if __name__ == "__main__":
         default="16GB",
     )
     parser.add_argument(
-        "--notebook",
-        help="""Do not use distributed Client.""",
-        action="store_true",
-        default=False,
-    )
-    parser.add_argument(
         "--n_jobs", help="""Number of parallel jobs.""", type=int, default=4
     )
-    parser.add_argument(
-        "PROJECTFILES", nargs="*", help="Project files in toml", default=None
-    )
+    parser.add_argument("FILE", nargs=1, help="netCDF file to process", default=None)
 
     options = parser.parse_args()
     crs = options.crs
     n_jobs = options.n_jobs
 
-    project_files = [Path(f) for f in options.PROJECTFILES]
-    project_experiments = [toml.load(f) for f in project_files]
+    ensemble_id = options.ensemble_id
 
-    ensemble_dir = Path(options.ensemble_dir)
-    assert ensemble_dir.exists()
     result_dir = Path(options.result_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
-
-    fig_dir = result_dir / "figures"
-    fig_dir.mkdir(exist_ok=True)
 
     # Load basins, merge all ICE_CAP geometries
     basin_url = Path(options.basin_url)
     basins = gp.read_file(basin_url).to_crs(crs)
-    # if "SUBREGION1" in basins:
-    #     ice_sheet = basins[basins["SUBREGION1"] != "ICE_CAP"]
-    #     ice_caps = basins[basins["SUBREGION1"] == "ICE_CAP"].unary_union
-    #     ice_caps = gp.GeoDataFrame(pd.DataFrame(data=["ICE_CAP"], columns=["SUBREGION1"]), geometry=[ice_caps], crs=basins.crs)
-    #     basins = pd.concat([ice_sheet, ice_caps]).reset_index(drop=True)
 
     mb_vars = [
         "ice_mass",
@@ -215,15 +133,29 @@ if __name__ == "__main__":
         "tendency_of_ice_mass_due_to_conservation_error",
         "tendency_of_ice_mass_due_to_flow",
     ]
+    regexp: str = "id_(.+?)_"
 
-    project_chunks = "auto"
     with dask.config.set(**{"array.slicing.split_large_chunks": True}):
-        ds = load_experiments(
-            project_experiments,
-            data_type="spatial",
-            chunks=project_chunks,
-            temporal_range=options.temporal_range,
+        ds = xr.open_dataset(
+            options.FILE[-1],
+            chunks="auto",
         )
+        m_id_re = re.search(regexp, ds.encoding["source"])
+        assert m_id_re is not None
+        m_id: Union[str, int]
+        try:
+            m_id = int(m_id_re.group(1))
+        except:
+            m_id = str(m_id_re.group(1))
+
+        ds = ds.expand_dims({"ensemble_id": [ensemble_id], "exp_id": [m_id]})
+
+        if "ice_mass" in ds:
+            ds["ice_mass"] /= 1e12
+            ds["ice_mass"].attrs["units"] = "Gt"
+
+        if options.temporal_range:
+            ds = ds.sel(time=slice(options.temporal_range))
 
     bmb_var = "tendency_of_ice_mass_due_to_basal_mass_flux"
     if bmb_var in ds:
@@ -248,7 +180,7 @@ if __name__ == "__main__":
 
     print(f"Size in memory: {(ds.nbytes / 1024**3):.1f} GB")
 
-    basins_file = result_dir / "basins_sums.nc"
+    basins_file = result_dir / f"basins_sums_ensemble_{ensemble_id}_id_{m_id}.nc"
 
     initialize(nthreads=options.n_jobs)
     with Client() as client:
