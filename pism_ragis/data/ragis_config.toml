@@ -16,3 +16,22 @@
 'basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max' = '$\phi_{\mathrm{max}}$'
 'basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min' = '$z_{\mathrm{min}}$'
 'basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max' = '$z_{\mathrm{min}}$'
+
+['Flux Variables']
+
+mass_flux = "mass_balance"
+discharge_flux = "ice_discharge"
+smb_flux = "surface_mass_balance"
+
+['Cumulative Variables']
+
+mass_cumulative = "cumulative_mass_balance"
+discharge_cumulative = "cumulative_ice_discharge"
+smb_cumulative = "cumulative_surface_mass_balance"
+
+[PISM]
+
+ice_mass = "cumulative_mass_balance"
+ice_mass_transport_across_grounding_line = "ice_discharge"
+tendency_of_ice_mass_due_to_surface_mass_flux = "surface_mass_balance"
+tendency_of_ice_mass = "mass_balance"
