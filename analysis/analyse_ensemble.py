@@ -22,9 +22,9 @@ Analyze RAGIS ensemble
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from importlib.resources import files
 from pathlib import Path
+from typing import Any, Hashable, Mapping
 
 import dask
-import geopandas as gp
 import numpy as np
 import pandas as pd
 import pylab as plt
@@ -37,8 +37,162 @@ from SALib.analyze import delta
 from pism_ragis.analysis import resample_ensemble_by_data
 from pism_ragis.observations import load_imbie, load_imbie_2021, load_mouginot
 
-kg2cmsle = 1 / 1e12 * 1.0 / 362.5 / 10.0
-gt2cmsle = 1 / 362.5 / 10.0
+
+def normalize_cumulative_variables(
+    ds: xr.Dataset, cumulative_variables, reference_year: int = 1992
+) -> xr.Dataset:
+    """
+    Normalize cumulative variables in an xarray Dataset by subtracting their values at a reference year.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        The xarray Dataset containing the cumulative variables to be normalized.
+    cumulative_variables : str or list of str
+        The name(s) of the cumulative variables to be normalized.
+    reference_year : int, optional
+        The reference year to use for normalization. Default is 1992.
+
+    Returns
+    -------
+    xr.Dataset
+        The xarray Dataset with normalized cumulative variables.
+
+    Examples
+    --------
+    >>> import xarray as xr
+    >>> import pandas as pd
+    >>> time = pd.date_range("1990-01-01", "1995-01-01", freq="A")
+    >>> data = xr.Dataset({
+    ...     "cumulative_var": ("time", [10, 20, 30, 40, 50, 60]),
+    ... }, coords={"time": time})
+    >>> normalize_cumulative_variables(data, "cumulative_var", reference_year=1992)
+    <xarray.Dataset>
+    Dimensions:         (time: 6)
+    Coordinates:
+      * time            (time) datetime64[ns] 1990-12-31 1991-12-31 ... 1995-12-31
+    Data variables:
+        cumulative_var  (time) int64 0 10 20 30 40 50
+    """
+    ds[cumulative_variables] -= ds[cumulative_variables].sel(
+        time=f"{reference_year}-01-01", method="nearest"
+    )
+    return ds
+
+
+def standarize_variable_names(
+    ds: xr.Dataset, name_dict: Mapping[Any, Hashable] | None
+) -> xr.Dataset:
+    """
+    Standardize variable names in an xarray Dataset.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        The xarray Dataset whose variable names need to be standardized.
+    name_dict : Mapping[Any, Hashable] or None
+        A dictionary mapping the current variable names to the new standardized names.
+        If None, no renaming is performed.
+
+    Returns
+    -------
+    xr.Dataset
+        The xarray Dataset with standardized variable names.
+
+    Examples
+    --------
+    >>> import xarray as xr
+    >>> ds = xr.Dataset({'temp': ('x', [1, 2, 3]), 'precip': ('x', [4, 5, 6])})
+    >>> name_dict = {'temp': 'temperature', 'precip': 'precipitation'}
+    >>> standarize_variable_names(ds, name_dict)
+    <xarray.Dataset>
+    Dimensions:      (x: 3)
+    Dimensions without coordinates: x
+    Data variables:
+        temperature   (x) int64 1 2 3
+        precipitation (x) int64 4 5 6
+    """
+    return ds.rename_vars(name_dict)
+
+
+def load_ensemble(
+    result_dir: Path,
+    glob_str: str = "basin*.nc",
+) -> xr.Dataset:
+    """
+    Load an ensemble of NetCDF files into an xarray Dataset.
+
+    Parameters
+    ----------
+    result_dir : Path
+        The directory containing the NetCDF files.
+    glob_str : str, optional
+        The glob pattern to match the NetCDF files. Default is "basin*.nc".
+    ensemble_id : str, optional
+        The identifier for the ensemble. Default is "RAGIS".
+
+    Returns
+    -------
+    xr.Dataset
+        The loaded xarray Dataset containing the ensemble data.
+
+    Notes
+    -----
+    This function uses Dask to load the dataset in parallel and handle large chunks efficiently.
+    """
+    m_files = result_dir.glob(glob_str)
+    with dask.config.set(**{"array.slicing.split_large_chunks": True}):
+        print("Loading ensemble files")
+        ds = xr.open_mfdataset(m_files, parallel=True, chunks="auto")
+        if "time" in ds["config"].coords:
+            ds["config"] = ds["config"].isel(time=0).drop_vars("time")
+        print("Done")
+        return ds
+
+
+def simplify(my_str: str) -> str:
+    """
+    Simplify string
+    """
+    return Path(my_str).name
+
+
+def convert_column_to_float(column):
+    """
+    Convert column to numeric if possible.
+    """
+    try:
+        return pd.to_numeric(column, errors="raise")
+    except ValueError:
+        return column
+
+
+def simplify_climate(my_str: str):
+    """
+    Simplify climate
+    """
+    if "MAR" in my_str:
+        return "MAR"
+    else:
+        return "HIRHAM"
+
+
+def simplify_ocean(my_str: str):
+    """
+    Simplify ocean
+    """
+    return "-".join(my_str.split("_")[1:2])
+
+
+def transpose_dataframe(df, exp_id):
+    """
+    Transpose dataframe.
+    """
+    param_names = df["config_axis"]
+    df = df[["config"]].T
+    df.columns = param_names
+    df["exp_id"] = exp_id
+    return df
 
 
 if __name__ == "__main__":
@@ -51,12 +205,6 @@ if __name__ == "__main__":
         help="""Result directory.""",
         type=str,
         default="./results",
-    )
-    parser.add_argument(
-        "--basin_url",
-        help="""Basin shapefile.""",
-        type=str,
-        default="~/base/pism-ragis/data/mouginot/Greenland_Basins_PS_v1.4.2_w_shelves.gpkg",
     )
     parser.add_argument(
         "--imbie_url",
@@ -99,7 +247,8 @@ if __name__ == "__main__":
     ragis_config_file = Path(
         str(files("pism_ragis.data").joinpath("ragis_config.toml"))
     )
-    all_params_dict = toml.load(ragis_config_file)["Parameters"]
+    ragis_config = toml.load(ragis_config_file)
+    all_params_dict = ragis_config["Parameters"]
 
     params = [
         "calving.vonmises_calving.sigma_max",
@@ -122,35 +271,23 @@ if __name__ == "__main__":
     params_short_dict = {key: all_params_dict[key] for key in params}
 
     result_dir = Path(options.result_dir)
-    result_dir.mkdir(parents=True, exist_ok=True)
-
-    fig_dir = result_dir / "figures"
-    fig_dir.mkdir(exist_ok=True)
 
     reference_year = 1992
 
-    mass_flux_varname = "mass_balance"
-    mass_flux_uncertainty_varname = "mass_balance_uncertainty"
-    mass_cumulative_varname = "cumulative_mass_balance"
-    mass_cumulative_uncertainty_varname = "cumulative_mass_balance_uncertainty"
+    ds = load_ensemble(result_dir)
+    ds = standarize_variable_names(ds, ragis_config["PISM"])
+    ds = normalize_cumulative_variables(
+        ds, ragis_config["Cumulative Variables"]["mass_cumulative"], reference_year=1992
+    )
+    config = ds.sel(basin="GIS").sel(config_axis=params).config
+    uq_df = config.to_dataframe()
 
-    discharge_flux_varname = "ice_discharge"
-    discharge_flux_uncertainty_varname = "ice_discharge_uncertainty"
-    smb_flux_varname = "surface_mass_balance"
-    smb_flux_uncertainty_varname = "surface_mass_balance_uncertainty"
-
-    basal_flux_varname = "tendency_of_ice_mass_due_to_basal_mass_flux"
-    basal_grounded_flux_varname = "tendency_of_ice_mass_due_to_basal_mass_flux_grounded"
-    basal_floating_flux_varname = "tendency_of_ice_mass_due_to_basal_mass_flux_floating"
-
-    sim_mass_cumulative_varname = "ice_mass"
-    sim_mass_flux_varname = "tendency_of_ice_mass"
-    sim_smb_flux_varname = "tendency_of_ice_mass_due_to_surface_mass_flux"
-    sim_discharge_flux_varname = "grounding_line_flux"
-
-    # Load basins, merge all ICE_CAP geometries
-    basin_url = Path(options.basin_url)
-    basins = gp.read_file(basin_url).to_crs(crs)
+    ragis = pd.concat(
+        [
+            transpose_dataframe(df, exp_id)
+            for exp_id, df in uq_df.reset_index().groupby(by="exp_id")
+        ]
+    ).reset_index(drop=True)
 
     # Load observations
     if options.imbie_url is not None:
@@ -164,224 +301,85 @@ if __name__ == "__main__":
 
     comp = {"zlib": True, "complevel": 2}
 
-    print("Loading files")
-    basins_files = result_dir.glob("basin*.nc")
-    with dask.config.set(**{"array.slicing.split_large_chunks": True}):
-        basins_sums = xr.open_mfdataset(basins_files, parallel=True, chunks="auto")
-        if "time" in basins_sums["config"].coords:
-            basins_sums["config"] = basins_sums["config"].isel(time=0).drop_vars("time")
-        basins_sums = basins_sums.sel(ensemble_id="RAGIS").sel(
-            time=slice("1980-01-01", "2020-01-01")
+    def select_experiment(ds, exp_id, n):
+        """
+        Reset the experiment id.
+        """
+        exp = ds.sel(exp_id=exp_id)
+        exp["exp_id"] = n
+        return exp
+
+    flux_vars = ragis_config["Flux Variables"]
+    flux_uncertainty_vars = {
+        k + "_uncertainty": v + "_uncertainty" for k, v in flux_vars.items()
+    }
+
+    observed = imbie
+    simulated = ds.sel(basin="GIS", ensemble_id="RAGIS").rolling(time=13).mean()
+    simulated["ensemble_id"] = "Prior"
+
+    # observed_days_in_month = observed["time"].dt.days_in_month
+    # observed_wgts = (
+    #     observed_days_in_month.groupby("time.year")
+    #     / observed_days_in_month.groupby("time.year").sum()
+    # )
+    # observed_sum = (observed * observed_wgts).resample(time="YS").sum(dim="time")
+
+    # simulated_days_in_month = simulated["time"].dt.days_in_month
+    # simulated_wgts = (
+    #     simulated_days_in_month.groupby("time.year")
+    #     / simulated_days_in_month.groupby("time.year").sum()
+    # )
+    # simulated_sum = (simulated * simulated_wgts).resample(time="YS").sum(dim="time")
+
+    # Apply the conversion function to each column
+    ragis = ragis.apply(convert_column_to_float)
+    for col in ["surface.given.file", "ocean.th.file"]:
+        ragis[col] = ragis[col].apply(simplify)
+    ragis["surface.given.file"] = ragis["surface.given.file"].apply(simplify_climate)
+    ragis["ocean.th.file"] = ragis["ocean.th.file"].apply(simplify_ocean)
+
+    ragis["Ensemble"] = "Prior"
+
+    simulated_resampled_all = {}
+    resampled_all = {}
+    for obs_mean_var, obs_std_var, sim_var in zip(
+        flux_vars.values(),
+        flux_uncertainty_vars.values(),
+        flux_vars.values(),
+    ):
+        print(f"Particle filtering using {obs_mean_var}")
+        resampled_ids = resample_ensemble_by_data(
+            observed,
+            simulated,
+            start_date="1992-01-01",
+            end_date="2012-01-01",
+            fudge_factor=3,
+            n_samples=len(simulated.exp_id),
+            obs_mean_var=obs_mean_var,
+            obs_std_var=obs_std_var,
+            sim_var=sim_var,
         )
-        basins_sums[sim_mass_cumulative_varname] -= basins_sums.sel(
-            time=f"{reference_year}-01-01", method="nearest"
-        )[sim_mass_cumulative_varname]
-        basins_sums[sim_discharge_flux_varname] = (
-            basins_sums["ice_mass_transport_across_grounding_line"]
-            + basins_sums["tendency_of_ice_mass_due_to_basal_mass_flux_grounded"]
-        )
-        # basins_sums.load()
-        print("Done")
-
-        def select_experiment(ds, exp_id, n):
-            """
-            Reset the experiment id.
-            """
-            exp = ds.sel(exp_id=exp_id)
-            exp["exp_id"] = n
-            return exp
-
-        print("Particle Filtering")
-
-        observed = imbie
-        simulated = basins_sums.sel(basin="GIS").rolling(time=13).mean()
-        simulated_resampled_all = {}
-        for obs_mean_var, obs_std_var, sim_var in zip(
-            ["mass_balance", "ice_discharge"],
-            ["mass_balance_uncertainty", "ice_discharge_uncertainty"],
-            ["ice_mass", "ice_mass_transport_across_grounding_line"],
-        ):
-            print(obs_mean_var)
-            resampled_ensemble = resample_ensemble_by_data(
-                observed,
-                simulated,
-                fudge_factor=3,
-                n_samples=len(simulated.exp_id),
-                obs_mean_var=obs_mean_var,
-                obs_std_var=obs_std_var,
-                sim_var=sim_var,
-            )
-            simulated_resampled = xr.concat(
-                [
-                    select_experiment(simulated, exp_id, k)
-                    for k, exp_id in enumerate(resampled_ensemble)
-                ],
-                dim="exp_id",
-            )
-            simulated_resampled_all[obs_mean_var] = simulated_resampled
-            print(resampled_ensemble)
-
-        observed = imbie_2021
-        simulated = basins_sums.sel(basin="GIS").rolling(time=13).mean()
-        resampled_ensemble = resample_ensemble_by_data(
-            observed, simulated, fudge_factor=3, n_samples=len(simulated.exp_id)
-        )
+        print(resampled_ids)
         simulated_resampled = xr.concat(
             [
                 select_experiment(simulated, exp_id, k)
-                for k, exp_id in enumerate(resampled_ensemble)
+                for k, exp_id in enumerate(resampled_ids)
             ],
             dim="exp_id",
         )
-        print("Done")
-
-        config = basins_sums.sel(basin="GIS").sel(config_axis=params).config
-        uq_df = config.to_dataframe()
-
-        def transpose_dataframe(df, exp_id):
-            """
-            Transpose dataframe.
-            """
-            param_names = df["config_axis"]
-            df = df[["config"]].T
-            df.columns = param_names
-            df["exp_id"] = exp_id
-            return df
-
-        ragis = pd.concat(
-            [
-                transpose_dataframe(df, exp_id)
-                for exp_id, df in uq_df.reset_index().groupby(by="exp_id")
-            ]
-        ).reset_index(drop=True)
-
-        def simplify(my_str: str) -> str:
-            """
-            Simplify string
-            """
-            return Path(my_str).name
-
-        # Function to convert column to float if possible
-        def convert_column_to_float(column):
-            """
-            Convert column to numeric if possible.
-            """
-            try:
-                return pd.to_numeric(column, errors="raise")
-            except ValueError:
-                return column
-
-        def simplify_climate(my_str: str):
-            """
-            Simplify climate
-            """
-            if "MAR" in my_str:
-                return "MAR"
-            else:
-                return "HIRHAM"
-
-        def simplify_ocean(my_str: str):
-            """
-            Simplify ocean
-            """
-            return "-".join(my_str.split("_")[1:2])
-
-        # Apply the conversion function to each column
-        ragis = ragis.apply(convert_column_to_float)
-        for col in ["surface.given.file", "ocean.th.file"]:
-            ragis[col] = ragis[col].apply(simplify)
-        ragis["surface.given.file"] = ragis["surface.given.file"].apply(
-            simplify_climate
-        )
-        ragis["ocean.th.file"] = ragis["ocean.th.file"].apply(simplify_ocean)
-
-        ragis["Ensemble"] = "Prior"
-        resampled_df = [ragis[ragis["exp_id"] == k] for k in resampled_ensemble]
+        simulated_resampled["ensemble_id"] = "Posterior"
+        simulated_resampled_all[obs_mean_var] = simulated_resampled
+        resampled_df = [ragis[ragis["exp_id"] == k] for k in resampled_ids]
 
         ragis_resampled = pd.concat(resampled_df)
         ragis_resampled["Ensemble"] = "Posterior"
 
-        posterior_df = pd.concat([ragis, ragis_resampled]).rename(
+        resampled_all[obs_mean_var] = pd.concat([ragis, ragis_resampled]).rename(
             columns=params_short_dict
         )
 
-        ensemble_df = ragis.drop(columns=["Ensemble", "exp_id"], errors="ignore")
-        climate_dict = {
-            v: k for k, v in enumerate(ensemble_df["surface.given.file"].unique())
-        }
-        ocean_dict = {v: k for k, v in enumerate(ensemble_df["ocean.th.file"].unique())}
-        ensemble_df["surface.given.file"] = ensemble_df["surface.given.file"].map(
-            climate_dict
-        )
-        ensemble_df["ocean.th.file"] = ensemble_df["ocean.th.file"].map(ocean_dict)
-        problem = {
-            "num_vars": len(ensemble_df.columns),
-            "names": ensemble_df.columns,  # Parameter names
-            "bounds": zip(
-                ensemble_df.min().values,
-                ensemble_df.max().values,
-            ),  # Parameter bounds
-        }
-
-        def get_delta(response, problem, ensemble_df):
-            """
-            Perform SALib delta analysis.
-            """
-            try:
-                delta_analysis = delta.analyze(
-                    problem,
-                    ensemble_df.values,
-                    response,
-                    num_resamples=10,
-                    seed=0,
-                    print_to_console=False,
-                )
-                df = delta_analysis.to_df()
-            except:
-                delta_analysis = {
-                    key: np.empty(problem["num_vars"]) + np.nan
-                    for key in ["delta", "delta_conf", "S1", "S1_conf"]
-                }
-                df = pd.DataFrame.from_dict(delta_analysis)
-                df["config_axis"] = problem["names"]
-                df.set_index("config_axis", inplace=True)
-            return xr.Dataset.from_dataframe(df)
-
-        to_analyze = basins_sums.sel(time=slice("1980-01-01", "2020-01-01"))
-        print("Calculating Sensitivity Indices")
-        cluster = LocalCluster(n_workers=4, threads_per_worker=1)
-        with Client(cluster, asynchronous=True) as client:
-            print(f"Open client in browser: {client.dashboard_link}")
-            dim = "time"
-            all_delta_indices = []
-            for response_var in [
-                "ice_mass",
-                "ice_mass_transport_across_grounding_line",
-            ]:
-                responses = to_analyze.sel(basin="GIS")[response_var]
-                responses_scattered = client.scatter(
-                    [
-                        responses.isel(time=k).to_numpy()
-                        for k in range(len(responses[dim]))
-                    ]
-                )
-
-                futures = client.map(
-                    get_delta,
-                    responses_scattered,
-                    problem=problem,
-                    ensemble_df=ensemble_df,
-                )
-                progress(futures)
-                result = client.gather(futures)
-
-                delta_indices = xr.concat([r.expand_dims(dim) for r in result], dim=dim)
-                delta_indices[dim] = responses[dim]
-                delta_indices.expand_dims("name", axis=1)
-                delta_indices["name"] = [response_var]
-                all_delta_indices.append(delta_indices)
-            all_delta_indices = xr.concat(all_delta_indices, dim="name")
-
+    posterior_df = resampled_all["mass_balance"]
     plt.rcParams["font.size"] = 6
     obs_cmap = sns.color_palette("crest", n_colors=4)
     obs_cmap = ["0.4", "0.0", "0.6", "0.0"]
@@ -420,145 +418,233 @@ if __name__ == "__main__":
             tick.set_rotation(45)
     fig.savefig("hist.pdf")
 
-    fig, axs = plt.subplots(
-        3, 1, sharex=True, figsize=(6.2, 4.2), height_ratios=[2, 1, 1]
-    )
-
     sim_alpha = 0.5
 
-    gris = simulated.load().drop_vars("config").rolling(time=13).mean()
-    gris["ensemble_id"] = "Prior"
-    gris_resampled = (
-        simulated_resampled.load().drop_vars("config").rolling(time=13).mean()
-    )
-    gris_resampled["ensemble_id"] = "Posterior"
+    for resampling_var, simulated_resampled in simulated_resampled_all.items():
+        mass_cumulative_varname = ragis_config["Cumulative Variables"][
+            "mass_cumulative"
+        ]
+        mass_cumulative_uncertainty_varname = mass_cumulative_varname + "_uncertainty"
+        discharge_flux_varname = ragis_config["Flux Variables"]["discharge_flux"]
+        discharge_flux_uncertainty_varname = discharge_flux_varname + "_uncertainty"
+        smb_flux_varname = ragis_config["Flux Variables"]["smb_flux"]
+        smb_flux_uncertainty_varname = discharge_flux_varname + "_uncertainty"
 
-    gris["config"] = basins_sums["config"]
-    gris_resampled["config"] = basins_sums["config"]
-
-    mou_ci = axs[0].fill_between(
-        mou_gis["time"],
-        mou_gis[mass_cumulative_varname] - mou_gis[mass_cumulative_uncertainty_varname],
-        mou_gis[mass_cumulative_varname] + mou_gis[mass_cumulative_uncertainty_varname],
-        color=obs_cmap[0],
-        alpha=0.5,
-        lw=0,
-        label="Mouginot et al (2019)",
-    )
-    imbie_ci = axs[0].fill_between(
-        imbie_2021["time"],
-        imbie_2021[mass_cumulative_varname]
-        - imbie_2021[mass_cumulative_uncertainty_varname],
-        imbie_2021[mass_cumulative_varname]
-        + imbie_2021[mass_cumulative_uncertainty_varname],
-        color=obs_cmap[2],
-        alpha=0.5,
-        lw=0,
-        label="IMBIE 2021",
-    )
-
-    axs[1].fill_between(
-        mou_gis["time"],
-        mou_gis[discharge_flux_varname] - mou_gis[discharge_flux_uncertainty_varname],
-        mou_gis[discharge_flux_varname] + mou_gis[discharge_flux_uncertainty_varname],
-        color=obs_cmap[0],
-        alpha=0.5,
-        lw=0,
-    )
-    axs[1].fill_between(
-        imbie["time"],
-        imbie[discharge_flux_varname] - imbie[discharge_flux_uncertainty_varname],
-        imbie[discharge_flux_varname] + imbie[discharge_flux_uncertainty_varname],
-        color=obs_cmap[2],
-        alpha=0.5,
-        lw=0,
-    )
-    axs[2].fill_between(
-        mou_gis["time"],
-        mou_gis[smb_flux_varname] - mou_gis[smb_flux_uncertainty_varname],
-        mou_gis[smb_flux_varname] + mou_gis[smb_flux_uncertainty_varname],
-        color=obs_cmap[0],
-        alpha=0.5,
-        lw=0,
-    )
-    axs[2].fill_between(
-        imbie["time"],
-        imbie[smb_flux_varname] - imbie[smb_flux_uncertainty_varname],
-        imbie[smb_flux_varname] + imbie[smb_flux_uncertainty_varname],
-        color=obs_cmap[2],
-        alpha=0.5,
-        lw=0,
-    )
-
-    sim_cis = []
-    quantiles = {}
-    for q in [0.16, 0.5, 0.84]:
-        quantiles[q] = gris.drop_vars("config").quantile(q, dim="exp_id", skipna=True)
-
-    for k, m_var in enumerate(
-        [sim_mass_cumulative_varname, sim_discharge_flux_varname, sim_smb_flux_varname]
-    ):
-        gris[m_var].plot(
-            hue="exp_id", color=sim_cmap[1], ax=axs[k], lw=0.2, add_legend=False
+        fig, axs = plt.subplots(
+            3, 1, sharex=True, figsize=(6.2, 4.2), height_ratios=[2, 1, 1]
         )
-        sim_ci = axs[k].fill_between(
-            quantiles[0.5].time,
-            quantiles[0.16][m_var],
-            quantiles[0.84][m_var],
+        mou_ci = axs[0].fill_between(
+            mou_gis["time"],
+            mou_gis[mass_cumulative_varname]
+            - mou_gis[mass_cumulative_uncertainty_varname],
+            mou_gis[mass_cumulative_varname]
+            + mou_gis[mass_cumulative_uncertainty_varname],
+            color=obs_cmap[0],
             alpha=0.5,
-            color=sim_cmap[1],
-            label=gris["ensemble_id"].values,
+            lw=0,
+            label="Mouginot et al (2019)",
+        )
+        imbie_ci = axs[0].fill_between(
+            imbie_2021["time"],
+            imbie_2021[mass_cumulative_varname]
+            - imbie_2021[mass_cumulative_uncertainty_varname],
+            imbie_2021[mass_cumulative_varname]
+            + imbie_2021[mass_cumulative_uncertainty_varname],
+            color=obs_cmap[2],
+            alpha=0.5,
+            lw=0,
+            label="IMBIE 2021",
+        )
+
+        axs[1].fill_between(
+            mou_gis["time"],
+            mou_gis[discharge_flux_varname]
+            - mou_gis[discharge_flux_uncertainty_varname],
+            mou_gis[discharge_flux_varname]
+            + mou_gis[discharge_flux_uncertainty_varname],
+            color=obs_cmap[0],
+            alpha=0.5,
             lw=0,
         )
-        if k == 0:
-            sim_cis.append(sim_ci)
-    quantiles = {}
-    for q in [0.16, 0.5, 0.84]:
-        quantiles[q] = gris_resampled.drop_vars("config").quantile(
-            q, dim="exp_id", skipna=True
-        )
-
-    for k, m_var in enumerate(
-        [sim_mass_cumulative_varname, sim_discharge_flux_varname, sim_smb_flux_varname]
-    ):
-        sim_ci = axs[k].fill_between(
-            quantiles[0.5].time,
-            quantiles[0.16][m_var],
-            quantiles[0.84][m_var],
+        axs[1].fill_between(
+            imbie["time"],
+            imbie[discharge_flux_varname] - imbie[discharge_flux_uncertainty_varname],
+            imbie[discharge_flux_varname] + imbie[discharge_flux_uncertainty_varname],
+            color=obs_cmap[2],
             alpha=0.5,
-            color=sim_cmap[3],
-            label=gris_resampled["ensemble_id"].values,
             lw=0,
         )
-        if k == 0:
-            sim_cis.append(sim_ci)
+        axs[2].fill_between(
+            mou_gis["time"],
+            mou_gis[smb_flux_varname] - mou_gis[smb_flux_uncertainty_varname],
+            mou_gis[smb_flux_varname] + mou_gis[smb_flux_uncertainty_varname],
+            color=obs_cmap[0],
+            alpha=0.5,
+            lw=0,
+        )
+        axs[2].fill_between(
+            imbie["time"],
+            imbie[smb_flux_varname] - imbie[smb_flux_uncertainty_varname],
+            imbie[smb_flux_varname] + imbie[smb_flux_uncertainty_varname],
+            color=obs_cmap[2],
+            alpha=0.5,
+            lw=0,
+        )
 
-    legend_obs = axs[0].legend(
-        handles=[mou_ci, imbie_ci], loc="lower left", title="Observed"
+        sim_cis = []
+        quantiles = {}
+        for q in [0.16, 0.5, 0.84]:
+            quantiles[q] = (
+                simulated.load()
+                .drop_vars("config")
+                .quantile(q, dim="exp_id", skipna=True)
+            )
+
+        for k, m_var in enumerate(
+            [mass_cumulative_varname, discharge_flux_varname, smb_flux_varname]
+        ):
+            simulated[m_var].plot(
+                hue="exp_id", color=sim_cmap[1], ax=axs[k], lw=0.1, add_legend=False
+            )
+            sim_ci = axs[k].fill_between(
+                quantiles[0.5].time,
+                quantiles[0.16][m_var],
+                quantiles[0.84][m_var],
+                alpha=0.2,
+                color=sim_cmap[1],
+                label=simulated["ensemble_id"].values,
+                lw=0,
+            )
+            if k == 0:
+                sim_cis.append(sim_ci)
+        quantiles = {}
+        for q in [0.16, 0.5, 0.84]:
+            quantiles[q] = (
+                simulated_resampled.load()
+                .drop_vars("config")
+                .quantile(q, dim="exp_id", skipna=True)
+            )
+
+        for k, m_var in enumerate(
+            [mass_cumulative_varname, discharge_flux_varname, smb_flux_varname]
+        ):
+            sim_ci = axs[k].fill_between(
+                quantiles[0.5].time,
+                quantiles[0.16][m_var],
+                quantiles[0.84][m_var],
+                alpha=0.2,
+                color=sim_cmap[3],
+                label=simulated_resampled["ensemble_id"].values,
+                lw=0,
+            )
+            if k == 0:
+                sim_cis.append(sim_ci)
+            axs[k].plot(
+                quantiles[0.5].time, quantiles[0.5][m_var], lw=1, color=sim_cmap[3]
+            )
+        legend_obs = axs[0].legend(
+            handles=[mou_ci, imbie_ci], loc="lower left", title="Observed"
+        )
+        legend_obs.get_frame().set_linewidth(0.0)
+        legend_obs.get_frame().set_alpha(0.0)
+
+        legend_sim = axs[0].legend(
+            handles=sim_cis,
+            loc="center left",
+            title="Simulated (13-month rolling mean)",
+        )
+        legend_sim.get_frame().set_linewidth(0.0)
+        legend_sim.get_frame().set_alpha(0.0)
+
+        axs[0].add_artist(legend_obs)
+        axs[0].add_artist(legend_sim)
+
+        axs[0].set_ylim(-6000, 3000)
+        axs[1].set_ylim(-750, 0)
+        axs[2].set_ylim(0, 750)
+        axs[0].xaxis.set_tick_params(labelbottom=False)
+
+        axs[0].set_ylabel(f"Cumulative mass\nloss since {reference_year} (Gt)")
+        axs[0].set_xlabel("")
+        axs[0].set_title(f"GIS resampled by {resampling_var}")
+        axs[1].set_title("")
+        axs[2].set_title("")
+        axs[1].set_ylabel("Grounding Line\nFlux (Gt/yr)")
+        axs[2].set_ylabel("Climatic Mass\nBalance (Gt/yr)")
+        axs[-1].set_xlim(np.datetime64("1980-01-01"), np.datetime64("2021-01-01"))
+        fig.tight_layout()
+        fig.savefig(f"GIS_mass_accounting_filtered_by_{resampling_var}.pdf")
+
+    ensemble_df = ragis.drop(columns=["Ensemble", "exp_id"], errors="ignore")
+    climate_dict = {
+        v: k for k, v in enumerate(ensemble_df["surface.given.file"].unique())
+    }
+    ocean_dict = {v: k for k, v in enumerate(ensemble_df["ocean.th.file"].unique())}
+    ensemble_df["surface.given.file"] = ensemble_df["surface.given.file"].map(
+        climate_dict
     )
-    legend_obs.get_frame().set_linewidth(0.0)
-    legend_obs.get_frame().set_alpha(0.0)
+    ensemble_df["ocean.th.file"] = ensemble_df["ocean.th.file"].map(ocean_dict)
+    problem = {
+        "num_vars": len(ensemble_df.columns),
+        "names": ensemble_df.columns,  # Parameter names
+        "bounds": zip(
+            ensemble_df.min().values,
+            ensemble_df.max().values,
+        ),  # Parameter bounds
+    }
 
-    legend_sim = axs[0].legend(
-        handles=sim_cis, loc="center left", title="Simulated (13-month rolling mean)"
-    )
-    legend_sim.get_frame().set_linewidth(0.0)
-    legend_sim.get_frame().set_alpha(0.0)
+    def get_delta(response, problem, ensemble_df):
+        """
+        Perform SALib delta analysis.
+        """
+        try:
+            delta_analysis = delta.analyze(
+                problem,
+                ensemble_df.values,
+                response,
+                num_resamples=10,
+                seed=0,
+                print_to_console=False,
+            )
+            df = delta_analysis.to_df()
+        except:
+            delta_analysis = {
+                key: np.empty(problem["num_vars"]) + np.nan
+                for key in ["delta", "delta_conf", "S1", "S1_conf"]
+            }
+            df = pd.DataFrame.from_dict(delta_analysis)
+            df["config_axis"] = problem["names"]
+            df.set_index("config_axis", inplace=True)
+        return xr.Dataset.from_dataframe(df)
 
-    axs[0].add_artist(legend_obs)
-    axs[0].add_artist(legend_sim)
+    to_analyze = ds.sel(time=slice("1980-01-01", "2020-01-01")).rolling(time=13).mean()
+    print("Calculating Sensitivity Indices")
+    cluster = LocalCluster(n_workers=8, threads_per_worker=1)
+    with Client(cluster, asynchronous=True) as client:
+        print(f"Open client in browser: {client.dashboard_link}")
+        dim = "time"
+        all_delta_indices = []
+        for response_var in [
+            "mass_balance",
+            "ice_discharge",
+        ]:
+            responses = to_analyze.sel(basin="GIS")[response_var]
+            responses_scattered = client.scatter(
+                [responses.isel(time=k).to_numpy() for k in range(len(responses[dim]))]
+            )
 
-    axs[0].set_ylim(-6000, 3000)
-    axs[1].set_ylim(-750, 0)
-    axs[2].set_ylim(0, 750)
-    axs[0].xaxis.set_tick_params(labelbottom=False)
+            futures = client.map(
+                get_delta,
+                responses_scattered,
+                problem=problem,
+                ensemble_df=ensemble_df,
+            )
+            progress(futures)
+            result = client.gather(futures)
 
-    axs[0].set_ylabel(f"Cumulative mass\nloss since {reference_year} (Gt)")
-    axs[0].set_xlabel("")
-    axs[0].set_title("basin = GIS")
-    axs[1].set_title("")
-    axs[1].set_ylabel("Grounding Line\nFlux (Gt/yr)")
-    axs[2].set_ylabel("Climatic Mass\nBalance (Gt/yr)")
-    axs[-1].set_xlim(np.datetime64("1980-01-01"), np.datetime64("2021-01-01"))
-    fig.tight_layout()
-    fig.savefig("GIS_mass_accounting.pdf")
+            delta_indices = xr.concat([r.expand_dims(dim) for r in result], dim=dim)
+            delta_indices[dim] = responses[dim]
+            delta_indices.expand_dims("name", axis=1)
+            delta_indices["name"] = [response_var]
+            all_delta_indices.append(delta_indices)
+        all_delta_indices = xr.concat(all_delta_indices, dim="name")
