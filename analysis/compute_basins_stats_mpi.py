@@ -80,7 +80,7 @@ if __name__ == "__main__":
         "--basin_url",
         help="""Basin shapefile.""",
         type=str,
-        default="data/imbie/GRE_Basins_IMBIE2_v1.3_w_shelves.gpkg",
+        default="data/mouginot/Greenland_Basins_PS_v1.4.2_w_shelves.gpkg",
     )
     parser.add_argument(
         "--temporal_range",
