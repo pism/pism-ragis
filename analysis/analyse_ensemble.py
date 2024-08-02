@@ -281,12 +281,14 @@ if __name__ == "__main__":
 
     result_dir = Path(options.result_dir)
 
-    reference_year = 1992
+    reference_year = 1980
 
     ds = load_ensemble(result_dir)
     ds = standarize_variable_names(ds, ragis_config["PISM"])
     ds = normalize_cumulative_variables(
-        ds, ragis_config["Cumulative Variables"]["mass_cumulative"], reference_year=1992
+        ds,
+        ragis_config["Cumulative Variables"]["mass_cumulative"],
+        reference_year=reference_year,
     )
     config = ds.sel(basin="GIS").sel(config_axis=params).config
     uq_df = config.to_dataframe()
@@ -306,17 +308,38 @@ if __name__ == "__main__":
     imbie_2021 = load_imbie_2021()
 
     mou = load_mouginot(url=Path(options.mouginot_url), norm_year=reference_year)
-    mou_gis = mou.sel(basin="GIS")
-
-    comp = {"zlib": True, "complevel": 2}
 
     flux_vars = ragis_config["Flux Variables"]
     flux_uncertainty_vars = {
         k + "_uncertainty": v + "_uncertainty" for k, v in flux_vars.items()
     }
+    cumulative_vars = ragis_config["Cumulative Variables"]
+    cumulative_uncertainty_vars = {
+        k + "_uncertainty": v + "_uncertainty" for k, v in cumulative_vars.items()
+    }
+    imbie_mean = imbie.sel(time=slice("1992-1-1", "2012-1-1"))[
+        list(cumulative_uncertainty_vars.values())
+        + list(flux_uncertainty_vars.values())
+    ].mean()
+    mou_mean = mou.sel(time=slice("1992-1-1", "2012-1-1"))[
+        list(cumulative_uncertainty_vars.values())
+        + list(flux_uncertainty_vars.values())
+    ].mean()
+    u_ratio = imbie_mean / mou_mean / 2
+    sigma_adjusted = np.maximum(u_ratio, 1)
 
-    observed = imbie
-    simulated = ds.sel(basin="GIS", ensemble_id="RAGIS")
+    mou_adjusted = mou
+    mou_adjusted[
+        list(cumulative_uncertainty_vars.values())
+        + list(flux_uncertainty_vars.values())
+    ] *= sigma_adjusted[
+        list(cumulative_uncertainty_vars.values())
+        + list(flux_uncertainty_vars.values())
+    ]
+    observed = mou_adjusted.sel(basin="GIS")
+    mou_gis = mou_adjusted.sel(basin="GIS")
+
+    simulated = ds.sel(basin="GIS", ensemble_id="RAGIS").rolling(time=13).mean()
     simulated["ensemble_id"] = "Prior"
 
     # Apply the conversion function to each column
@@ -339,8 +362,8 @@ if __name__ == "__main__":
         resampled_ids = resample_ensemble_by_data(
             observed,
             simulated,
-            start_date="1992-01-01",
-            end_date="2012-01-01",
+            start_date="1985-01-01",
+            end_date="2015-01-01",
             fudge_factor=3,
             n_samples=len(simulated.exp_id),
             obs_mean_var=obs_mean_var,
@@ -429,18 +452,7 @@ if __name__ == "__main__":
             color=obs_cmap[0],
             alpha=0.5,
             lw=0,
-            label="Mouginot et al (2019)",
-        )
-        imbie_ci = axs[0].fill_between(
-            imbie_2021["time"],
-            imbie_2021[mass_cumulative_varname]
-            - imbie_2021[mass_cumulative_uncertainty_varname],
-            imbie_2021[mass_cumulative_varname]
-            + imbie_2021[mass_cumulative_uncertainty_varname],
-            color=obs_cmap[2],
-            alpha=0.5,
-            lw=0,
-            label="IMBIE 2021",
+            label="Mouginot adj/IMBIE",
         )
 
         axs[1].fill_between(
@@ -453,27 +465,11 @@ if __name__ == "__main__":
             alpha=0.5,
             lw=0,
         )
-        axs[1].fill_between(
-            imbie["time"],
-            imbie[discharge_flux_varname] - imbie[discharge_flux_uncertainty_varname],
-            imbie[discharge_flux_varname] + imbie[discharge_flux_uncertainty_varname],
-            color=obs_cmap[2],
-            alpha=0.5,
-            lw=0,
-        )
         axs[2].fill_between(
             mou_gis["time"],
             mou_gis[smb_flux_varname] - mou_gis[smb_flux_uncertainty_varname],
             mou_gis[smb_flux_varname] + mou_gis[smb_flux_uncertainty_varname],
             color=obs_cmap[0],
-            alpha=0.5,
-            lw=0,
-        )
-        axs[2].fill_between(
-            imbie["time"],
-            imbie[smb_flux_varname] - imbie[smb_flux_uncertainty_varname],
-            imbie[smb_flux_varname] + imbie[smb_flux_uncertainty_varname],
-            color=obs_cmap[2],
             alpha=0.5,
             lw=0,
         )
@@ -504,6 +500,7 @@ if __name__ == "__main__":
             )
             if k == 0:
                 sim_cis.append(sim_ci)
+
         quantiles = {}
         for q in [0.16, 0.5, 0.84]:
             quantiles[q] = (
@@ -519,7 +516,7 @@ if __name__ == "__main__":
                 quantiles[0.5].time,
                 quantiles[0.16][m_var],
                 quantiles[0.84][m_var],
-                alpha=0.2,
+                alpha=0.4,
                 color=sim_cmap[3],
                 label=simulated_resampled["ensemble_id"].values,
                 lw=0,
@@ -529,9 +526,7 @@ if __name__ == "__main__":
             axs[k].plot(
                 quantiles[0.5].time, quantiles[0.5][m_var], lw=1, color=sim_cmap[3]
             )
-        legend_obs = axs[0].legend(
-            handles=[mou_ci, imbie_ci], loc="lower left", title="Observed"
-        )
+        legend_obs = axs[0].legend(handles=[mou_ci], loc="lower left", title="Observed")
         legend_obs.get_frame().set_linewidth(0.0)
         legend_obs.get_frame().set_alpha(0.0)
 
@@ -546,7 +541,7 @@ if __name__ == "__main__":
         axs[0].add_artist(legend_obs)
         axs[0].add_artist(legend_sim)
 
-        axs[0].set_ylim(-6000, 3000)
+        axs[0].set_ylim(-10_000, 500)
         axs[1].set_ylim(-750, 0)
         axs[2].set_ylim(0, 750)
         axs[0].xaxis.set_tick_params(labelbottom=False)
@@ -562,6 +557,44 @@ if __name__ == "__main__":
         fig.tight_layout()
         fig.savefig(f"GIS_mass_accounting_filtered_by_{resampling_var}.pdf")
 
+    fig, axs = plt.subplots(
+        4,
+        2,
+        figsize=[6.2, 7.2],
+    )
+    fig.subplots_adjust(hspace=0.75, wspace=0.25)
+
+    for k, basin in enumerate(mou_adjusted.basin):
+        obs = mou_adjusted.sel(basin=basin)
+        sim = ds.sel(ensemble_id="RAGIS", basin=basin)
+        ax = axs.ravel()[k]
+        quantiles = {}
+        for q in [0.16, 0.5, 0.84]:
+            quantiles[q] = (
+                sim.load().drop_vars("config").quantile(q, dim="exp_id", skipna=True)
+            )
+        m_var = "cumulative_mass_balance"
+        sim_ci = ax.fill_between(
+            quantiles[0.5].time,
+            quantiles[0.16][m_var],
+            quantiles[0.84][m_var],
+            alpha=0.2,
+            color=sim_cmap[1],
+            label=simulated["ensemble_id"].values,
+            lw=0,
+        )
+        mou_ci = ax.fill_between(
+            obs["time"],
+            obs[mass_cumulative_varname] - obs[mass_cumulative_uncertainty_varname],
+            obs[mass_cumulative_varname] + obs[mass_cumulative_uncertainty_varname],
+            color=obs_cmap[0],
+            alpha=0.5,
+            lw=0,
+            label="Mouginot adj/IMBIE",
+        )
+        ax.set_title(basin.values)
+        ax.set_xlim(np.datetime64("1980-01-01"), np.datetime64("2021-01-01"))
+        fig.tight_layout()
     ensemble_df = ragis.drop(columns=["Ensemble", "exp_id"], errors="ignore")
     climate_dict = {
         v: k for k, v in enumerate(ensemble_df["surface.given.file"].unique())

@@ -58,9 +58,9 @@ dists: Dict[str, Any] = {
     "ragis": {
         "uq": {
             "calving.vonmises_calving.sigma_max": uniform(loc=350_000, scale=300_000),
+            "calving.rate_scaling.file": randint(0, 8),
             "ocean.th.gamma_T": uniform(loc=0.75e-4, scale=0.75e-4),
             "ocean_file": randint(0, len(gcms)),
-            "calving_file": randint(0, 7),
             "climate_file": randint(0, 2),
             "frontal_melt.routing.parameter_a": uniform(loc=2.4e-4, scale=1.2e-4),
             "frontal_melt.routing.parameter_b": uniform(loc=1.0, scale=0.70),
@@ -211,7 +211,7 @@ dist_sample = np.zeros_like(unif_sample, dtype="object")
 sb_dict = {0: "ssa+sia", 1: "blatter"}
 # For each variable, transform with the inverse of the CDF (inv(CDF)=ppf)
 for i, key in enumerate(keys_prior):
-    if key == "calving_rate_scaling_file":
+    if key == "calving.rate_scaling.file":
         dist_sample[:, i] = [
             f"seasonal_calving_{int(id)}_1975_2025.nc"
             for id in distributions[key].ppf(unif_sample[:, i])

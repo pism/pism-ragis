@@ -21,19 +21,17 @@ Compute basins.
 
 # pylint: disable=redefined-outer-name
 
+import re
 import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from pathlib import Path
-from typing import Any, Dict, List, Union
-import re
+from typing import Union
 
 import dask
 import geopandas as gp
 import xarray as xr
 from dask.distributed import Client, progress
 from dask_mpi import initialize
-
-from pism_ragis.processing import preprocess_nc
 
 
 def compute_basin(ds: xr.Dataset, name: str) -> xr.Dataset:
