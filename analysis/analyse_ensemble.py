@@ -336,11 +336,27 @@ if __name__ == "__main__":
         list(cumulative_uncertainty_vars.values())
         + list(flux_uncertainty_vars.values())
     ]
-    observed = mou_adjusted.sel(basin="GIS")
     mou_gis = mou_adjusted.sel(basin="GIS")
 
-    simulated = ds.sel(basin="GIS", ensemble_id="RAGIS").rolling(time=13).mean()
+    observed = mou_adjusted.sel(basin="GIS")
+    observed_days_in_month = observed["time"].dt.days_in_month
+    observed_wgts = (
+        observed_days_in_month.groupby("time.year")
+        / observed_days_in_month.groupby("time.year").sum()
+    )
+    observed_yearly = (observed * observed_wgts).resample(time="YS").sum(dim="time")
+
+    simulated = ds.sel(basin="GIS", ensemble_id="RAGIS").drop_vars(
+        "config", errors="ignore"
+    )
     simulated["ensemble_id"] = "Prior"
+
+    simulated_days_in_month = simulated["time"].dt.days_in_month
+    simulated_wgts = (
+        simulated_days_in_month.groupby("time.year")
+        / simulated_days_in_month.groupby("time.year").sum()
+    )
+    simulated_yearly = (simulated * simulated_wgts).resample(time="YS").sum(dim="time")
 
     # Apply the conversion function to each column
     ragis = ragis.apply(convert_column_to_float)
@@ -360,10 +376,10 @@ if __name__ == "__main__":
     ):
         print(f"Particle filtering using {obs_mean_var}")
         resampled_ids = resample_ensemble_by_data(
-            observed,
-            simulated,
-            start_date="1985-01-01",
-            end_date="2015-01-01",
+            observed_yearly,
+            simulated_yearly,
+            start_date="1992-01-01",
+            end_date="2018-01-01",
             fudge_factor=3,
             n_samples=len(simulated.exp_id),
             obs_mean_var=obs_mean_var,
@@ -449,8 +465,8 @@ if __name__ == "__main__":
             - mou_gis[mass_cumulative_uncertainty_varname],
             mou_gis[mass_cumulative_varname]
             + mou_gis[mass_cumulative_uncertainty_varname],
-            color=obs_cmap[0],
-            alpha=0.5,
+            color=obs_cmap[3],
+            alpha=0.4,
             lw=0,
             label="Mouginot adj/IMBIE",
         )
@@ -461,16 +477,16 @@ if __name__ == "__main__":
             - mou_gis[discharge_flux_uncertainty_varname],
             mou_gis[discharge_flux_varname]
             + mou_gis[discharge_flux_uncertainty_varname],
-            color=obs_cmap[0],
-            alpha=0.5,
+            color=obs_cmap[3],
+            alpha=0.4,
             lw=0,
         )
         axs[2].fill_between(
             mou_gis["time"],
             mou_gis[smb_flux_varname] - mou_gis[smb_flux_uncertainty_varname],
             mou_gis[smb_flux_varname] + mou_gis[smb_flux_uncertainty_varname],
-            color=obs_cmap[0],
-            alpha=0.5,
+            color=obs_cmap[3],
+            alpha=0.4,
             lw=0,
         )
 
@@ -479,7 +495,7 @@ if __name__ == "__main__":
         for q in [0.16, 0.5, 0.84]:
             quantiles[q] = (
                 simulated.load()
-                .drop_vars("config")
+                .drop_vars("config", errors="ignore")
                 .quantile(q, dim="exp_id", skipna=True)
             )
 
@@ -493,7 +509,7 @@ if __name__ == "__main__":
                 quantiles[0.5].time,
                 quantiles[0.16][m_var],
                 quantiles[0.84][m_var],
-                alpha=0.2,
+                alpha=0.4,
                 color=sim_cmap[1],
                 label=simulated["ensemble_id"].values,
                 lw=0,
@@ -505,7 +521,7 @@ if __name__ == "__main__":
         for q in [0.16, 0.5, 0.84]:
             quantiles[q] = (
                 simulated_resampled.load()
-                .drop_vars("config")
+                .drop_vars("config", errors="ignore")
                 .quantile(q, dim="exp_id", skipna=True)
             )
 
@@ -668,17 +684,3 @@ if __name__ == "__main__":
             delta_indices["name"] = [response_var]
             all_delta_indices.append(delta_indices)
         all_delta_indices = xr.concat(all_delta_indices, dim="name")
-
-    # observed_days_in_month = observed["time"].dt.days_in_month
-    # observed_wgts = (
-    #     observed_days_in_month.groupby("time.year")
-    #     / observed_days_in_month.groupby("time.year").sum()
-    # )
-    # observed_sum = (observed * observed_wgts).resample(time="YS").sum(dim="time")
-
-    # simulated_days_in_month = simulated["time"].dt.days_in_month
-    # simulated_wgts = (
-    #     simulated_days_in_month.groupby("time.year")
-    #     / simulated_days_in_month.groupby("time.year").sum()
-    # )
-    # simulated_sum = (simulated * simulated_wgts).resample(time="YS").sum(dim="time")

@@ -213,7 +213,7 @@ sb_dict = {0: "ssa+sia", 1: "blatter"}
 for i, key in enumerate(keys_prior):
     if key == "calving.rate_scaling.file":
         dist_sample[:, i] = [
-            f"seasonal_calving_{int(id)}_1975_2025.nc"
+            f"seasonal_calving_id_{int(id)}_1975_2025.nc"
             for id in distributions[key].ppf(unif_sample[:, i])
         ]
     elif key == "climate_file":
