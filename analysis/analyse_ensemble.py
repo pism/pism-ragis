@@ -27,6 +27,7 @@ from typing import Any, Hashable, List, Mapping
 import dask
 import numpy as np
 import pandas as pd
+import pint_xarray  # pylint: disable=unused-import
 import pylab as plt
 import seaborn as sns
 import toml
@@ -36,6 +37,124 @@ from SALib.analyze import delta
 
 from pism_ragis.analysis import resample_ensemble_by_data
 from pism_ragis.observations import load_imbie, load_mouginot
+
+
+def plot_gis(obs_gis, sim_gis_prior, sim_gis_posterior, config, resampling_var):
+    """
+    Plot Greenland figure with cumulative mass balance and fluxes.
+    """
+    mass_cumulative_varname = config["Cumulative Variables"]["mass_cumulative"]
+    discharge_flux_varname = config["Flux Variables"]["discharge_flux"]
+    discharge_flux_uncertainty_varname = discharge_flux_varname + "_uncertainty"
+    smb_flux_varname = config["Flux Variables"]["smb_flux"]
+    smb_flux_uncertainty_varname = discharge_flux_varname + "_uncertainty"
+
+    fig, axs = plt.subplots(
+        3, 1, sharex=True, figsize=(6.2, 4.2), height_ratios=[2, 1, 1]
+    )
+    obs_ci = axs[0].fill_between(
+        obs_gis["time"],
+        obs_gis[mass_cumulative_varname] - obs_gis[mass_cumulative_uncertainty_varname],
+        obs_gis[mass_cumulative_varname] + obs_gis[mass_cumulative_uncertainty_varname],
+        color=obs_cmap[0],
+        alpha=0.4,
+        lw=0,
+        label="Mouginot adj/IMBIE",
+    )
+
+    axs[1].fill_between(
+        obs_gis["time"],
+        obs_gis[discharge_flux_varname] - obs_gis[discharge_flux_uncertainty_varname],
+        obs_gis[discharge_flux_varname] + obs_gis[discharge_flux_uncertainty_varname],
+        color=obs_cmap[0],
+        alpha=0.4,
+        lw=0,
+    )
+    axs[2].fill_between(
+        obs_gis["time"],
+        obs_gis[smb_flux_varname] - obs_gis[smb_flux_uncertainty_varname],
+        obs_gis[smb_flux_varname] + obs_gis[smb_flux_uncertainty_varname],
+        color=obs_cmap[0],
+        alpha=0.4,
+        lw=0,
+    )
+
+    sim_cis = []
+    quantiles = {}
+    for q in [0.16, 0.5, 0.84]:
+        quantiles[q] = sim_gis_prior.drop_vars(
+            ["config", "Ensemble"], errors="ignore"
+        ).quantile(q, dim="exp_id", skipna=True)
+
+    for k, m_var in enumerate(
+        [mass_cumulative_varname, discharge_flux_varname, smb_flux_varname]
+    ):
+        sim_gis_prior[m_var].plot(
+            hue="exp_id", color=sim_cmap[1], ax=axs[k], lw=0.1, add_legend=False
+        )
+        sim_ci = axs[k].fill_between(
+            quantiles[0.5].time,
+            quantiles[0.16][m_var],
+            quantiles[0.84][m_var],
+            alpha=0.4,
+            color=sim_cmap[1],
+            label=sim_gis_prior["Ensemble"].values,
+            lw=0,
+        )
+        if k == 0:
+            sim_cis.append(sim_ci)
+
+    quantiles = {}
+    for q in [0.16, 0.5, 0.84]:
+        quantiles[q] = sim_gis_posterior.drop_vars(
+            ["config", "Ensemble"], errors="ignore"
+        ).quantile(q, dim="exp_id", skipna=True)
+
+    for k, m_var in enumerate(
+        [mass_cumulative_varname, discharge_flux_varname, smb_flux_varname]
+    ):
+        sim_ci = axs[k].fill_between(
+            quantiles[0.5].time,
+            quantiles[0.16][m_var],
+            quantiles[0.84][m_var],
+            alpha=0.4,
+            color=sim_cmap[3],
+            label=sim_gis_posterior["Ensemble"].values,
+            lw=0,
+        )
+        if k == 0:
+            sim_cis.append(sim_ci)
+        axs[k].plot(quantiles[0.5].time, quantiles[0.5][m_var], lw=1, color=sim_cmap[3])
+    legend_obs = axs[0].legend(handles=[obs_ci], loc="lower left", title="Observed")
+    legend_obs.get_frame().set_linewidth(0.0)
+    legend_obs.get_frame().set_alpha(0.0)
+
+    legend_sim = axs[0].legend(
+        handles=sim_cis,
+        loc="center left",
+        title="Simulated (13-month rolling mean)",
+    )
+    legend_sim.get_frame().set_linewidth(0.0)
+    legend_sim.get_frame().set_alpha(0.0)
+
+    axs[0].add_artist(legend_obs)
+    axs[0].add_artist(legend_sim)
+
+    axs[0].set_ylim(-10_000, 500)
+    axs[1].set_ylim(-750, 0)
+    axs[2].set_ylim(0, 750)
+    axs[0].xaxis.set_tick_params(labelbottom=False)
+
+    axs[0].set_ylabel(f"Cumulative mass\nloss since {reference_year} (Gt)")
+    axs[0].set_xlabel("")
+    axs[0].set_title(f"GIS resampled by {resampling_var}")
+    axs[1].set_title("")
+    axs[2].set_title("")
+    axs[1].set_ylabel("Grounding Line\nFlux (Gt/yr)")
+    axs[2].set_ylabel("Climatic Mass\nBalance (Gt/yr)")
+    axs[-1].set_xlim(np.datetime64("1980-01-01"), np.datetime64("2021-01-01"))
+    fig.tight_layout()
+    fig.savefig(f"GIS_mass_accounting_filtered_by_{resampling_var}.pdf")
 
 
 def normalize_cumulative_variables(
@@ -315,11 +434,20 @@ if __name__ == "__main__":
 
     ds = load_ensemble(result_dir).sortby("basin")
     ds = standarize_variable_names(ds, ragis_config["PISM"])
+    ds[ragis_config["Cumulative Variables"]["discharge_cumulative"]] = ds[
+        ragis_config["Flux Variables"]["discharge_flux"]
+    ].cumsum()
+    ds[ragis_config["Cumulative Variables"]["smb_cumulative"]] = ds[
+        ragis_config["Flux Variables"]["smb_flux"]
+    ].cumsum()
     ds = normalize_cumulative_variables(
         ds,
-        ragis_config["Cumulative Variables"]["mass_cumulative"],
+        list(ragis_config["Cumulative Variables"].values()),
         reference_year=reference_year,
     )
+    # ds = ds.pint.quantify()
+    # ds[list(ragis_config["Cumulative Variables"].values())].pint.to("Gt")
+
     config = ds.sel(basin="GIS").sel(config_axis=params).config
     uq_df = config.to_dataframe()
 
@@ -439,7 +567,7 @@ if __name__ == "__main__":
     posterior_df = resampled_all["mass_balance"]
     plt.rcParams["font.size"] = 6
     obs_cmap = sns.color_palette("crest", n_colors=4)
-    obs_cmap = ["0.4", "0.0", "0.6", "0.0"]
+    obs_cmap = ["0.4"]
     sim_cmap = sns.color_palette("flare", n_colors=4)
     hist_cmap = ["#a6cee3", "#1f78b4", "#b2df8a", "#33a02c"]
     hist_cmap = ["#a6cee3", "#1f78b4"]
@@ -481,6 +609,7 @@ if __name__ == "__main__":
     sim_gis_prior = (
         simulated.load().sel(basin="GIS", ensemble_id="RAGIS").rolling(time=13).mean()
     )
+    sim_gis_prior["Ensemble"] = "Prior"
 
     for resampling_var, simulated_resampled in simulated_resampled_all.items():
         sim_gis_posterior = (
@@ -489,167 +618,98 @@ if __name__ == "__main__":
             .rolling(time=13)
             .mean()
         )
-
+        sim_gis_posterior["Ensemble"] = "Posterior"
         mass_cumulative_varname = ragis_config["Cumulative Variables"][
             "mass_cumulative"
         ]
-        mass_cumulative_uncertainty_varname = mass_cumulative_varname + "_uncertainty"
-        discharge_flux_varname = ragis_config["Flux Variables"]["discharge_flux"]
-        discharge_flux_uncertainty_varname = discharge_flux_varname + "_uncertainty"
-        smb_flux_varname = ragis_config["Flux Variables"]["smb_flux"]
-        smb_flux_uncertainty_varname = discharge_flux_varname + "_uncertainty"
-
-        fig, axs = plt.subplots(
-            3, 1, sharex=True, figsize=(6.2, 4.2), height_ratios=[2, 1, 1]
-        )
-        obs_ci = axs[0].fill_between(
-            obs_gis["time"],
-            obs_gis[mass_cumulative_varname]
-            - obs_gis[mass_cumulative_uncertainty_varname],
-            obs_gis[mass_cumulative_varname]
-            + obs_gis[mass_cumulative_uncertainty_varname],
-            color=obs_cmap[3],
-            alpha=0.4,
-            lw=0,
-            label="Mouginot adj/IMBIE",
+        mass_cumulative_uncertainty_varname = (
+            ragis_config["Cumulative Variables"]["mass_cumulative"] + "_uncertainty"
         )
 
-        axs[1].fill_between(
-            obs_gis["time"],
-            obs_gis[discharge_flux_varname]
-            - obs_gis[discharge_flux_uncertainty_varname],
-            obs_gis[discharge_flux_varname]
-            + obs_gis[discharge_flux_uncertainty_varname],
-            color=obs_cmap[3],
-            alpha=0.4,
-            lw=0,
-        )
-        axs[2].fill_between(
-            obs_gis["time"],
-            obs_gis[smb_flux_varname] - obs_gis[smb_flux_uncertainty_varname],
-            obs_gis[smb_flux_varname] + obs_gis[smb_flux_uncertainty_varname],
-            color=obs_cmap[3],
-            alpha=0.4,
-            lw=0,
+        plot_gis(
+            obs_gis,
+            sim_gis_prior,
+            sim_gis_posterior,
+            config=ragis_config,
+            resampling_var=resampling_var,
         )
 
-        sim_cis = []
-        quantiles = {}
-        for q in [0.16, 0.5, 0.84]:
-            quantiles[q] = sim_gis_prior.drop_vars("config", errors="ignore").quantile(
-                q, dim="exp_id", skipna=True
+        for m_var in ragis_config["Cumulative Variables"].values():
+            print(resampling_var, m_var)
+            m_var_uncertainty = m_var + "_uncertainty"
+            fig, axs = plt.subplots(
+                4,
+                2,
+                figsize=[6.2, 7.2],
             )
+            fig.subplots_adjust(hspace=0.75, wspace=0.25)
 
-        for k, m_var in enumerate(
-            [mass_cumulative_varname, discharge_flux_varname, smb_flux_varname]
-        ):
-            sim_gis_prior[m_var].plot(
-                hue="exp_id", color=sim_cmap[1], ax=axs[k], lw=0.1, add_legend=False
-            )
-            sim_ci = axs[k].fill_between(
-                quantiles[0.5].time,
-                quantiles[0.16][m_var],
-                quantiles[0.84][m_var],
-                alpha=0.4,
-                color=sim_cmap[1],
-                label=simulated["ensemble_id"].values,
-                lw=0,
-            )
-            if k == 0:
-                sim_cis.append(sim_ci)
+            for k, basin in enumerate(mou_adjusted.basin):
+                obs = mou_adjusted.sel(basin=basin)
+                sim_prior = (
+                    simulated.load()
+                    .sel(basin=basin, ensemble_id="RAGIS")
+                    .rolling(time=13)
+                    .mean()
+                )
+                sim_prior["Ensemble"] = "Prior"
 
-        quantiles = {}
-        for q in [0.16, 0.5, 0.84]:
-            quantiles[q] = sim_gis_posterior.drop_vars(
-                ["config", "Ensemble"], errors="ignore"
-            ).quantile(q, dim="exp_id", skipna=True)
+                sim_posterior = (
+                    simulated_resampled.load()
+                    .sel(basin=basin, ensemble_id="RAGIS")
+                    .rolling(time=13)
+                    .mean()
+                )
+                sim_posterior["Ensemble"] = "Posterior"
 
-        for k, m_var in enumerate(
-            [mass_cumulative_varname, discharge_flux_varname, smb_flux_varname]
-        ):
-            sim_ci = axs[k].fill_between(
-                quantiles[0.5].time,
-                quantiles[0.16][m_var],
-                quantiles[0.84][m_var],
-                alpha=0.4,
-                color=sim_cmap[3],
-                label=simulated_resampled["ensemble_id"].values,
-                lw=0,
-            )
-            if k == 0:
-                sim_cis.append(sim_ci)
-            axs[k].plot(
-                quantiles[0.5].time, quantiles[0.5][m_var], lw=1, color=sim_cmap[3]
-            )
-        legend_obs = axs[0].legend(handles=[obs_ci], loc="lower left", title="Observed")
-        legend_obs.get_frame().set_linewidth(0.0)
-        legend_obs.get_frame().set_alpha(0.0)
+                ax = axs.ravel()[k]
 
-        legend_sim = axs[0].legend(
-            handles=sim_cis,
-            loc="center left",
-            title="Simulated (13-month rolling mean)",
-        )
-        legend_sim.get_frame().set_linewidth(0.0)
-        legend_sim.get_frame().set_alpha(0.0)
+                quantiles = {}
+                for q in [0.16, 0.5, 0.84]:
+                    quantiles[q] = (
+                        sim_prior.load()
+                        .drop_vars(["config", "Ensemble"])
+                        .quantile(q, dim="exp_id", skipna=True)
+                    )
+                sim_ci = ax.fill_between(
+                    quantiles[0.5].time,
+                    quantiles[0.16][m_var],
+                    quantiles[0.84][m_var],
+                    alpha=0.4,
+                    color=sim_cmap[1],
+                    label=sim_prior["Ensemble"].values,
+                    lw=0,
+                )
+                quantiles = {}
+                for q in [0.16, 0.5, 0.84]:
+                    quantiles[q] = (
+                        sim_posterior.load()
+                        .drop_vars(["config", "Ensemble"])
+                        .quantile(q, dim="exp_id", skipna=True)
+                    )
+                sim_ci = ax.fill_between(
+                    quantiles[0.5].time,
+                    quantiles[0.16][m_var],
+                    quantiles[0.84][m_var],
+                    alpha=0.4,
+                    color=sim_cmap[3],
+                    label=sim_posterior["Ensemble"].values,
+                    lw=0,
+                )
+                obs_ci = ax.fill_between(
+                    obs["time"],
+                    obs[m_var] - obs[m_var_uncertainty],
+                    obs[m_var] + obs[m_var_uncertainty],
+                    color=obs_cmap[0],
+                    alpha=0.4,
+                    lw=0,
+                    label="Mouginot adj/IMBIE",
+                )
+                ax.set_title(basin.values)
+                ax.set_xlim(np.datetime64("1980-01-01"), np.datetime64("2021-01-01"))
+            fig.tight_layout()
+            fig.savefig(f"basins_{m_var}_filtered_by_{resampling_var}.pdf")
 
-        axs[0].add_artist(legend_obs)
-        axs[0].add_artist(legend_sim)
-
-        axs[0].set_ylim(-10_000, 500)
-        axs[1].set_ylim(-750, 0)
-        axs[2].set_ylim(0, 750)
-        axs[0].xaxis.set_tick_params(labelbottom=False)
-
-        axs[0].set_ylabel(f"Cumulative mass\nloss since {reference_year} (Gt)")
-        axs[0].set_xlabel("")
-        axs[0].set_title(f"GIS resampled by {resampling_var}")
-        axs[1].set_title("")
-        axs[2].set_title("")
-        axs[1].set_ylabel("Grounding Line\nFlux (Gt/yr)")
-        axs[2].set_ylabel("Climatic Mass\nBalance (Gt/yr)")
-        axs[-1].set_xlim(np.datetime64("1980-01-01"), np.datetime64("2021-01-01"))
-        fig.tight_layout()
-        fig.savefig(f"GIS_mass_accounting_filtered_by_{resampling_var}.pdf")
-
-    fig, axs = plt.subplots(
-        4,
-        2,
-        figsize=[6.2, 7.2],
-    )
-    fig.subplots_adjust(hspace=0.75, wspace=0.25)
-
-    for k, basin in enumerate(mou_adjusted.basin):
-        obs = mou_adjusted.sel(basin=basin)
-        sim = ds.sel(ensemble_id="RAGIS", basin=basin)
-        ax = axs.ravel()[k]
-        quantiles = {}
-        for q in [0.16, 0.5, 0.84]:
-            quantiles[q] = (
-                sim.load().drop_vars("config").quantile(q, dim="exp_id", skipna=True)
-            )
-        m_var = "cumulative_mass_balance"
-        sim_ci = ax.fill_between(
-            quantiles[0.5].time,
-            quantiles[0.16][m_var],
-            quantiles[0.84][m_var],
-            alpha=0.2,
-            color=sim_cmap[1],
-            label=simulated["ensemble_id"].values,
-            lw=0,
-        )
-        mou_ci = ax.fill_between(
-            obs["time"],
-            obs[mass_cumulative_varname] - obs[mass_cumulative_uncertainty_varname],
-            obs[mass_cumulative_varname] + obs[mass_cumulative_uncertainty_varname],
-            color=obs_cmap[0],
-            alpha=0.5,
-            lw=0,
-            label="Mouginot adj/IMBIE",
-        )
-        ax.set_title(basin.values)
-        ax.set_xlim(np.datetime64("1980-01-01"), np.datetime64("2021-01-01"))
-        fig.tight_layout()
     ensemble_df = ragis.drop(columns=["Ensemble", "exp_id"], errors="ignore")
     climate_dict = {
         v: k for k, v in enumerate(ensemble_df["surface.given.file"].unique())

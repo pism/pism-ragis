@@ -33,6 +33,8 @@ import xarray as xr
 from dask.distributed import Client, progress
 from dask_mpi import initialize
 
+xr.set_options(keep_attrs=True)
+
 
 def compute_basin(ds: xr.Dataset, name: str) -> xr.Dataset:
     """
