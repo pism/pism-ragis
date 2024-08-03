@@ -195,6 +195,8 @@ if __name__ == "__main__":
         futures = client.map(compute_basin, basins_ds_scattered, basin_names)
         progress(futures)
         basin_sums = xr.concat(client.gather(futures), dim="basin")
+        if "time_bounds" in ds.data_vars:
+            basin_sums["time_bounds"] = ds["time_bounds"]
         basin_sums.to_netcdf(basins_file)
 
         end = time.time()
