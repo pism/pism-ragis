@@ -22,7 +22,7 @@ Analyze RAGIS ensemble
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from importlib.resources import files
 from pathlib import Path
-from typing import Any, Hashable, Mapping
+from typing import Any, Hashable, List, Mapping
 
 import dask
 import numpy as np
@@ -35,7 +35,7 @@ from dask.distributed import Client, LocalCluster, progress
 from SALib.analyze import delta
 
 from pism_ragis.analysis import resample_ensemble_by_data
-from pism_ragis.observations import load_imbie, load_imbie_2021, load_mouginot
+from pism_ragis.observations import load_imbie, load_mouginot
 
 
 def normalize_cumulative_variables(
@@ -113,6 +113,36 @@ def standarize_variable_names(
         precipitation (x) int64 4 5 6
     """
     return ds.rename_vars(name_dict)
+
+
+def select_experiments(df: pd.DataFrame, ids_to_select: List[int]) -> pd.DataFrame:
+    """
+    Select rows from a DataFrame based on a list of experiment IDs, including duplicates.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The input DataFrame containing experiment data.
+    ids_to_select : List[int]
+        A list of experiment IDs to select from the DataFrame. Duplicates in this list
+        will result in duplicate rows in the output DataFrame.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame containing the selected rows, including duplicates as specified
+        in `ids_to_select`.
+    """
+    # Create a DataFrame with the rows to select
+    selected_rows = df[df["exp_id"].isin(ids_to_select)]
+
+    # Repeat the indices according to the number of times they appear in ids_to_select
+    repeated_indices = selected_rows.index.repeat(
+        [ids_to_select.count(id) for id in selected_rows["exp_id"]]
+    )
+
+    # Select the rows based on the repeated indices
+    return df.loc[repeated_indices]
 
 
 def load_ensemble(
@@ -283,7 +313,7 @@ if __name__ == "__main__":
 
     reference_year = 1980
 
-    ds = load_ensemble(result_dir)
+    ds = load_ensemble(result_dir).sortby("basin")
     ds = standarize_variable_names(ds, ragis_config["PISM"])
     ds = normalize_cumulative_variables(
         ds,
@@ -305,9 +335,9 @@ if __name__ == "__main__":
         imbie = load_imbie(url=Path(options.imbie_url))
     else:
         imbie = load_imbie()
-    imbie_2021 = load_imbie_2021()
 
     mou = load_mouginot(url=Path(options.mouginot_url), norm_year=reference_year)
+    mou = mou.sortby("basin")
 
     flux_vars = ragis_config["Flux Variables"]
     flux_uncertainty_vars = {
@@ -338,7 +368,7 @@ if __name__ == "__main__":
     ]
     mou_gis = mou_adjusted.sel(basin="GIS")
 
-    observed = mou_adjusted.sel(basin="GIS")
+    observed = mou_adjusted
     observed_days_in_month = observed["time"].dt.days_in_month
     observed_wgts = (
         observed_days_in_month.groupby("time.year")
@@ -346,17 +376,19 @@ if __name__ == "__main__":
     )
     observed_yearly = (observed * observed_wgts).resample(time="YS").sum(dim="time")
 
-    simulated = ds.sel(basin="GIS", ensemble_id="RAGIS").drop_vars(
-        "config", errors="ignore"
-    )
-    simulated["ensemble_id"] = "Prior"
-
+    simulated = ds.drop_vars("config", errors="ignore")
+    simulated = ds
     simulated_days_in_month = simulated["time"].dt.days_in_month
     simulated_wgts = (
         simulated_days_in_month.groupby("time.year")
         / simulated_days_in_month.groupby("time.year").sum()
     )
-    simulated_yearly = (simulated * simulated_wgts).resample(time="YS").sum(dim="time")
+    simulated_yearly = (
+        (simulated.drop_vars("config", errors="ignore") * simulated_wgts)
+        .resample(time="YS")
+        .sum(dim="time")
+    )
+    simulated_yearly["config"] = simulated["config"]
 
     # Apply the conversion function to each column
     ragis = ragis.apply(convert_column_to_float)
@@ -376,8 +408,8 @@ if __name__ == "__main__":
     ):
         print(f"Particle filtering using {obs_mean_var}")
         resampled_ids = resample_ensemble_by_data(
-            observed_yearly,
-            simulated_yearly,
+            simulated=simulated_yearly,
+            observed=observed_yearly,
             start_date="1992-01-01",
             end_date="2018-01-01",
             fudge_factor=3,
@@ -386,19 +418,18 @@ if __name__ == "__main__":
             obs_std_var=obs_std_var,
             sim_var=sim_var,
         )
-        print(resampled_ids)
-        simulated_resampled = xr.concat(
-            [
-                select_experiment(simulated, exp_id, k)
-                for k, exp_id in enumerate(resampled_ids)
-            ],
-            dim="exp_id",
+        resampled_ids["basin"] = resampled_ids["basin"].astype("<U3")
+        simulated_resampled = (
+            simulated.sel(exp_id=resampled_ids)
+            .drop_vars("exp_id")
+            .rename_dims({"exp_id_sampled": "exp_id"})
         )
-        simulated_resampled["ensemble_id"] = "Posterior"
+        simulated_resampled["Ensemble"] = "Posterior"
         simulated_resampled_all[obs_mean_var] = simulated_resampled
-        resampled_df = [ragis[ragis["exp_id"] == k] for k in resampled_ids]
 
-        ragis_resampled = pd.concat(resampled_df)
+        ids_to_select = list(resampled_ids.sel(basin="GIS", ensemble_id="RAGIS").values)
+
+        ragis_resampled = select_experiments(ragis, ids_to_select)
         ragis_resampled["Ensemble"] = "Posterior"
 
         resampled_all[obs_mean_var] = pd.concat([ragis, ragis_resampled]).rename(
@@ -414,39 +445,51 @@ if __name__ == "__main__":
     hist_cmap = ["#a6cee3", "#1f78b4"]
 
     n_params = len(params_short_dict)
-    fig, axs = plt.subplots(
-        7,
-        2,
-        figsize=[6.2, 9.2],
-    )
-    fig.subplots_adjust(hspace=0.75, wspace=0.25)
+    # fig, axs = plt.subplots(
+    #     7,
+    #     2,
+    #     figsize=[6.2, 9.2],
+    # )
+    # fig.subplots_adjust(hspace=0.75, wspace=0.25)
 
-    for k, v in enumerate(params_short_dict.values()):
-        try:
-            sns.histplot(
-                data=posterior_df,
-                x=v,
-                hue="Ensemble",
-                palette=hist_cmap,
-                common_norm=False,
-                stat="density",
-                multiple="dodge",
-                alpha=0.8,
-                linewidth=0.2,
-                ax=axs.ravel()[k],
-                legend=False,
-            )
-        except:
-            pass
-    for ax in axs.flatten():
-        ticklabels = ax.get_xticklabels()
-        for tick in ticklabels:
-            tick.set_rotation(45)
-    fig.savefig("hist.pdf")
+    # for k, v in enumerate(params_short_dict.values()):
+    #     try:
+    #         sns.histplot(
+    #             data=posterior_df,
+    #             x=v,
+    #             hue="Ensemble",
+    #             palette=hist_cmap,
+    #             common_norm=False,
+    #             stat="density",
+    #             multiple="dodge",
+    #             alpha=0.8,
+    #             linewidth=0.2,
+    #             ax=axs.ravel()[k],
+    #             legend=False,
+    #         )
+    #     except:
+    #         pass
+    # for ax in axs.flatten():
+    #     ticklabels = ax.get_xticklabels()
+    #     for tick in ticklabels:
+    #         tick.set_rotation(45)
+    # fig.savefig("hist.pdf")
 
     sim_alpha = 0.5
 
+    obs_gis = mou_gis
+    sim_gis_prior = (
+        simulated.load().sel(basin="GIS", ensemble_id="RAGIS").rolling(time=13).mean()
+    )
+
     for resampling_var, simulated_resampled in simulated_resampled_all.items():
+        sim_gis_posterior = (
+            simulated_resampled.load()
+            .sel(basin="GIS", ensemble_id="RAGIS")
+            .rolling(time=13)
+            .mean()
+        )
+
         mass_cumulative_varname = ragis_config["Cumulative Variables"][
             "mass_cumulative"
         ]
@@ -459,12 +502,12 @@ if __name__ == "__main__":
         fig, axs = plt.subplots(
             3, 1, sharex=True, figsize=(6.2, 4.2), height_ratios=[2, 1, 1]
         )
-        mou_ci = axs[0].fill_between(
-            mou_gis["time"],
-            mou_gis[mass_cumulative_varname]
-            - mou_gis[mass_cumulative_uncertainty_varname],
-            mou_gis[mass_cumulative_varname]
-            + mou_gis[mass_cumulative_uncertainty_varname],
+        obs_ci = axs[0].fill_between(
+            obs_gis["time"],
+            obs_gis[mass_cumulative_varname]
+            - obs_gis[mass_cumulative_uncertainty_varname],
+            obs_gis[mass_cumulative_varname]
+            + obs_gis[mass_cumulative_uncertainty_varname],
             color=obs_cmap[3],
             alpha=0.4,
             lw=0,
@@ -472,19 +515,19 @@ if __name__ == "__main__":
         )
 
         axs[1].fill_between(
-            mou_gis["time"],
-            mou_gis[discharge_flux_varname]
-            - mou_gis[discharge_flux_uncertainty_varname],
-            mou_gis[discharge_flux_varname]
-            + mou_gis[discharge_flux_uncertainty_varname],
+            obs_gis["time"],
+            obs_gis[discharge_flux_varname]
+            - obs_gis[discharge_flux_uncertainty_varname],
+            obs_gis[discharge_flux_varname]
+            + obs_gis[discharge_flux_uncertainty_varname],
             color=obs_cmap[3],
             alpha=0.4,
             lw=0,
         )
         axs[2].fill_between(
-            mou_gis["time"],
-            mou_gis[smb_flux_varname] - mou_gis[smb_flux_uncertainty_varname],
-            mou_gis[smb_flux_varname] + mou_gis[smb_flux_uncertainty_varname],
+            obs_gis["time"],
+            obs_gis[smb_flux_varname] - obs_gis[smb_flux_uncertainty_varname],
+            obs_gis[smb_flux_varname] + obs_gis[smb_flux_uncertainty_varname],
             color=obs_cmap[3],
             alpha=0.4,
             lw=0,
@@ -493,16 +536,14 @@ if __name__ == "__main__":
         sim_cis = []
         quantiles = {}
         for q in [0.16, 0.5, 0.84]:
-            quantiles[q] = (
-                simulated.load()
-                .drop_vars("config", errors="ignore")
-                .quantile(q, dim="exp_id", skipna=True)
+            quantiles[q] = sim_gis_prior.drop_vars("config", errors="ignore").quantile(
+                q, dim="exp_id", skipna=True
             )
 
         for k, m_var in enumerate(
             [mass_cumulative_varname, discharge_flux_varname, smb_flux_varname]
         ):
-            simulated[m_var].plot(
+            sim_gis_prior[m_var].plot(
                 hue="exp_id", color=sim_cmap[1], ax=axs[k], lw=0.1, add_legend=False
             )
             sim_ci = axs[k].fill_between(
@@ -519,11 +560,9 @@ if __name__ == "__main__":
 
         quantiles = {}
         for q in [0.16, 0.5, 0.84]:
-            quantiles[q] = (
-                simulated_resampled.load()
-                .drop_vars("config", errors="ignore")
-                .quantile(q, dim="exp_id", skipna=True)
-            )
+            quantiles[q] = sim_gis_posterior.drop_vars(
+                ["config", "Ensemble"], errors="ignore"
+            ).quantile(q, dim="exp_id", skipna=True)
 
         for k, m_var in enumerate(
             [mass_cumulative_varname, discharge_flux_varname, smb_flux_varname]
@@ -542,7 +581,7 @@ if __name__ == "__main__":
             axs[k].plot(
                 quantiles[0.5].time, quantiles[0.5][m_var], lw=1, color=sim_cmap[3]
             )
-        legend_obs = axs[0].legend(handles=[mou_ci], loc="lower left", title="Observed")
+        legend_obs = axs[0].legend(handles=[obs_ci], loc="lower left", title="Observed")
         legend_obs.get_frame().set_linewidth(0.0)
         legend_obs.get_frame().set_alpha(0.0)
 

@@ -1,5 +1,6 @@
 earthaccess
 bokeh
+mpi4py
 dask[distributed]
 dask_mpi
 joblib>=1.3.2
