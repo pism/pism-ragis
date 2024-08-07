@@ -182,10 +182,8 @@ if __name__ == "__main__":
 
     basins_file = result_dir / f"basins_sums_ensemble_{ensemble_id}_id_{m_id}.nc"
 
-    from dask_mpi import initialize
-    initialize()
     path_to_sched = '~/dask_sch/sched.json'
-    with Client() as client:
+    with Client(scheduler_file=path_to_sched) as client:
         print(f"Open client in browser: {client.dashboard_link}")
 
         start = time.time()
