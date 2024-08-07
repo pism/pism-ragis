@@ -1,3 +1,4 @@
+#!/bin/env python3
 # Copyright (C) 2024 Andy Aschwanden, Constantine Khroulev
 #
 # This file is part of pism-ragis.
@@ -31,7 +32,6 @@ import dask
 import geopandas as gp
 import xarray as xr
 from dask.distributed import Client, progress
-from dask_mpi import initialize
 
 
 def compute_basin(ds: xr.Dataset, name: str) -> xr.Dataset:
@@ -180,7 +180,9 @@ if __name__ == "__main__":
 
     basins_file = result_dir / f"basins_sums_ensemble_{ensemble_id}_id_{m_id}.nc"
 
-    initialize(nthreads=options.n_jobs)
+    from dask_mpi import initialize
+    initialize()
+    path_to_sched = '~/dask_sch/sched.json'
     with Client() as client:
         print(f"Open client in browser: {client.dashboard_link}")
 
