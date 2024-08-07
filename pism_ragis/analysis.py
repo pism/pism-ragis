@@ -262,32 +262,59 @@ def compute_sensitivity_indices(
     return pd.concat(sensitivity_dfs)
 
 
+def sample_with_replacement(
+    weights: np.ndarray, exp_id: np.ndarray, n_samples: int, seed: int
+) -> np.ndarray:
+    """
+    Sample with replacement from exp_id based on the given weights.
+
+    Parameters
+    ----------
+    weights : np.ndarray
+        The probabilities associated with each entry in exp_id.
+    exp_id : np.ndarray
+        The array of experiment IDs to sample from.
+    n_samples : int
+        The number of samples to draw.
+    seed : int
+        The random seed for reproducibility.
+
+    Returns
+    -------
+    np.ndarray
+        An array of sampled experiment IDs.
+    """
+    rng = np.random.default_rng(seed)
+    return rng.choice(exp_id, size=n_samples, p=weights)
+
+
 def resample_ensemble_by_data(
-    observed: xr.Dataset,
     simulated: xr.Dataset,
+    observed: xr.Dataset,
     start_date: str = "1992-01-01",
     end_date: str = "2020-01-01",
-    id_var: str = "exp_id",
+    dim: str = "exp_id",
     fudge_factor: float = 3.0,
     n_samples: int = 100,
     obs_mean_var: str = "mass_balance",
     obs_std_var: str = "mass_balance_uncertainty",
-    sim_var: str = "ice_mass",
+    sim_var: str = "mass_balance",
+    seed: int = 0,
 ) -> np.ndarray:
     """
     Resample an ensemble of simulated data to match observed data using a likelihood-based approach.
 
     Parameters
     ----------
-    observed : xr.Dataset
-        An xarray Dataset containing the observed data.
     simulated : xr.Dataset
         An xarray Dataset containing the simulated data.
+    observed : xr.Dataset
+        An xarray Dataset containing the observed data.
     start_date : str, optional
         The start date for the period over which to perform the resampling, by default "1992-01-01".
     end_date : str, optional
         The end date for the period over which to perform the resampling, by default "2020-01-01".
-    id_var : str, optional
+    dim : str, optional
         The variable name in `simulated` that identifies each ensemble member, by default "exp_id".
     fudge_factor : float, optional
         A multiplicative factor applied to the observed standard deviation to widen the likelihood function,
@@ -301,7 +328,9 @@ def resample_ensemble_by_data(
         by default "mass_balance_uncertainty".
     sim_var : str, optional
         The variable name in `simulated` that represents the simulated data to be resampled,
-        by default "ice_mass".
+        by default "mass_balance".
+    seed : int, optional
+        The random seed for reproducibility, by default 0.
 
     Returns
     -------
@@ -318,40 +347,47 @@ def resample_ensemble_by_data(
     """
 
     # Interpolate simulated data to match the observed data's calendar
-    # Note: This needs to happen before selecting the time slice to avoid nans.
     simulated = simulated.interp_like(observed, method="linear")
 
     # Select the observed and simulated data within the specified date range
     observed = observed.sel(time=slice(start_date, end_date))
     simulated = simulated.sel(time=slice(start_date, end_date))
 
-    observed = observed.sel(time=slice(start_date, end_date))
-    simulated = simulated.sel(time=slice(start_date, end_date))
-
-    simulated = simulated.interp_like(observed, method="nearest")
-
     # Calculate the observed mean and adjusted standard deviation
     obs_mean = observed[obs_mean_var]
     obs_std = fudge_factor * observed[obs_std_var]
 
     # Extract the simulated data
-    sim = simulated[sim_var].dropna(dim="exp_id")
+    sim = simulated[sim_var].dropna(dim=dim)
+
     # Compute the log-likelihood of each simulated data point
     n = len(obs_mean["time"])
     log_likes = -0.5 * ((sim - obs_mean) / obs_std) ** 2 - n * 0.5 * np.log(
         2 * np.pi * obs_std**2
     )
     log_likes_sum = log_likes.sum(dim="time")
-    log_likes_scaled = log_likes_sum - log_likes_sum.mean()
+    log_likes_scaled = log_likes_sum - log_likes_sum.mean(dim=dim)
 
     # Convert log-likelihoods to weights
     weights = np.exp(log_likes_scaled)
-    weights /= weights.sum()
+    weights /= weights.sum(dim=dim)
 
-    # Draw samples based on the computed weights
-    sampled_ids = np.random.choice(sim[id_var].values, size=n_samples, p=weights.values)
-
-    return sampled_ids
+    # Apply the function along the 'exp_id' dimension
+    da = xr.apply_ufunc(
+        sample_with_replacement,
+        weights.load(),
+        input_core_dims=[[dim]],
+        output_core_dims=[[dim + "_sampled"]],
+        vectorize=True,
+        dask="allowed",
+        kwargs={
+            "exp_id": weights[dim].to_numpy(),
+            "n_samples": n_samples,
+            "seed": seed,
+        },
+    )
+    da.name = dim + "_sampled"
+    return da
 
 
 def resample_ensemble_by_data_df(
