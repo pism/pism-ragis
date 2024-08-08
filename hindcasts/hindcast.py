@@ -202,7 +202,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--o_size",
         dest="osize",
-        choices=["small", "medium", "big", "big_2d", "custom"],
+        choices=["small", "medium", "big", "big_2d", "custom", "none"],
         help="output size type",
         default="custom",
     )
