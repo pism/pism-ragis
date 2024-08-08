@@ -1,6 +1,7 @@
 [Parameters]
 
 'calving.vonmises_calving.sigma_max' = '$\sigma_{\mathrm{max}}$'
+'calving.rate_scaling.file' = 'Calving'
 'ocean.th.gamma_T' = '$\gamma$'
 'surface.given.file' = 'Climate'
 'ocean.th.file' = 'Ocean'

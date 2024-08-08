@@ -357,8 +357,10 @@ def resample_ensemble_by_data(
     obs_mean = observed[obs_mean_var]
     obs_std = fudge_factor * observed[obs_std_var]
 
-    # Extract the simulated data
-    sim = simulated[sim_var].dropna(dim=dim)
+    # Extract the simulated data, remove exp_id's which contain zeros.
+    sim = simulated[sim_var]
+    sim = sim.where(sim != 0.0, np.nan)
+    sim = sim.dropna(dim=dim)
 
     # Compute the log-likelihood of each simulated data point
     n = len(obs_mean["time"])
