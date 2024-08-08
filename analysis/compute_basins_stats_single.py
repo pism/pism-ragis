@@ -135,12 +135,12 @@ if __name__ == "__main__":
         "tendency_of_ice_mass_due_to_basal_mass_flux",
         "tendency_of_ice_mass_due_to_basal_mass_flux_grounded",
         "tendency_of_ice_mass_due_to_basal_mass_flux_floating",
+        "tendency_of_ice_mass_due_to_frontal_melt",
         "tendency_of_ice_mass_due_to_discharge",
         "tendency_of_ice_mass_due_to_surface_mass_flux",
         "tendency_of_ice_mass_due_to_conservation_error",
         "tendency_of_ice_mass_due_to_flow",
     ]
-
     regexp: str = "id_(.+?)_"
 
     with dask.config.set(**{"array.slicing.split_large_chunks": True}):
@@ -174,17 +174,24 @@ if __name__ == "__main__":
         ds = xr.merge([ds, bmb_grounded_da, bmb_floating_da])
 
     config = ds["pism_config"]
+    stats = ds["run_stats"]
     ds = ds[mb_vars]
     ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
     ds.rio.write_crs(crs, inplace=True)
 
     pism_config = xr.DataArray(
         list(config.attrs.values()),
-        dims=["config_axis"],
-        coords={"config_axis": list(config.attrs.keys())},
-        name="config",
+        dims=["pism_config_axis"],
+        coords={"pism_config_axis": list(config.attrs.keys())},
+        name="pism_config",
     )
-    ds = xr.merge([ds, pism_config])
+    run_stats = xr.DataArray(
+        list(stats.attrs.values()),
+        dims=["run_stats_axis"],
+        coords={"run_stats_axis": list(stats.attrs.keys())},
+        name="run_stats",
+    )
+    ds = xr.merge([ds, pism_config, run_stats])
 
     print(f"Size in memory: {(ds.nbytes / 1024**3):.1f} GB")
 
@@ -203,6 +210,8 @@ if __name__ == "__main__":
         futures = client.map(compute_basin, basins_ds_scattered, basin_names)
         progress(futures)
         basin_sums = xr.concat(client.gather(futures), dim="basin")
+        if "time_bounds" in ds.data_vars:
+            basin_sums["time_bounds"] = ds["time_bounds"]
         basin_sums.to_netcdf(basins_file)
 
         end = time.time()
