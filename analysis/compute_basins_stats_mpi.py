@@ -31,7 +31,8 @@ from typing import Union
 import dask
 import geopandas as gp
 import xarray as xr
-from dask.distributed import Client, progress
+from dask.distributed import Client
+from dask_mpi import initialize
 
 xr.set_options(keep_attrs=True)
 
@@ -128,6 +129,7 @@ if __name__ == "__main__":
         "tendency_of_ice_mass_due_to_basal_mass_flux",
         "tendency_of_ice_mass_due_to_basal_mass_flux_grounded",
         "tendency_of_ice_mass_due_to_basal_mass_flux_floating",
+        "tendency_of_ice_mass_due_to_frontal_melt",
         "tendency_of_ice_mass_due_to_discharge",
         "tendency_of_ice_mass_due_to_surface_mass_flux",
         "tendency_of_ice_mass_due_to_conservation_error",
@@ -166,24 +168,31 @@ if __name__ == "__main__":
         ds = xr.merge([ds, bmb_grounded_da, bmb_floating_da])
 
     config = ds["pism_config"]
+    stats = ds["run_stats"]
     ds = ds[mb_vars]
     ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
     ds.rio.write_crs(crs, inplace=True)
 
     pism_config = xr.DataArray(
         list(config.attrs.values()),
-        dims=["config_axis"],
-        coords={"config_axis": list(config.attrs.keys())},
-        name="config",
+        dims=["pism_config_axis"],
+        coords={"pism_config_axis": list(config.attrs.keys())},
+        name="pism_config",
     )
-    ds = xr.merge([ds, pism_config])
+    run_stats = xr.DataArray(
+        list(stats.attrs.values()),
+        dims=["run_stats_axis"],
+        coords={"run_stats_axis": list(stats.attrs.keys())},
+        name="run_stats",
+    )
+    ds = xr.merge([ds, pism_config, run_stats])
 
     print(f"Size in memory: {(ds.nbytes / 1024**3):.1f} GB")
 
     basins_file = result_dir / f"basins_sums_ensemble_{ensemble_id}_id_{m_id}.nc"
-    from dask_mpi import initialize
+
     initialize()
-    path_to_sched = '~/dask_sch/sched.json'
+    path_to_sched = "~/dask_sch/sched.json"
     # with Client(scheduler_file=path_to_sched) as client:
     with Client() as client:
         print(f"Open client in browser: {client.dashboard_link}")
@@ -203,4 +212,3 @@ if __name__ == "__main__":
         end = time.time()
         time_elapsed = end - start
         print(f"Time elapsed {time_elapsed:.0f}s")
-
