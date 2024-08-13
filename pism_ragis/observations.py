@@ -29,6 +29,18 @@ import pylab as plt
 import xarray as xr
 
 
+def load_grace(
+    url: Union[Path, str] = Path("../data/grace/gsfc_grace_mouginot_basins.nc"),
+) -> xr.Dataset:
+    """
+    Load GRACE.
+    """
+
+    ds = xr.open_dataset(url)
+
+    return ds
+
+
 def load_imbie_2021(
     url: Union[
         str, Path

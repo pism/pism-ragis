@@ -32,32 +32,7 @@ import geopandas as gp
 import xarray as xr
 from dask.distributed import Client, LocalCluster, progress
 
-
-def compute_basin(ds: xr.Dataset, name: str) -> xr.Dataset:
-    """
-    Compute the sum of the dataset over the 'x' and 'y' dimensions and add a new dimension 'basin'.
-
-    Parameters
-    ----------
-    ds : xr.Dataset
-        The input dataset.
-    name : str
-        The name to assign to the new 'basin' dimension.
-
-    Returns
-    -------
-    xr.Dataset
-        The computed dataset with the new 'basin' dimension.
-
-    Examples
-    --------
-    >>> ds = xr.Dataset({'var': (('x', 'y'), np.random.rand(5, 5))})
-    >>> compute_basin(ds, 'new_basin')
-    """
-    ds = ds.sum(dim=["x", "y"]).expand_dims("basin")
-    ds["basin"] = [name]
-    return ds.compute()
-
+from pism_ragis.processing import compute_basin
 
 if __name__ == "__main__":
     __spec__ = None

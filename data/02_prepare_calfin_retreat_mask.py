@@ -219,7 +219,7 @@ if __name__ == "__main__":
     )
     options = parser.parse_args()
 
-    # download_calfin()
+    download_calfin()
 
     crs = options.crs
     encoding = {

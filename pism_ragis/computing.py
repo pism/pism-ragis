@@ -655,6 +655,8 @@ systems["anvil"] = {
     "queue": {
         "wide": 128,
         "debug": 128,
+        "wholenode": 128,
+        "standard": 128,
     },
 }
 

@@ -35,11 +35,16 @@ import xarray as xr
 from dask.distributed import Client, LocalCluster, progress
 from SALib.analyze import delta
 
-from pism_ragis.analysis import resample_ensemble_by_data
-from pism_ragis.observations import load_imbie, load_mouginot
+from pism_ragis.analysis import filter_ensemble_by_data
 
 
-def plot_gis(obs, sim_prior, sim_posterior, config, resampling_var):
+def plot_gis(
+    obs: xr.Dataset,
+    sim_prior: xr.Dataset,
+    sim_posterior: xr.Dataset,
+    config,
+    filtering_var,
+):
     """
     Plot Greenland figure with cumulative mass balance and fluxes.
     """
@@ -60,7 +65,7 @@ def plot_gis(obs, sim_prior, sim_posterior, config, resampling_var):
         color=obs_cmap[0],
         alpha=0.4,
         lw=0,
-        label="Mouginot adj/IMBIE",
+        label="Mankoff et al (2021)",
     )
 
     axs[1].fill_between(
@@ -84,7 +89,7 @@ def plot_gis(obs, sim_prior, sim_posterior, config, resampling_var):
     quantiles = {}
     for q in [0.16, 0.5, 0.84]:
         quantiles[q] = sim_prior.drop_vars(
-            ["config", "Ensemble"], errors="ignore"
+            ["pism_config", "run_stats", "Ensemble"], errors="ignore"
         ).quantile(q, dim="exp_id", skipna=True)
 
     for k, m_var in enumerate(
@@ -113,7 +118,7 @@ def plot_gis(obs, sim_prior, sim_posterior, config, resampling_var):
     quantiles = {}
     for q in [0.16, 0.5, 0.84]:
         quantiles[q] = sim_posterior.drop_vars(
-            ["config", "Ensemble"], errors="ignore"
+            ["pism_config", "run_stats", "Ensemble"], errors="ignore"
         ).quantile(q, dim="exp_id", skipna=True)
 
     for k, m_var in enumerate(
@@ -140,7 +145,7 @@ def plot_gis(obs, sim_prior, sim_posterior, config, resampling_var):
     legend_sim = axs[0].legend(
         handles=sim_cis,
         loc="center left",
-        title="Simulated (13-month rolling mean)",
+        title="Simulated",
     )
     legend_sim.get_frame().set_linewidth(0.0)
     legend_sim.get_frame().set_alpha(0.0)
@@ -148,28 +153,28 @@ def plot_gis(obs, sim_prior, sim_posterior, config, resampling_var):
     axs[0].add_artist(legend_obs)
     axs[0].add_artist(legend_sim)
 
-    axs[0].set_ylim(-10_000, 500)
+    axs[0].set_ylim(-10_000, 5_000)
     axs[1].set_ylim(-750, 0)
     axs[2].set_ylim(0, 750)
     axs[0].xaxis.set_tick_params(labelbottom=False)
 
     axs[0].set_ylabel(f"Cumulative mass\nloss since {reference_year} (Gt)")
     axs[0].set_xlabel("")
-    axs[0].set_title(f"GIS filtered by {resampling_var}")
+    axs[0].set_title(f"GIS filtered by {filtering_var}")
     axs[1].set_title("")
     axs[2].set_title("")
     axs[1].set_ylabel("Grounding Line\nFlux (Gt/yr)")
     axs[2].set_ylabel("Climatic Mass\nBalance (Gt/yr)")
     axs[-1].set_xlim(np.datetime64("1980-01-01"), np.datetime64("2021-01-01"))
     fig.tight_layout()
-    fig.savefig(f"GIS_mass_accounting_filtered_by_{resampling_var}.pdf")
+    fig.savefig(f"GIS_mass_accounting_filtered_by_{filtering_var}.pdf")
 
 
-def plot_basins(observed, simulated, plot_var, resampling_var):
+def plot_basins(observed, simulated, plot_var, filtering_var):
     """
     Plot basins.
     """
-    print(f"Plotting {plot_var} filtered by {resampling_var}")
+    print(f"Plotting {plot_var} filtered by {filtering_var}")
     plot_var_uncertainty = plot_var + "_uncertainty"
     fig, axs = plt.subplots(
         4,
@@ -189,7 +194,7 @@ def plot_basins(observed, simulated, plot_var, resampling_var):
         sim_prior["Ensemble"] = "Prior"
 
         sim_posterior = (
-            simulated_resampled.load()
+            simulated_filtered.load()
             .sel(basin=basin, ensemble_id="RAGIS")
             .rolling(time=13)
             .mean()
@@ -202,7 +207,7 @@ def plot_basins(observed, simulated, plot_var, resampling_var):
         for q in [0.16, 0.5, 0.84]:
             quantiles[q] = (
                 sim_prior.load()
-                .drop_vars(["config", "Ensemble"])
+                .drop_vars(["pism_config", "run_stats", "Ensemble"])
                 .quantile(q, dim="exp_id", skipna=True)
             )
         _ = ax.fill_between(
@@ -218,7 +223,7 @@ def plot_basins(observed, simulated, plot_var, resampling_var):
         for q in [0.16, 0.5, 0.84]:
             quantiles[q] = (
                 sim_posterior.load()
-                .drop_vars(["config", "Ensemble"])
+                .drop_vars(["pism_config", "run_stats", "Ensemble"])
                 .quantile(q, dim="exp_id", skipna=True)
             )
         _ = ax.fill_between(
@@ -242,11 +247,11 @@ def plot_basins(observed, simulated, plot_var, resampling_var):
         ax.set_title(basin.values)
         ax.set_xlim(np.datetime64("1980-01-01"), np.datetime64("2021-01-01"))
     fig.tight_layout()
-    fig.savefig(f"basins_{plot_var}_filtered_by_{resampling_var}.pdf")
+    fig.savefig(f"basins_{plot_var}_filtered_by_{filtering_var}.pdf")
 
 
 def normalize_cumulative_variables(
-    ds: xr.Dataset, cumulative_variables, reference_year: int = 1992
+    ds: xr.Dataset, variables, reference_year: int = 1992
 ) -> xr.Dataset:
     """
     Normalize cumulative variables in an xarray Dataset by subtracting their values at a reference year.
@@ -255,7 +260,7 @@ def normalize_cumulative_variables(
     ----------
     ds : xr.Dataset
         The xarray Dataset containing the cumulative variables to be normalized.
-    cumulative_variables : str or list of str
+    variables : str or list of str
         The name(s) of the cumulative variables to be normalized.
     reference_year : int, optional
         The reference year to use for normalization. Default is 1992.
@@ -281,9 +286,7 @@ def normalize_cumulative_variables(
     Data variables:
         cumulative_var  (time) int64 0 10 20 30 40 50
     """
-    ds[cumulative_variables] -= ds[cumulative_variables].sel(
-        time=f"{reference_year}-01-01", method="nearest"
-    )
+    ds[variables] -= ds[variables].sel(time=f"{reference_year}-01-01", method="nearest")
     return ds
 
 
@@ -381,8 +384,8 @@ def load_ensemble(
     with dask.config.set(**{"array.slicing.split_large_chunks": True}):
         print("Loading ensemble files")
         ds = xr.open_mfdataset(m_files, parallel=True, chunks="auto")
-        if "time" in ds["config"].coords:
-            ds["config"] = ds["config"].isel(time=0).drop_vars("time")
+        if "time" in ds["pism_config"].coords:
+            ds["pism_config"] = ds["pism_config"].isel(time=0).drop_vars("time")
         print("Done")
         return ds
 
@@ -441,8 +444,8 @@ def transpose_dataframe(df, exp_id):
     """
     Transpose dataframe.
     """
-    param_names = df["config_axis"]
-    df = df[["config"]].T
+    param_names = df["pism_config_axis"]
+    df = df[["pism_config"]].T
     df.columns = param_names
     df["exp_id"] = exp_id
     return df
@@ -472,6 +475,12 @@ if __name__ == "__main__":
         default="/mnt/storstrommen/data/mouginot/pnas.1904242116.sd02.xlsx",
     )
     parser.add_argument(
+        "--mankoff_url",
+        help="""Path to Mankoff basins mass balance.""",
+        type=str,
+        default="data/mankoff/mankoff_mass_balance.nc",
+    )
+    parser.add_argument(
         "--temporal_range",
         help="""Time slice to extract.""",
         type=str,
@@ -484,9 +493,16 @@ if __name__ == "__main__":
         type=str,
         default="EPSG:3413",
     )
+    parser.add_argument(
+        "--reference_year",
+        help="""Reference year.""",
+        type=int,
+        default=1980,
+    )
 
     options = parser.parse_args()
     crs = options.crs
+    reference_year = options.reference_year
 
     colorblind_colors = [
         "#882255",
@@ -527,7 +543,14 @@ if __name__ == "__main__":
     result_dir = Path(options.result_dir)
     plt.rcParams["font.size"] = 6
 
-    reference_year = 1980
+    flux_vars = ragis_config["Flux Variables"]
+    flux_uncertainty_vars = {
+        k + "_uncertainty": v + "_uncertainty" for k, v in flux_vars.items()
+    }
+    cumulative_vars = ragis_config["Cumulative Variables"]
+    cumulative_uncertainty_vars = {
+        k + "_uncertainty": v + "_uncertainty" for k, v in cumulative_vars.items()
+    }
 
     ds = load_ensemble(result_dir).sortby("basin")
     ds = standarize_variable_names(ds, ragis_config["PISM"])
@@ -543,8 +566,9 @@ if __name__ == "__main__":
         reference_year=reference_year,
     )
 
-    config = ds.sel(basin="GIS").sel(config_axis=params).config
-    uq_df = config.to_dataframe()
+    pism_config = ds.sel(basin="GIS").sel(pism_config_axis=params).pism_config
+
+    uq_df = pism_config.to_dataframe()
 
     ragis = pd.concat(
         [
@@ -553,64 +577,46 @@ if __name__ == "__main__":
         ]
     ).reset_index(drop=True)
 
-    # Load observations
-    if options.imbie_url is not None:
-        imbie = load_imbie(url=Path(options.imbie_url))
-    else:
-        imbie = load_imbie()
+    observed = xr.open_dataset(options.mankoff_url).sel(
+        time=slice("1986-01-01", "2024-01-01")
+    )
+    observed = observed.sortby("basin")
+    observed = normalize_cumulative_variables(
+        observed,
+        list(cumulative_vars.values()) + list(cumulative_uncertainty_vars.values()),
+        reference_year,
+    )
 
-    mou = load_mouginot(url=Path(options.mouginot_url), norm_year=reference_year)
-    mou = mou.sortby("basin")
+    resampling_freq = "MS"
+    freq_dict = {"MS": "month", "YS": "year"}
 
-    flux_vars = ragis_config["Flux Variables"]
-    flux_uncertainty_vars = {
-        k + "_uncertainty": v + "_uncertainty" for k, v in flux_vars.items()
-    }
-    cumulative_vars = ragis_config["Cumulative Variables"]
-    cumulative_uncertainty_vars = {
-        k + "_uncertainty": v + "_uncertainty" for k, v in cumulative_vars.items()
-    }
-    imbie_mean = imbie.sel(time=slice("1992-1-1", "2012-1-1"))[
-        list(cumulative_uncertainty_vars.values())
-        + list(flux_uncertainty_vars.values())
-    ].mean()
-    mou_mean = mou.sel(time=slice("1992-1-1", "2012-1-1"))[
-        list(cumulative_uncertainty_vars.values())
-        + list(flux_uncertainty_vars.values())
-    ].mean()
-    u_ratio = imbie_mean / mou_mean / 2
-    sigma_adjusted = np.maximum(u_ratio, 1)
-
-    mou_adjusted = mou.copy()
-    mou_adjusted[
-        list(cumulative_uncertainty_vars.values())
-        + list(flux_uncertainty_vars.values())
-    ] *= sigma_adjusted[
-        list(cumulative_uncertainty_vars.values())
-        + list(flux_uncertainty_vars.values())
-    ]
-
-    observed = mou_adjusted
     observed_days_in_month = observed["time"].dt.days_in_month
     observed_wgts = (
-        observed_days_in_month.groupby("time.year")
-        / observed_days_in_month.groupby("time.year").sum()
+        observed_days_in_month.groupby(f"""time.{freq_dict[resampling_freq]}""")
+        / observed_days_in_month.groupby(f"""time.{freq_dict[resampling_freq]}""").sum()
     )
-    observed_yearly = (observed * observed_wgts).resample(time="YS").sum(dim="time")
+    observed_resampled = (
+        (observed * observed_wgts).resample(time=resampling_freq).sum(dim="time")
+    )
 
-    simulated = ds.drop_vars("config", errors="ignore")
+    simulated = ds.drop_vars(["pism_config", "run_stats"], errors="ignore")
     simulated = ds
     simulated_days_in_month = simulated["time"].dt.days_in_month
     simulated_wgts = (
-        simulated_days_in_month.groupby("time.year")
-        / simulated_days_in_month.groupby("time.year").sum()
+        simulated_days_in_month.groupby(f"""time.{freq_dict[resampling_freq]}""")
+        / simulated_days_in_month.groupby(
+            f"""time.{freq_dict[resampling_freq]}"""
+        ).sum()
     )
-    simulated_yearly = (
-        (simulated.drop_vars("config", errors="ignore") * simulated_wgts)
-        .resample(time="YS")
+    simulated_resampled = (
+        (
+            simulated.drop_vars(["pism_config", "run_stats"], errors="ignore")
+            * simulated_wgts
+        )
+        .resample(time=resampling_freq)
         .sum(dim="time")
     )
-    simulated_yearly["config"] = simulated["config"]
+    simulated_resampled["pism_config"] = simulated["pism_config"]
 
     # Apply the conversion function to each column
     ragis = ragis.apply(convert_column_to_float)
@@ -624,18 +630,18 @@ if __name__ == "__main__":
 
     ragis["Ensemble"] = "Prior"
 
-    simulated_resampled_all = {}
-    resampled_all = {}
+    simulated_filtered_all = {}
+    filtered_all = {}
     for obs_mean_var, obs_std_var, sim_var in zip(
         flux_vars.values(),
         flux_uncertainty_vars.values(),
         flux_vars.values(),
     ):
         print(f"Particle filtering using {obs_mean_var}")
-        resampled_ids = resample_ensemble_by_data(
-            simulated=simulated_yearly,
-            observed=observed_yearly,
-            start_date="1992-01-01",
+        filtered_ids = filter_ensemble_by_data(
+            simulated=simulated_resampled,
+            observed=observed_resampled,
+            start_date="2004-01-01",
             end_date="2018-01-01",
             fudge_factor=2,
             n_samples=len(simulated.exp_id),
@@ -643,41 +649,46 @@ if __name__ == "__main__":
             obs_std_var=obs_std_var,
             sim_var=sim_var,
         )
-        resampled_ids["basin"] = resampled_ids["basin"].astype("<U3")
-        simulated_resampled = (
-            simulated.sel(exp_id=resampled_ids)
+        filtered_ids["basin"] = filtered_ids["basin"].astype("<U3")
+        simulated_filtered = (
+            simulated.sel(exp_id=filtered_ids)
             .drop_vars("exp_id")
             .rename_dims({"exp_id_sampled": "exp_id"})
         )
-        simulated_resampled["Ensemble"] = "Posterior"
-        simulated_resampled_all[obs_mean_var] = simulated_resampled
+        simulated_filtered["Ensemble"] = "Posterior"
+        simulated_filtered_all[obs_mean_var] = simulated_filtered
 
-        ids_to_select = list(resampled_ids.sel(basin="GIS", ensemble_id="RAGIS").values)
+        ids_to_select = list(filtered_ids.sel(basin="GIS", ensemble_id="RAGIS").values)
 
-        ragis_resampled = select_experiments(ragis, ids_to_select)
-        ragis_resampled["Ensemble"] = "Posterior"
+        ragis_filtered = select_experiments(ragis, ids_to_select)
+        ragis_filtered["Ensemble"] = "Posterior"
 
-        resampled_all[obs_mean_var] = pd.concat([ragis, ragis_resampled]).rename(
+        filtered_all[obs_mean_var] = pd.concat([ragis, ragis_filtered]).rename(
             columns=params_short_dict
         )
 
     sim_alpha = 0.5
     obs_cmap = sns.color_palette("crest", n_colors=4)
-    obs_cmap = ["0.4"]
+    obs_cmap = ["0.4", "0.2"]
     sim_cmap = sns.color_palette("flare", n_colors=4)
     hist_cmap = ["#a6cee3", "#1f78b4", "#b2df8a", "#33a02c"]
     hist_cmap = ["#a6cee3", "#1f78b4"]
 
-    obs_gis = mou_adjusted.sel(basin="GIS")
+    obs_gis = observed.sel(basin="GIS").rolling(time=390).mean()
     sim_gis_prior = (
-        simulated.load().sel(basin="GIS", ensemble_id="RAGIS").rolling(time=13).mean()
+        simulated.load()
+        .sel(basin="GIS", ensemble_id="RAGIS")
+        .drop_vars(["pism_config", "run_stats"], errors="ignore")
+        .rolling(time=13)
+        .mean()
     )
     sim_gis_prior["Ensemble"] = "Prior"
 
-    for resampling_var, simulated_resampled in simulated_resampled_all.items():
+    for filtering_var, simulated_filtered in simulated_filtered_all.items():
         sim_gis_posterior = (
-            simulated_resampled.load()
+            simulated_filtered.load()
             .sel(basin="GIS", ensemble_id="RAGIS")
+            .drop_vars(["pism_config", "run_stats"], errors="ignore")
             .rolling(time=13)
             .mean()
         )
@@ -688,14 +699,14 @@ if __name__ == "__main__":
             sim_gis_prior,
             sim_gis_posterior,
             config=ragis_config,
-            resampling_var=resampling_var,
+            filtering_var=filtering_var,
         )
 
         # observed = mou_adjusted
         # for plot_var in ragis_config["Cumulative Variables"].values():
-        #     plot_basins(observed, simulated, plot_var, resampling_var)
+        #     plot_basins(observed, simulated, plot_var, filtering_var)
 
-        posterior_df = resampled_all[resampling_var]
+        posterior_df = filtered_all[filtering_var]
 
         n_params = len(params_short_dict)
         fig, axs = plt.subplots(
@@ -726,7 +737,7 @@ if __name__ == "__main__":
             ticklabels = ax.get_xticklabels()
             for tick in ticklabels:
                 tick.set_rotation(45)
-        fig.savefig(f"hist_prior_posterior_filtered_by_{resampling_var}.pdf")
+        fig.savefig(f"hist_prior_posterior_filtered_by_{filtering_var}.pdf")
 
     ensemble_df = ragis.drop(columns=["Ensemble", "exp_id"], errors="ignore")
     climate_dict = {
@@ -772,8 +783,8 @@ if __name__ == "__main__":
                 for key in ["delta", "delta_conf", "S1", "S1_conf"]
             }
             df = pd.DataFrame.from_dict(delta_analysis)
-            df["config_axis"] = problem["names"]
-            df.set_index("config_axis", inplace=True)
+            df["pism_config_axis"] = problem["names"]
+            df.set_index("pism_config_axis", inplace=True)
         return xr.Dataset.from_dataframe(df)
 
     to_analyze = ds.sel(time=slice("1980-01-01", "2020-01-01"))
@@ -808,11 +819,11 @@ if __name__ == "__main__":
             all_delta_indices.append(delta_indices)
     all_delta_indices = xr.concat(all_delta_indices, dim="name")
     # # Extract the prefix from each coordinate value
-    # prefixes = [name.split(".")[0] for name in all_delta_indices.config_axis.values]
+    # prefixes = [name.split(".")[0] for name in all_delta_indices.pism_config_axis.values]
 
     # # Add the prefixes as a new coordinate
     # all_delta_indices = all_delta_indices.assign_coords(
-    #     prefix=("config_axis", prefixes)
+    #     prefix=("pism_config_axis", prefixes)
     # )
 
     # # Group by the new coordinate and compute the sum for each group

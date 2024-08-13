@@ -288,7 +288,7 @@ def sample_with_replacement(
     return rng.choice(exp_id, size=n_samples, p=weights)
 
 
-def resample_ensemble_by_data(
+def filter_ensemble_by_data(
     simulated: xr.Dataset,
     observed: xr.Dataset,
     start_date: str = "1992-01-01",
@@ -302,7 +302,7 @@ def resample_ensemble_by_data(
     seed: int = 0,
 ) -> np.ndarray:
     """
-    Resample an ensemble of simulated data to match observed data using a likelihood-based approach.
+    Filter an ensemble of simulated data to match observed data using a likelihood-based approach.
 
     Parameters
     ----------
@@ -311,9 +311,9 @@ def resample_ensemble_by_data(
     observed : xr.Dataset
         An xarray Dataset containing the observed data.
     start_date : str, optional
-        The start date for the period over which to perform the resampling, by default "1992-01-01".
+        The start date for the period over which to perform the filtering, by default "1992-01-01".
     end_date : str, optional
-        The end date for the period over which to perform the resampling, by default "2020-01-01".
+        The end date for the period over which to perform the filtering, by default "2020-01-01".
     dim : str, optional
         The variable name in `simulated` that identifies each ensemble member, by default "exp_id".
     fudge_factor : float, optional
@@ -335,11 +335,11 @@ def resample_ensemble_by_data(
     Returns
     -------
     np.ndarray
-        An array of ensemble member IDs selected through the resampling process.
+        An array of ensemble member IDs selected through the filtering process.
 
     Notes
     -----
-    This function implements a resampling algorithm that uses a likelihood-based approach to select ensemble members
+    This function implements a filtering algorithm that uses a likelihood-based approach to select ensemble members
     from the simulated dataset that are most consistent with the observed data. The likelihood is computed based on
     the difference between the simulated and observed means, scaled by the observed standard deviation (adjusted by
     the fudge factor). This method allows for the incorporation of observational uncertainty into the ensemble
@@ -406,7 +406,7 @@ def resample_ensemble_by_data_df(
     return_weights: bool = False,
 ) -> pd.DataFrame:
     """
-    Resampling algorithm by Douglas C. Brinkerhoff
+    Filtering algorithm by Douglas C. Brinkerhoff
 
 
     Parameters
