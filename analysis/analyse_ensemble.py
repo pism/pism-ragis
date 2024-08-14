@@ -463,18 +463,6 @@ if __name__ == "__main__":
         default="./results",
     )
     parser.add_argument(
-        "--imbie_url",
-        help="""Path to IMBIE excel file.""",
-        type=str,
-        default=None,
-    )
-    parser.add_argument(
-        "--mouginot_url",
-        help="""Path to Mouginot 2019 excel file.""",
-        type=str,
-        default="/mnt/storstrommen/data/mouginot/pnas.1904242116.sd02.xlsx",
-    )
-    parser.add_argument(
         "--mankoff_url",
         help="""Path to Mankoff basins mass balance.""",
         type=str,
@@ -497,7 +485,7 @@ if __name__ == "__main__":
         "--reference_year",
         help="""Reference year.""",
         type=int,
-        default=1980,
+        default=1986,
     )
 
     options = parser.parse_args()
@@ -552,7 +540,10 @@ if __name__ == "__main__":
         k + "_uncertainty": v + "_uncertainty" for k, v in cumulative_vars.items()
     }
 
-    ds = load_ensemble(result_dir).sortby("basin")
+    filter_start_year = 1990
+    filter_end_year = 2019
+
+    ds = load_ensemble(result_dir).sortby("basin").dropna(dim="exp_id").load()
     ds = standarize_variable_names(ds, ragis_config["PISM"])
     ds[ragis_config["Cumulative Variables"]["discharge_cumulative"]] = ds[
         ragis_config["Flux Variables"]["discharge_flux"]
@@ -565,6 +556,39 @@ if __name__ == "__main__":
         list(ragis_config["Cumulative Variables"].values()),
         reference_year=reference_year,
     )
+    fig, ax = plt.subplots(1, 1)
+    ds.sel(time=slice(str(filter_start_year), str(filter_end_year))).sel(
+        basin="GIS", ensemble_id="RAGIS"
+    ).ice_discharge.plot(hue="exp_id", add_legend=False, ax=ax, lw=0.5)
+    fig.savefig("ice_discharge_unfiltered.pdf")
+
+    lower_bound = -575
+    upper_bound = -325
+
+    filter_ds = (
+        ds.sel(basin="GIS", ensemble_id="RAGIS")
+        .drop_vars(["pism_config", "run_stats"], errors="ignore")["ice_discharge"]
+        .sel(time=slice(str(filter_start_year), str(filter_end_year)))
+    )
+    filter_days_in_month = filter_ds.time.dt.days_in_month
+    filter_wgts = filter_days_in_month.groupby(
+        "time.year"
+    ) / filter_days_in_month.groupby("time.year").sum(dim="time")
+    outlier_filter = (filter_ds * filter_wgts).resample({"time": "YS"}).sum()
+    outlier_filter = filter_ds
+    # Identify exp_id values that fall within the 99% credibility interval
+    mask = (outlier_filter >= lower_bound) & (outlier_filter <= upper_bound)
+    mask = ~(~mask).any(dim="time")
+    filtered_ds = outlier_filter.sel(exp_id=mask)
+    filtered_exp_ids = filtered_ds.exp_id.values
+    print(len(filtered_exp_ids))
+    ds = ds.sel(exp_id=filtered_exp_ids)
+
+    fig, ax = plt.subplots(1, 1)
+    ds.sel(time=slice(str(filter_start_year), str(filter_end_year))).sel(
+        basin="GIS", ensemble_id="RAGIS"
+    ).ice_discharge.plot(hue="exp_id", add_legend=False, ax=ax, lw=0.5)
+    fig.savefig("ice_discharge_filtered.pdf")
 
     pism_config = ds.sel(basin="GIS").sel(pism_config_axis=params).pism_config
 
@@ -577,8 +601,8 @@ if __name__ == "__main__":
         ]
     ).reset_index(drop=True)
 
-    observed = xr.open_dataset(options.mankoff_url).sel(
-        time=slice("1986-01-01", "2024-01-01")
+    observed = (
+        xr.open_dataset(options.mankoff_url).sel(time=slice("1986", "2021")).load()
     )
     observed = observed.sortby("basin")
     observed = normalize_cumulative_variables(
@@ -587,35 +611,48 @@ if __name__ == "__main__":
         reference_year,
     )
 
+    sim_alpha = 0.5
+    obs_cmap = sns.color_palette("crest", n_colors=4)
+    obs_cmap = ["0.4", "0.2"]
+    sim_cmap = sns.color_palette("flare", n_colors=4)
+    hist_cmap = ["#a6cee3", "#1f78b4", "#b2df8a", "#33a02c"]
+    hist_cmap = ["#a6cee3", "#1f78b4"]
+
     resampling_freq = "MS"
     freq_dict = {"MS": "month", "YS": "year"}
 
     observed_days_in_month = observed["time"].dt.days_in_month
-    observed_wgts = (
-        observed_days_in_month.groupby(f"""time.{freq_dict[resampling_freq]}""")
-        / observed_days_in_month.groupby(f"""time.{freq_dict[resampling_freq]}""").sum()
-    )
+    observed_days_in_month = observed.time.dt.days_in_month
+
+    observed_wgts = 1 / (observed_days_in_month)
     observed_resampled = (
         (observed * observed_wgts).resample(time=resampling_freq).sum(dim="time")
     )
 
-    simulated = ds.drop_vars(["pism_config", "run_stats"], errors="ignore")
+    # observed_resampled = observed_resampled.rolling(time=13).mean()
     simulated = ds
-    simulated_days_in_month = simulated["time"].dt.days_in_month
-    simulated_wgts = (
-        simulated_days_in_month.groupby(f"""time.{freq_dict[resampling_freq]}""")
-        / simulated_days_in_month.groupby(
-            f"""time.{freq_dict[resampling_freq]}"""
-        ).sum()
-    )
-    simulated_resampled = (
-        (
-            simulated.drop_vars(["pism_config", "run_stats"], errors="ignore")
-            * simulated_wgts
-        )
-        .resample(time=resampling_freq)
-        .sum(dim="time")
-    )
+
+    # simulated_days_in_month = simulated["time"].dt.days_in_month
+    # simulated_wgts = (
+    #     simulated_days_in_month.groupby(f"""time.{freq_dict[resampling_freq]}""")
+    #     / simulated_days_in_month.groupby(
+    #         f"""time.{freq_dict[resampling_freq]}"""
+    #     ).sum()
+    # )
+    # simulated_resampled = (
+    #     (
+    #         simulated.drop_vars(["pism_config", "run_stats"], errors="ignore")
+    #         * simulated_wgts
+    #     )
+    #     .resample(time=resampling_freq)
+    #     .sum(dim="time")
+    # )
+    simulated_resampled = simulated.resample(time="MS").sum(dim="time")
+    # simulated_resampled = (
+    #     simulated.drop_vars(["pism_config", "run_stats"], errors="ignore")
+    #     .rolling(time=13)
+    #     .mean()
+    # )
     simulated_resampled["pism_config"] = simulated["pism_config"]
 
     # Apply the conversion function to each column
@@ -641,9 +678,9 @@ if __name__ == "__main__":
         filtered_ids = filter_ensemble_by_data(
             simulated=simulated_resampled,
             observed=observed_resampled,
-            start_date="2004-01-01",
-            end_date="2018-01-01",
-            fudge_factor=2,
+            start_date=str(filter_start_year),
+            end_date=str(filter_end_year),
+            fudge_factor=10,
             n_samples=len(simulated.exp_id),
             obs_mean_var=obs_mean_var,
             obs_std_var=obs_std_var,
@@ -658,6 +695,19 @@ if __name__ == "__main__":
         simulated_filtered["Ensemble"] = "Posterior"
         simulated_filtered_all[obs_mean_var] = simulated_filtered
 
+        sim_prior = simulated_resampled.sel(basin="GIS", ensemble_id="RAGIS")
+        sim_prior["Ensemble"] = "Prior"
+        sim_posterior = simulated_filtered.sel(basin="GIS", ensemble_id="RAGIS")
+        sim_posterior["Ensemble"] = "Posterior"
+
+        plot_gis(
+            observed_resampled.sel(basin="GIS"),
+            sim_prior,
+            sim_posterior,
+            config=ragis_config,
+            filtering_var=obs_mean_var,
+        )
+
         ids_to_select = list(filtered_ids.sel(basin="GIS", ensemble_id="RAGIS").values)
 
         ragis_filtered = select_experiments(ragis, ids_to_select)
@@ -667,17 +717,9 @@ if __name__ == "__main__":
             columns=params_short_dict
         )
 
-    sim_alpha = 0.5
-    obs_cmap = sns.color_palette("crest", n_colors=4)
-    obs_cmap = ["0.4", "0.2"]
-    sim_cmap = sns.color_palette("flare", n_colors=4)
-    hist_cmap = ["#a6cee3", "#1f78b4", "#b2df8a", "#33a02c"]
-    hist_cmap = ["#a6cee3", "#1f78b4"]
-
     obs_gis = observed.sel(basin="GIS").rolling(time=390).mean()
     sim_gis_prior = (
-        simulated.load()
-        .sel(basin="GIS", ensemble_id="RAGIS")
+        simulated.sel(basin="GIS", ensemble_id="RAGIS")
         .drop_vars(["pism_config", "run_stats"], errors="ignore")
         .rolling(time=13)
         .mean()
@@ -686,8 +728,7 @@ if __name__ == "__main__":
 
     for filtering_var, simulated_filtered in simulated_filtered_all.items():
         sim_gis_posterior = (
-            simulated_filtered.load()
-            .sel(basin="GIS", ensemble_id="RAGIS")
+            simulated_filtered.sel(basin="GIS", ensemble_id="RAGIS")
             .drop_vars(["pism_config", "run_stats"], errors="ignore")
             .rolling(time=13)
             .mean()

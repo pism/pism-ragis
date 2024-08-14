@@ -114,4 +114,4 @@ if __name__ == "__main__":
 
     fn = "mankoff_mass_balance.nc"
     p_fn = p / fn
-    ds.to_netcdf(p_fn, encoding=encoding)
+    ds.pint.dequantify().to_netcdf(p_fn, encoding=encoding)

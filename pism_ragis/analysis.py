@@ -284,8 +284,13 @@ def sample_with_replacement(
     np.ndarray
         An array of sampled experiment IDs.
     """
+
     rng = np.random.default_rng(seed)
-    return rng.choice(exp_id, size=n_samples, p=weights)
+    try:
+        ids = rng.choice(exp_id, size=n_samples, p=weights)
+    except:
+        ids = exp_id
+    return ids
 
 
 def filter_ensemble_by_data(
@@ -357,10 +362,8 @@ def filter_ensemble_by_data(
     obs_mean = observed[obs_mean_var]
     obs_std = fudge_factor * observed[obs_std_var]
 
-    # Extract the simulated data, remove exp_id's which contain zeros.
+    # Extract the simulated data
     sim = simulated[sim_var]
-    sim = sim.where(sim != 0.0, np.nan)
-    sim = sim.dropna(dim=dim)
 
     # Compute the log-likelihood of each simulated data point
     n = len(obs_mean["time"])
@@ -369,7 +372,6 @@ def filter_ensemble_by_data(
     )
     log_likes_sum = log_likes.sum(dim="time")
     log_likes_scaled = log_likes_sum - log_likes_sum.mean(dim=dim)
-
     # Convert log-likelihoods to weights
     weights = np.exp(log_likes_scaled)
     weights /= weights.sum(dim=dim)
