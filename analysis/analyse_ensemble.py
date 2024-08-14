@@ -22,12 +22,11 @@ Analyze RAGIS ensemble
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from importlib.resources import files
 from pathlib import Path
-from typing import Any, Hashable, List, Mapping
+from typing import Any, Hashable, List, Mapping, Union
 
 import dask
 import numpy as np
 import pandas as pd
-import pint_xarray  # pylint: disable=unused-import
 import pylab as plt
 import seaborn as sns
 import toml
@@ -38,16 +37,22 @@ from SALib.analyze import delta
 from pism_ragis.analysis import filter_ensemble_by_data
 
 
-def plot_gis(
+def plot_obs_sims(
     obs: xr.Dataset,
     sim_prior: xr.Dataset,
     sim_posterior: xr.Dataset,
     config,
     filtering_var,
+    fig_dir: Union[str, Path] = "figures",
 ):
     """
-    Plot Greenland figure with cumulative mass balance and fluxes.
+    Plot figure with cumulative mass balance and ice discharge and climatic
+    mass balance fluxes.
     """
+
+    Path(fig_dir).mkdir(exist_ok=True)
+
+    basin = obs.basin.values
     mass_cumulative_varname = config["Cumulative Variables"]["mass_cumulative"]
     mass_cumulative_uncertainty_varname = mass_cumulative_varname + "_uncertainty"
     discharge_flux_varname = config["Flux Variables"]["discharge_flux"]
@@ -58,6 +63,8 @@ def plot_gis(
     fig, axs = plt.subplots(
         3, 1, sharex=True, figsize=(6.2, 4.2), height_ratios=[2, 1, 1]
     )
+    fig.subplots_adjust(hspace=0.05, wspace=0.05)
+
     obs_ci = axs[0].fill_between(
         obs["time"],
         obs[mass_cumulative_varname] - obs[mass_cumulative_uncertainty_varname],
@@ -153,21 +160,25 @@ def plot_gis(
     axs[0].add_artist(legend_obs)
     axs[0].add_artist(legend_sim)
 
-    axs[0].set_ylim(-10_000, 5_000)
-    axs[1].set_ylim(-750, 0)
-    axs[2].set_ylim(0, 750)
+    # axs[0].set_ylim(-10_000, 5_000)
+    # axs[1].set_ylim(-750, -250)
+    # axs[2].set_ylim(-500, 1_000)
     axs[0].xaxis.set_tick_params(labelbottom=False)
+    axs[1].xaxis.set_tick_params(labelbottom=False)
 
     axs[0].set_ylabel(f"Cumulative mass\nloss since {reference_year} (Gt)")
     axs[0].set_xlabel("")
-    axs[0].set_title(f"GIS filtered by {filtering_var}")
+    axs[1].set_xlabel("")
+    axs[0].set_title(f"{basin} filtered by {filtering_var}")
     axs[1].set_title("")
     axs[2].set_title("")
     axs[1].set_ylabel("Grounding Line\nFlux (Gt/yr)")
     axs[2].set_ylabel("Climatic Mass\nBalance (Gt/yr)")
     axs[-1].set_xlim(np.datetime64("1980-01-01"), np.datetime64("2021-01-01"))
     fig.tight_layout()
-    fig.savefig(f"GIS_mass_accounting_filtered_by_{filtering_var}.pdf")
+    fig.savefig(
+        fig_dir / Path(f"{basin}_mass_accounting_filtered_by_{filtering_var}.pdf")
+    )
 
 
 def plot_basins(observed, simulated, plot_var, filtering_var):
@@ -181,7 +192,7 @@ def plot_basins(observed, simulated, plot_var, filtering_var):
         2,
         figsize=[6.2, 7.2],
     )
-    fig.subplots_adjust(hspace=0.75, wspace=0.25)
+    fig.subplots_adjust(hspace=0.75, wspace=0.5)
 
     for k, basin in enumerate(observed.basin):
         obs = observed.sel(basin=basin)
@@ -541,7 +552,7 @@ if __name__ == "__main__":
     }
 
     filter_start_year = 1990
-    filter_end_year = 2019
+    filter_end_year = 2009
 
     ds = load_ensemble(result_dir).sortby("basin").dropna(dim="exp_id").load()
     ds = standarize_variable_names(ds, ragis_config["PISM"])
@@ -680,7 +691,7 @@ if __name__ == "__main__":
             observed=observed_resampled,
             start_date=str(filter_start_year),
             end_date=str(filter_end_year),
-            fudge_factor=10,
+            fudge_factor=3,
             n_samples=len(simulated.exp_id),
             obs_mean_var=obs_mean_var,
             obs_std_var=obs_std_var,
@@ -695,18 +706,20 @@ if __name__ == "__main__":
         simulated_filtered["Ensemble"] = "Posterior"
         simulated_filtered_all[obs_mean_var] = simulated_filtered
 
-        sim_prior = simulated_resampled.sel(basin="GIS", ensemble_id="RAGIS")
+        sim_prior = simulated_resampled
         sim_prior["Ensemble"] = "Prior"
-        sim_posterior = simulated_filtered.sel(basin="GIS", ensemble_id="RAGIS")
+        sim_posterior = simulated_filtered
         sim_posterior["Ensemble"] = "Posterior"
 
-        plot_gis(
-            observed_resampled.sel(basin="GIS"),
-            sim_prior,
-            sim_posterior,
-            config=ragis_config,
-            filtering_var=obs_mean_var,
-        )
+        for basin in observed_resampled.basin:
+            plot_obs_sims(
+                observed_resampled.sel(basin=basin),
+                sim_prior.sel(basin=basin, ensemble_id="RAGIS"),
+                sim_posterior.sel(basin=basin, ensemble_id="RAGIS"),
+                config=ragis_config,
+                filtering_var=obs_mean_var,
+                fig_dir=result_dir / Path("figures"),
+            )
 
         ids_to_select = list(filtered_ids.sel(basin="GIS", ensemble_id="RAGIS").values)
 
@@ -734,14 +747,6 @@ if __name__ == "__main__":
             .mean()
         )
         sim_gis_posterior["Ensemble"] = "Posterior"
-
-        plot_gis(
-            obs_gis,
-            sim_gis_prior,
-            sim_gis_posterior,
-            config=ragis_config,
-            filtering_var=filtering_var,
-        )
 
         # observed = mou_adjusted
         # for plot_var in ragis_config["Cumulative Variables"].values():
