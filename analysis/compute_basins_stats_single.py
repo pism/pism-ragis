@@ -115,6 +115,8 @@ if __name__ == "__main__":
         "tendency_of_ice_mass_due_to_surface_mass_flux",
         "tendency_of_ice_mass_due_to_conservation_error",
         "tendency_of_ice_mass_due_to_flow",
+        "tendency_of_ice_mass_due_to_calving",
+        "tendency_of_ice_mass_due_to_forced_retreat",
     ]
     regexp: str = "id_(.+?)_"
 

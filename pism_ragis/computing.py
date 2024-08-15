@@ -487,6 +487,8 @@ def generate_climate(climate, **kwargs):
 
     if climate in climate_dict:
         params_dict = climate_dict.get(climate)
+    else:
+        params_dict = OrderedDict()
 
     return merge_dicts(params_dict, kwargs)
 
@@ -504,6 +506,8 @@ def generate_ocean(ocean, **kwargs):
     }
     if ocean in ocean_dict:
         params_dict = ocean_dict.get(ocean)
+    else:
+        params_dict = OrderedDict()
 
     return merge_dicts(params_dict, kwargs)
 

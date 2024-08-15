@@ -195,10 +195,8 @@ if method == "saltelli":
     unif_sample = saltelli.sample(
         problem, n_draw_samples, calc_second_order=calc_second_order
     )
-elif method == "lhs":
-    unif_sample = lhs(len(keys_prior), n_draw_samples)
 else:
-    print(f"Method {method} not available")
+    unif_sample = lhs(len(keys_prior), n_draw_samples)
 
 n_samples = unif_sample.shape[0]
 # To hold the transformed variables

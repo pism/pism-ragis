@@ -67,7 +67,7 @@ geom = {
 }
 
 
-def dissolve(ds, date):
+def dissolve(ds, date, crs: str = "EPSG:3413"):
     """
     Dissolve geometries.
     """
@@ -147,7 +147,7 @@ def create_ds(
     ds = gp.GeoDataFrame(ds1, crs=crs)
     geom_valid = ds.geometry.make_valid()
     ds.geometry = geom_valid
-    ds_dissolved = ds.dissolve()
+    ds_dissolved = ds.dissolve(crs=crs)
     diff = ds2.difference(ds_dissolved.buffer(5))
     n = len(diff)
     diff_df = {"land_ice_area_fraction_retreat": np.ones(n)}
