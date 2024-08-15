@@ -32,12 +32,12 @@ import seaborn as sns
 import toml
 import xarray as xr
 from dask.distributed import Client, LocalCluster, progress
-from SALib.analyze import delta
 from joblib import Parallel, delayed
+from SALib.analyze import delta
 from tqdm.auto import tqdm
 
-from pism_ragis.processing import tqdm_joblib
 from pism_ragis.analysis import filter_ensemble_by_data
+from pism_ragis.processing import tqdm_joblib
 
 
 def plot_obs_sims(
@@ -77,17 +77,19 @@ def plot_obs_sims(
         obs[mass_cumulative_varname] - obs[mass_cumulative_uncertainty_varname],
         obs[mass_cumulative_varname] + obs[mass_cumulative_uncertainty_varname],
         color=obs_cmap[0],
-        alpha=0.5,
+        alpha=1.0,
         lw=0,
         label="1-$\sigma$",
     )
-    
+
     obs_filtered_ci = axs[0].fill_between(
         obs_filtered["time"],
-        obs_filtered[mass_cumulative_varname] - obs_filtered[mass_cumulative_uncertainty_varname],
-        obs_filtered[mass_cumulative_varname] + obs_filtered[mass_cumulative_uncertainty_varname],
+        obs_filtered[mass_cumulative_varname]
+        - obs_filtered[mass_cumulative_uncertainty_varname],
+        obs_filtered[mass_cumulative_varname]
+        + obs_filtered[mass_cumulative_uncertainty_varname],
         color=obs_cmap[1],
-        alpha=0.5,
+        alpha=1.0,
         lw=0,
         label="Filter Interval",
     )
@@ -97,16 +99,18 @@ def plot_obs_sims(
         obs[discharge_flux_varname] - obs[discharge_flux_uncertainty_varname],
         obs[discharge_flux_varname] + obs[discharge_flux_uncertainty_varname],
         color=obs_cmap[0],
-        alpha=0.5,
+        alpha=1.0,
         lw=0,
     )
 
     axs[1].fill_between(
         obs_filtered["time"],
-        obs_filtered[discharge_flux_varname] - obs_filtered[discharge_flux_uncertainty_varname],
-        obs_filtered[discharge_flux_varname] + obs_filtered[discharge_flux_uncertainty_varname],
+        obs_filtered[discharge_flux_varname]
+        - obs_filtered[discharge_flux_uncertainty_varname],
+        obs_filtered[discharge_flux_varname]
+        + obs_filtered[discharge_flux_uncertainty_varname],
         color=obs_cmap[1],
-        alpha=0.5,
+        alpha=1.0,
         lw=0,
     )
 
@@ -115,7 +119,7 @@ def plot_obs_sims(
         obs[smb_flux_varname] - obs[smb_flux_uncertainty_varname],
         obs[smb_flux_varname] + obs[smb_flux_uncertainty_varname],
         color=obs_cmap[0],
-        alpha=0.5,
+        alpha=1.0,
         lw=0,
     )
 
@@ -148,7 +152,7 @@ def plot_obs_sims(
         )
         if k == 0:
             sim_cis.append(sim_ci)
-            
+
     quantiles = {}
     for q in [0.16, 0.5, 0.84]:
         quantiles[q] = sim_posterior.drop_vars(
@@ -172,7 +176,9 @@ def plot_obs_sims(
         axs[k].plot(
             quantiles[0.5].time, quantiles[0.5][m_var], lw=0.75, color=sim_cmap[3]
         )
-    legend_obs = axs[0].legend(handles=[obs_ci, obs_filtered_ci], loc="lower left", title="Observed")
+    legend_obs = axs[0].legend(
+        handles=[obs_ci, obs_filtered_ci], loc="lower left", title="Observed"
+    )
     legend_obs.get_frame().set_linewidth(0.0)
     legend_obs.get_frame().set_alpha(0.0)
 
@@ -224,16 +230,12 @@ def plot_basins(observed, simulated, plot_var, filtering_var):
     for k, basin in enumerate(observed.basin):
         obs = observed.sel(basin=basin)
         sim_prior = (
-            simulated
-            .sel(basin=basin, ensemble_id="RAGIS")
-            .rolling(time=13)
-            .mean()
+            simulated.sel(basin=basin, ensemble_id="RAGIS").rolling(time=13).mean()
         )
         sim_prior["Ensemble"] = "Prior"
 
         sim_posterior = (
-            simulated_filtered
-            .sel(basin=basin, ensemble_id="RAGIS")
+            simulated_filtered.sel(basin=basin, ensemble_id="RAGIS")
             .rolling(time=13)
             .mean()
         )
@@ -609,8 +611,8 @@ if __name__ == "__main__":
     ).ice_discharge.plot(hue="exp_id", add_legend=False, ax=ax, lw=0.5)
     fig.savefig("ice_discharge_unfiltered.pdf")
 
-    lower_bound = -650
-    upper_bound = -150
+    lower_bound = -750
+    upper_bound = -100
 
     filter_ds = (
         ds.sel(basin="GIS", ensemble_id="RAGIS")
@@ -660,10 +662,10 @@ if __name__ == "__main__":
 
     sim_alpha = 0.5
     obs_cmap = sns.color_palette("crest", n_colors=4)
-    #obs_cmap = ["#DC267F", "#DC267F"]
+    # obs_cmap = ["#DC267F", "#DC267F"]
     sim_cmap = ["#FFB000", "#FE6100"]
     sim_cmap = sns.color_palette("flare", n_colors=4)
-    obs_cmap = ["0.6", "0.4"]
+    obs_cmap = ["0.8", "0.7"]
     hist_cmap = ["#a6cee3", "#1f78b4", "#b2df8a", "#33a02c"]
     hist_cmap = ["#a6cee3", "#1f78b4"]
 
@@ -679,9 +681,13 @@ if __name__ == "__main__":
     )
 
     # observed_resampled = observed_resampled.rolling(time=13).mean()
-    simulated = ds.drop_vars(["pism_config", "run_stats"], errors="ignore").rolling(time=13).mean()
+    simulated = (
+        ds.drop_vars(["pism_config", "run_stats"], errors="ignore")
+        .rolling(time=13)
+        .mean()
+    )
     simulated = xr.merge([simulated, ds[["pism_config", "run_stats"]]])
-    
+
     # simulated_days_in_month = simulated["time"].dt.days_in_month
     # simulated_wgts = (
     #     simulated_days_in_month.groupby(f"""time.{freq_dict[resampling_freq]}""")
@@ -697,7 +703,11 @@ if __name__ == "__main__":
     #     .resample(time=resampling_freq)
     #     .sum(dim="time")
     # )
-    simulated_resampled = simulated.drop_vars(["pism_config", "run_stats"], errors="ignore").resample(time="MS").sum(dim="time")
+    simulated_resampled = (
+        simulated.drop_vars(["pism_config", "run_stats"], errors="ignore")
+        .resample(time="MS")
+        .sum(dim="time")
+    )
     # simulated_resampled = (
     #     simulated.drop_vars(["pism_config", "run_stats"], errors="ignore")
     #     .rolling(time=13)
@@ -754,15 +764,17 @@ if __name__ == "__main__":
             tqdm(desc="Plotting basins", total=len(observed_resampled.basin))
         ) as progress_bar:
             result = Parallel(n_jobs=options.n_jobs)(
-                delayed(plot_obs_sims)(observed_resampled.sel(basin=basin),
-                sim_prior.sel(basin=basin, ensemble_id="RAGIS"),
-                sim_posterior.sel(basin=basin, ensemble_id="RAGIS"),
-                config=ragis_config,
-                filtering_var=obs_mean_var,
-                filter_range=[filter_start_year, filter_end_year],
-                fig_dir=result_dir / Path("figures"),
-            )  for basin in observed_resampled.basin)
-
+                delayed(plot_obs_sims)(
+                    observed_resampled.sel(basin=basin).rolling(time=13).mean(),
+                    sim_prior.sel(basin=basin, ensemble_id="RAGIS"),
+                    sim_posterior.sel(basin=basin, ensemble_id="RAGIS"),
+                    config=ragis_config,
+                    filtering_var=obs_mean_var,
+                    filter_range=[filter_start_year, filter_end_year],
+                    fig_dir=result_dir / Path("figures"),
+                )
+                for basin in observed_resampled.basin
+            )
 
         ids_to_select = list(filtered_ids.sel(basin="GIS", ensemble_id="RAGIS").values)
 
@@ -772,7 +784,6 @@ if __name__ == "__main__":
         filtered_all[obs_mean_var] = pd.concat([ragis, ragis_filtered]).rename(
             columns=params_short_dict
         )
-
 
     for filtering_var, simulated_filtered in simulated_filtered_all.items():
         for basin in simulated_filtered.basin.values:
@@ -823,7 +834,12 @@ if __name__ == "__main__":
                 ticklabels = ax.get_xticklabels()
                 for tick in ticklabels:
                     tick.set_rotation(45)
-            fig.savefig(f"{basin}_hist_prior_posterior_filtered_by_{filtering_var}.pdf")
+            fn = (
+                result_dir
+                / Path("figures")
+                / Path(f"{basin}_hist_prior_posterior_filtered_by_{filtering_var}.pdf")
+            )
+            fig.savefig(fn)
 
     ensemble_df = ragis.drop(columns=["Ensemble", "exp_id"], errors="ignore")
     climate_dict = {
@@ -879,7 +895,7 @@ if __name__ == "__main__":
     with Client(cluster, asynchronous=True) as client:
         print(f"Open client in browser: {client.dashboard_link}")
         dim = "time"
-        all_delta_indices = []
+        all_delta_indices_list = []
         for response_var in [
             "mass_balance",
             "ice_discharge",
@@ -902,10 +918,12 @@ if __name__ == "__main__":
             delta_indices[dim] = responses[dim]
             delta_indices.expand_dims("name", axis=1)
             delta_indices["name"] = [response_var]
-            all_delta_indices.append(delta_indices)
-    all_delta_indices = xr.concat(all_delta_indices, dim="name")
+            all_delta_indices_list.append(delta_indices)
+    all_delta_indices: xr.Dataset = xr.concat(all_delta_indices_list, dim="name")
     # Extract the prefix from each coordinate value
-    prefixes = [name.split(".")[0] for name in all_delta_indices.pism_config_axis.values]
+    prefixes = [
+        name.split(".")[0] for name in all_delta_indices.pism_config_axis.values
+    ]
 
     # Add the prefixes as a new coordinate
     all_delta_indices = all_delta_indices.assign_coords(
