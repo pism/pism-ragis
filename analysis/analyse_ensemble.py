@@ -19,11 +19,12 @@
 Analyze RAGIS ensemble
 """
 
+import time
+import warnings
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from importlib.resources import files
 from pathlib import Path
 from typing import Any, Hashable, List, Mapping, Union
-import warnings
 
 import dask
 import numpy as np
@@ -34,9 +35,9 @@ import toml
 import xarray as xr
 from dask.distributed import Client, LocalCluster, progress
 from joblib import Parallel, delayed
-from SALib.analyze import delta
 from tqdm.auto import tqdm
 
+from pism_ragis.analysis import delta_analysis
 from pism_ragis.filter import particle_filter
 from pism_ragis.processing import tqdm_joblib
 
@@ -126,7 +127,7 @@ def plot_obs_sims(
 
     sim_cis = []
     with warnings.catch_warnings():
-        warnings.filterwarnings('ignore', r'All-NaN (slice|axis) encountered')
+        warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
         quantiles = {}
         for q in [0.16, 0.5, 0.84]:
             quantiles[q] = sim_prior.drop_vars(
@@ -157,7 +158,7 @@ def plot_obs_sims(
             sim_cis.append(sim_ci)
 
     with warnings.catch_warnings():
-        warnings.filterwarnings('ignore', r'All-NaN (slice|axis) encountered')
+        warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
         quantiles = {}
         for q in [0.16, 0.5, 0.84]:
             quantiles[q] = sim_posterior.drop_vars(
@@ -218,7 +219,6 @@ def plot_obs_sims(
         fig_dir / Path(f"{basin}_mass_accounting_filtered_by_{filtering_var}.pdf")
     )
     plt.close()
-
 
 
 def normalize_cumulative_variables(
@@ -327,20 +327,15 @@ def select_experiments(df: pd.DataFrame, ids_to_select: List[int]) -> pd.DataFra
 
 
 def load_ensemble(
-    result_dir: Union[Path, str],
-    glob_str: str = "basin*.nc",
+    filenames: List[Union[Path, str]],
 ) -> xr.Dataset:
     """
     Load an ensemble of NetCDF files into an xarray Dataset.
 
     Parameters
     ----------
-    result_dir : Path
-        The directory containing the NetCDF files.
-    glob_str : str, optional
-        The glob pattern to match the NetCDF files. Default is "basin*.nc".
-    ensemble_id : str, optional
-        The identifier for the ensemble. Default is "RAGIS".
+    filenames : List[Union[Path, str]]
+        A list of file paths or strings representing the NetCDF files to be loaded.
 
     Returns
     -------
@@ -351,14 +346,12 @@ def load_ensemble(
     -----
     This function uses Dask to load the dataset in parallel and handle large chunks efficiently.
     """
-    result_dir = Path(result_dir)
-    m_files = result_dir.glob(glob_str)
     with dask.config.set(**{"array.slicing.split_large_chunks": True}):
-        print("Loading ensemble files")
-        ds = xr.open_mfdataset(m_files, parallel=True, chunks="auto")
+        print("Loading ensemble files... ", end="", flush=True)
+        ds = xr.open_mfdataset(filenames, parallel=True, chunks="auto")
         if "time" in ds["pism_config"].coords:
             ds["pism_config"] = ds["pism_config"].isel(time=0).drop_vars("time")
-        print("Done")
+        print("Done.")
         return ds
 
 
@@ -467,14 +460,30 @@ if __name__ == "__main__":
         default=1986,
     )
     parser.add_argument(
+        "--notebook",
+        help="""Use when running in a notebook to display a nicer progress bar. Default=False.""",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
         "--n_jobs", help="""Number of parallel jobs.""", type=int, default=4
     )
     parser.add_argument(
-        "--fudge_factor", help="""Observational uncertainty multiplier. Default=3""", type=int, default=3
+        "--fudge_factor",
+        help="""Observational uncertainty multiplier. Default=3""",
+        type=int,
+        default=3,
+    )
+    parser.add_argument(
+        "FILES",
+        help="""Ensemble netCDF files.""",
+        nargs="*",
     )
 
     options = parser.parse_args()
+    basin_files = options.FILES
     crs = options.crs
+    notebook = options.notebook
     fudge_factor = options.fudge_factor
     reference_year = options.reference_year
     filter_start_year, filter_end_year = options.filter_range.split(" ")
@@ -527,7 +536,7 @@ if __name__ == "__main__":
         k + "_uncertainty": v + "_uncertainty" for k, v in cumulative_vars.items()
     }
 
-    ds = load_ensemble(result_dir).sortby("basin").dropna(dim="exp_id").load()
+    ds = load_ensemble(basin_files).sortby("basin").dropna(dim="exp_id").load()
     ds = standarize_variable_names(ds, ragis_config["PISM"])
     ds[ragis_config["Cumulative Variables"]["discharge_cumulative"]] = ds[
         ragis_config["Flux Variables"]["discharge_flux"]
@@ -547,25 +556,26 @@ if __name__ == "__main__":
     fig.savefig("ice_discharge_unfiltered.pdf")
 
     lower_bound = -750
-    upper_bound = -100
+    upper_bound = -150
 
-    filter_ds = (
+    outlier_filter = (
         ds.sel(basin="GIS", ensemble_id="RAGIS")
         .drop_vars(["pism_config", "run_stats"], errors="ignore")["ice_discharge"]
         .sel(time=slice(str(filter_start_year), str(filter_end_year)))
     )
-    filter_days_in_month = filter_ds.time.dt.days_in_month
-    filter_wgts = filter_days_in_month.groupby(
-        "time.year"
-    ) / filter_days_in_month.groupby("time.year").sum(dim="time")
-    outlier_filter = (filter_ds * filter_wgts).resample({"time": "YS"}).sum()
-    outlier_filter = filter_ds
+    # filter_days_in_month = filter_ds.time.dt.days_in_month
+    # filter_wgts = filter_days_in_month.groupby(
+    #     "time.year"
+    # ) / filter_days_in_month.groupby("time.year").sum(dim="time")
+    # outlier_filter = (filter_ds * filter_wgts).resample({"time": "YS"}).sum()
     # Identify exp_id values that fall within the 99% credibility interval
     mask = (outlier_filter >= lower_bound) & (outlier_filter <= upper_bound)
     mask = ~(~mask).any(dim="time")
     filtered_ds = outlier_filter.sel(exp_id=mask)
     filtered_exp_ids = filtered_ds.exp_id.values
-    print(len(filtered_exp_ids))
+    n_members = len(ds.exp_id)
+    n_members_filtered = len(filtered_exp_ids)
+    print(f"Ensemble size: {n_members}, outlier-filtered size: {n_members_filtered}")
     ds = ds.sel(exp_id=filtered_exp_ids)
 
     fig, ax = plt.subplots(1, 1)
@@ -612,11 +622,12 @@ if __name__ == "__main__":
 
     observed_wgts = 1 / (observed_days_in_month)
     observed_resampled = (
-        (observed * observed_wgts).resample(time=resampling_freq)
+        (observed * observed_wgts)
+        .resample(time=resampling_freq)
         .sum(dim="time")
         .rolling(time=13)
         .mean()
-        )
+    )
 
     # observed_resampled = observed_resampled.rolling(time=13).mean()
     # simulated = (
@@ -668,7 +679,6 @@ if __name__ == "__main__":
 
     ragis["Ensemble"] = "Prior"
 
-
     simulated_filtered_all = {}
     filtered_all = {}
     for obs_mean_var, obs_std_var, sim_var in zip(
@@ -678,8 +688,12 @@ if __name__ == "__main__":
     ):
         print(f"Particle filtering using {obs_mean_var}")
         filtered_ids = particle_filter(
-            simulated=simulated_resampled.sel(time=slice(str(filter_start_year), str(filter_end_year))),
-            observed=observed_resampled.sel(time=slice(str(filter_start_year), str(filter_end_year))),
+            simulated=simulated_resampled.sel(
+                time=slice(str(filter_start_year), str(filter_end_year))
+            ),
+            observed=observed_resampled.sel(
+                time=slice(str(filter_start_year), str(filter_end_year))
+            ),
             fudge_factor=fudge_factor,
             n_samples=len(simulated.exp_id),
             obs_mean_var=obs_mean_var,
@@ -746,13 +760,14 @@ if __name__ == "__main__":
             posterior_df = filtered_all[filtering_var]
 
             n_params = len(params_short_dict)
+            plt.rcParams["font.size"] = 4
             fig, axs = plt.subplots(
                 5,
                 3,
-                figsize=[6.2, 7.2],
+                sharey=True,
+                figsize=[6.2, 5.2],
             )
-            fig.subplots_adjust(hspace=1.5, wspace=0.25)
-
+            fig.subplots_adjust(hspace=1.0, wspace=0.1)
             for k, v in enumerate(params_short_dict.values()):
                 try:
                     sns.histplot(
@@ -761,7 +776,7 @@ if __name__ == "__main__":
                         hue="Ensemble",
                         palette=hist_cmap,
                         common_norm=False,
-                        stat="density",
+                        stat="probability",
                         multiple="dodge",
                         alpha=0.8,
                         linewidth=0.2,
@@ -771,6 +786,7 @@ if __name__ == "__main__":
                 except:
                     pass
             for ax in axs.flatten():
+                ax.set_ylabel("")
                 ticklabels = ax.get_xticklabels()
                 for tick in ticklabels:
                     tick.set_rotation(45)
@@ -797,6 +813,7 @@ if __name__ == "__main__":
     ensemble_df["calving.rate_scaling.file"] = ensemble_df[
         "calving.rate_scaling.file"
     ].map(calving_dict)
+
     problem = {
         "num_vars": len(ensemble_df.columns),
         "names": ensemble_df.columns,  # Parameter names
@@ -806,34 +823,12 @@ if __name__ == "__main__":
         ),  # Parameter bounds
     }
 
-    def get_delta(response, problem, ensemble_df):
-        """
-        Perform SALib delta analysis.
-        """
-        try:
-            delta_analysis = delta.analyze(
-                problem,
-                ensemble_df.values,
-                response,
-                num_resamples=10,
-                seed=0,
-                print_to_console=False,
-            )
-            df = delta_analysis.to_df()
-        except:
-            delta_analysis = {
-                key: np.empty(problem["num_vars"]) + np.nan
-                for key in ["delta", "delta_conf", "S1", "S1_conf"]
-            }
-            df = pd.DataFrame.from_dict(delta_analysis)
-            df["pism_config_axis"] = problem["names"]
-            df.set_index("pism_config_axis", inplace=True)
-        return xr.Dataset.from_dataframe(df)
-
     to_analyze = ds.sel(time=slice("1980-01-01", "2020-01-01"))
     print("Calculating Sensitivity Indices")
+    print("===============================")
     cluster = LocalCluster(n_workers=options.n_jobs, threads_per_worker=1)
     client = Client(cluster, asynchronous=True)
+    # client = Client()
     print(f"Open client in browser: {client.dashboard_link}")
     dim = "time"
     all_delta_indices_list = []
@@ -842,19 +837,28 @@ if __name__ == "__main__":
             "mass_balance",
             "ice_discharge",
         ]:
+            print(
+                f"  ...sensitivity indices for basin {basin} filtered by {filter_var} ",
+            )
+            start = time.time()
+
             responses = to_analyze.sel(basin=basin, ensemble_id="RAGIS")[filter_var]
             responses_scattered = client.scatter(
                 [responses.isel(time=k).to_numpy() for k in range(len(responses[dim]))]
             )
 
             futures = client.map(
-                get_delta,
+                delta_analysis,
                 responses_scattered,
                 problem=problem,
                 ensemble_df=ensemble_df,
             )
-            progress(futures)
+            progress(futures, notebook=notebook)
             result = client.gather(futures)
+
+            end = time.time()
+            time_elapsed = end - start
+            print(f"  ...took {time_elapsed:.0f}s")
 
             delta_indices = xr.concat([r.expand_dims(dim) for r in result], dim=dim)
             delta_indices[dim] = responses[dim]
@@ -863,8 +867,10 @@ if __name__ == "__main__":
             delta_indices = delta_indices.expand_dims("filtered_by", axis=2)
             delta_indices["filtered_by"] = [filter_var]
             all_delta_indices_list.append(delta_indices)
+
     all_delta_indices: xr.Dataset = xr.merge(all_delta_indices_list)
-    
+    client.close()
+
     # Extract the prefix from each coordinate value
     prefixes = [
         name.split(".")[0] for name in all_delta_indices.pism_config_axis.values
@@ -875,20 +881,29 @@ if __name__ == "__main__":
         prefix=("pism_config_axis", prefixes)
     )
 
-    sensitivity_indices_groups = {"surface": "Climate", "atmosphere": "Climate", "ocean": "Ocean",
-                                  "calving": "Calving", "frontal_melt": "Frontal Melt",
-                                  "basal_resistance": "Flow", "basal_yield_stress": "Flow", "stress_balance": "Flow"}
-    
-  
+    sensitivity_indices_groups = {
+        "surface": "Climate",
+        "atmosphere": "Climate",
+        "ocean": "Ocean",
+        "calving": "Calving",
+        "frontal_melt": "Frontal Melt",
+        "basal_resistance": "Flow",
+        "basal_yield_stress": "Flow",
+        "stress_balance": "Flow",
+    }
+    parameter_groups = ragis_config["Parameter Groups"]
 
-    si_prefixes = [
-        sensitivity_indices_groups[name] for name in all_delta_indices.prefix.values
-    ]
+    si_prefixes = [parameter_groups[name] for name in all_delta_indices.prefix.values]
     all_delta_indices = all_delta_indices.assign_coords(
         sensitivity_indices_group=("pism_config_axis", si_prefixes)
     )
     # Group by the new coordinate and compute the sum for each group
-    aggregated_data = all_delta_indices.groupby("sensitivity_indices_group").sum().rolling(time=13).mean()
+    aggregated_data = (
+        all_delta_indices.groupby("sensitivity_indices_group")
+        .sum()
+        .rolling(time=13)
+        .mean()
+    )
 
     for basin in aggregated_data.basin.values:
         for filter_var in aggregated_data.filtered_by.values:
