@@ -41,6 +41,11 @@ from pism_ragis.analysis import delta_analysis
 from pism_ragis.filter import particle_filter
 from pism_ragis.processing import tqdm_joblib
 
+sim_alpha = 0.4
+sim_cmap = sns.color_palette("flare", n_colors=4)
+obs_alpha = 1.0
+obs_cmap = ["0.8", "0.7"]
+hist_cmap = ["#a6cee3", "#1f78b4"]
 
 def plot_obs_sims(
     obs: xr.Dataset,
@@ -50,6 +55,8 @@ def plot_obs_sims(
     filtering_var: str,
     filter_range: List = [1990, 2019],
     fig_dir: Union[str, Path] = "figures",
+    sim_alpha: float = 0.4,
+    obs_alpha: float = 1.0,
 ):
     """
     Plot figure with cumulative mass balance and ice discharge and climatic
@@ -79,7 +86,7 @@ def plot_obs_sims(
         obs[mass_cumulative_varname] - obs[mass_cumulative_uncertainty_varname],
         obs[mass_cumulative_varname] + obs[mass_cumulative_uncertainty_varname],
         color=obs_cmap[0],
-        alpha=1.0,
+        alpha=obs_alpha,
         lw=0,
         label="1-$\sigma$",
     )
@@ -91,7 +98,7 @@ def plot_obs_sims(
         obs_filtered[mass_cumulative_varname]
         + obs_filtered[mass_cumulative_uncertainty_varname],
         color=obs_cmap[1],
-        alpha=1.0,
+        alpha=obs_alpha,
         lw=0,
         label="Filter Interval",
     )
@@ -101,7 +108,7 @@ def plot_obs_sims(
         obs[discharge_flux_varname] - obs[discharge_flux_uncertainty_varname],
         obs[discharge_flux_varname] + obs[discharge_flux_uncertainty_varname],
         color=obs_cmap[0],
-        alpha=1.0,
+        alpha=obs_alpha,
         lw=0,
     )
 
@@ -112,7 +119,7 @@ def plot_obs_sims(
         obs_filtered[discharge_flux_varname]
         + obs_filtered[discharge_flux_uncertainty_varname],
         color=obs_cmap[1],
-        alpha=1.0,
+        alpha=obs_alpha,
         lw=0,
     )
 
@@ -121,7 +128,7 @@ def plot_obs_sims(
         obs[smb_flux_varname] - obs[smb_flux_uncertainty_varname],
         obs[smb_flux_varname] + obs[smb_flux_uncertainty_varname],
         color=obs_cmap[0],
-        alpha=1.0,
+        alpha=obs_alpha,
         lw=0,
     )
 
@@ -142,14 +149,14 @@ def plot_obs_sims(
             color=sim_cmap[1],
             ax=axs[k],
             lw=0.1,
-            alpha=0.4,
+            alpha=sim_alpha,
             add_legend=False,
         )
         sim_ci = axs[k].fill_between(
             quantiles[0.5].time,
             quantiles[0.16][m_var],
             quantiles[0.84][m_var],
-            alpha=0.4,
+            alpha=sim_alpha,
             color=sim_cmap[1],
             label=sim_prior["Ensemble"].values,
             lw=0,
@@ -172,7 +179,7 @@ def plot_obs_sims(
             quantiles[0.5].time,
             quantiles[0.16][m_var],
             quantiles[0.84][m_var],
-            alpha=0.4,
+            alpha=sim_alpha,
             color=sim_cmap[3],
             label=sim_posterior["Ensemble"].values,
             lw=0,
@@ -328,6 +335,7 @@ def select_experiments(df: pd.DataFrame, ids_to_select: List[int]) -> pd.DataFra
 
 def load_ensemble(
     filenames: List[Union[Path, str]],
+    parallel: bool = True,
 ) -> xr.Dataset:
     """
     Load an ensemble of NetCDF files into an xarray Dataset.
@@ -336,6 +344,8 @@ def load_ensemble(
     ----------
     filenames : List[Union[Path, str]]
         A list of file paths or strings representing the NetCDF files to be loaded.
+    parallel : bool, optional
+        Whether to load the files in parallel using Dask. Default is True.
 
     Returns
     -------
@@ -345,15 +355,15 @@ def load_ensemble(
     Notes
     -----
     This function uses Dask to load the dataset in parallel and handle large chunks efficiently.
+    It sets the Dask configuration to split large chunks during array slicing.
     """
     with dask.config.set(**{"array.slicing.split_large_chunks": True}):
         print("Loading ensemble files... ", end="", flush=True)
-        ds = xr.open_mfdataset(filenames, parallel=True, chunks="auto")
+        ds = xr.open_mfdataset(filenames, parallel=parallel, chunks="auto")
         if "time" in ds["pism_config"].coords:
             ds["pism_config"] = ds["pism_config"].isel(time=0).drop_vars("time")
         print("Done.")
         return ds
-
 
 def select_experiment(ds, exp_id, n):
     """
@@ -428,17 +438,16 @@ if __name__ == "__main__":
         default="./results",
     )
     parser.add_argument(
-        "--mankoff_url",
-        help="""Path to Mankoff basins mass balance.""",
+        "--obs_url",
+        help="""Path to "observed" mass balance.""",
         type=str,
         default="data/mankoff/mankoff_mass_balance.nc",
     )
     parser.add_argument(
-        "--temporal_range",
-        help="""Time slice to extract.""",
+        "--crs",
+        help="""Coordinate reference system. Default is EPSG:3413.""",
         type=str,
-        nargs=2,
-        default=None,
+        default="EPSG:3413",
     )
     parser.add_argument(
         "--filter_range",
@@ -448,16 +457,13 @@ if __name__ == "__main__":
         default="1990 2019",
     )
     parser.add_argument(
-        "--crs",
-        help="""Coordinate reference system. Default is EPSG:3413.""",
-        type=str,
-        default="EPSG:3413",
+        "--fudge_factor",
+        help="""Observational uncertainty multiplier. Default=3""",
+        type=int,
+        default=3,
     )
     parser.add_argument(
-        "--reference_year",
-        help="""Reference year.""",
-        type=int,
-        default=1986,
+        "--n_jobs", help="""Number of parallel jobs.""", type=int, default=4
     )
     parser.add_argument(
         "--notebook",
@@ -466,13 +472,29 @@ if __name__ == "__main__":
         default=False,
     )
     parser.add_argument(
-        "--n_jobs", help="""Number of parallel jobs.""", type=int, default=4
+        "--parallel",
+        help="""Open dataset in parallel. Default=False.""",
+        action="store_true",
+        default=False,
     )
     parser.add_argument(
-        "--fudge_factor",
-        help="""Observational uncertainty multiplier. Default=3""",
+        "--resampling_frequency",
+        help="""Resampling data to resampling_frequency for particle filtering. Default is "MS".""",
+        type=str,
+        default="MS",
+    )
+    parser.add_argument(
+        "--reference_year",
+        help="""Reference year.""",
         type=int,
-        default=3,
+        default=1986,
+    )
+    parser.add_argument(
+        "--temporal_range",
+        help="""Time slice to extract.""",
+        type=str,
+        nargs=2,
+        default=None,
     )
     parser.add_argument(
         "FILES",
@@ -483,20 +505,13 @@ if __name__ == "__main__":
     options = parser.parse_args()
     basin_files = options.FILES
     crs = options.crs
-    notebook = options.notebook
-    fudge_factor = options.fudge_factor
-    reference_year = options.reference_year
     filter_start_year, filter_end_year = options.filter_range.split(" ")
+    fudge_factor = options.fudge_factor
+    notebook = options.notebook
+    parallel = options.parallel
+    reference_year = options.reference_year
+    resampling_frequency = options.resampling_frequency
 
-    colorblind_colors = [
-        "#882255",
-        "#DDCC77",
-        "#CC6677",
-        "#AA4499",
-        "#88CCEE",
-        "#44AA99",
-        "#117733",
-    ]
     ragis_config_file = Path(
         str(files("pism_ragis.data").joinpath("ragis_config.toml"))
     )
@@ -536,7 +551,7 @@ if __name__ == "__main__":
         k + "_uncertainty": v + "_uncertainty" for k, v in cumulative_vars.items()
     }
 
-    ds = load_ensemble(basin_files).sortby("basin").dropna(dim="exp_id").load()
+    ds = load_ensemble(basin_files, parallel=parallel).sortby("basin").dropna(dim="exp_id").load()
     ds = standarize_variable_names(ds, ragis_config["PISM"])
     ds[ragis_config["Cumulative Variables"]["discharge_cumulative"]] = ds[
         ragis_config["Flux Variables"]["discharge_flux"]
@@ -596,7 +611,7 @@ if __name__ == "__main__":
     ).reset_index(drop=True)
 
     observed = (
-        xr.open_dataset(options.mankoff_url).sel(time=slice("1986", "2021")).load()
+        xr.open_dataset(options.obs_url).sel(time=slice("1986", "2021"))
     )
     observed = observed.sortby("basin")
     observed = normalize_cumulative_variables(
@@ -605,25 +620,13 @@ if __name__ == "__main__":
         reference_year,
     )
 
-    sim_alpha = 0.5
-    obs_cmap = sns.color_palette("crest", n_colors=4)
-    # obs_cmap = ["#DC267F", "#DC267F"]
-    sim_cmap = ["#FFB000", "#FE6100"]
-    sim_cmap = sns.color_palette("flare", n_colors=4)
-    obs_cmap = ["0.8", "0.7"]
-    hist_cmap = ["#a6cee3", "#1f78b4", "#b2df8a", "#33a02c"]
-    hist_cmap = ["#a6cee3", "#1f78b4"]
-
-    resampling_freq = "MS"
-    freq_dict = {"MS": "month", "YS": "year"}
-
     observed_days_in_month = observed["time"].dt.days_in_month
     observed_days_in_month = observed.time.dt.days_in_month
 
     observed_wgts = 1 / (observed_days_in_month)
     observed_resampled = (
         (observed * observed_wgts)
-        .resample(time=resampling_freq)
+        .resample(time=resampling_frequency)
         .sum(dim="time")
         .rolling(time=13)
         .mean()
@@ -639,9 +642,9 @@ if __name__ == "__main__":
 
     # simulated_days_in_month = simulated["time"].dt.days_in_month
     # simulated_wgts = (
-    #     simulated_days_in_month.groupby(f"""time.{freq_dict[resampling_freq]}""")
+    #     simulated_days_in_month.groupby(f"""time.{freq_dict[resampling_frequency]}""")
     #     / simulated_days_in_month.groupby(
-    #         f"""time.{freq_dict[resampling_freq]}"""
+    #         f"""time.{freq_dict[resampling_frequency]}"""
     #     ).sum()
     # )
     # simulated_resampled = (
@@ -649,22 +652,17 @@ if __name__ == "__main__":
     #         simulated.drop_vars(["pism_config", "run_stats"], errors="ignore")
     #         * simulated_wgts
     #     )
-    #     .resample(time=resampling_freq)
+    #     .resample(time=resampling_frequency)
     #     .sum(dim="time")
     # )
     simulated = ds
     simulated_resampled = (
         simulated.drop_vars(["pism_config", "run_stats"], errors="ignore")
-        .resample(time="MS")
+        .resample(time=resampling_frequency)
         .sum(dim="time")
         .rolling(time=13)
         .mean()
     )
-    # simulated_resampled = (
-    #     simulated.drop_vars(["pism_config", "run_stats"], errors="ignore")
-    #     .rolling(time=13)
-    #     .mean()
-    # )
     simulated_resampled["pism_config"] = simulated["pism_config"]
 
     # Apply the conversion function to each column
@@ -726,6 +724,8 @@ if __name__ == "__main__":
                     filtering_var=obs_mean_var,
                     filter_range=[filter_start_year, filter_end_year],
                     fig_dir=result_dir / Path("figures"),
+                    obs_alpha=obs_alpha,
+                    sim_alpha=sim_alpha
                 )
                 for basin in observed_resampled.basin
             )
