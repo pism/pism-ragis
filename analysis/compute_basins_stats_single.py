@@ -175,24 +175,22 @@ if __name__ == "__main__":
     basins_file = result_dir / f"basins_sums_ensemble_{ensemble_id}_id_{m_id}.nc"
 
     cluster = LocalCluster(n_workers=options.n_jobs, threads_per_worker=1)
-    with Client(cluster, asynchronous=True) as client:
-        print(f"Open client in browser: {client.dashboard_link}")
+    client = Client(cluster, asynchronous=True)
+    print(f"Open client in browser: {client.dashboard_link}")
 
-        start = time.time()
+    start = time.time()
 
-        basins_ds_scattered = client.scatter(
-            [ds.rio.clip([basin.geometry]) for _, basin in basins.iterrows()]
-        )
-        basin_names = [basin["SUBREGION1"] for _, basin in basins.iterrows()]
-        futures = client.map(compute_basin, basins_ds_scattered, basin_names)
-        progress(futures)
-        basin_sums = xr.concat(client.gather(futures), dim="basin")
-        if "time_bounds" in ds.data_vars:
-            basin_sums["time_bounds"] = ds["time_bounds"]
-        basin_sums.to_netcdf(basins_file)
+    basins_ds_scattered = client.scatter(
+        [ds.rio.clip([basin.geometry]) for _, basin in basins.iterrows()]
+    )
+    basin_names = [basin["SUBREGION1"] for _, basin in basins.iterrows()]
+    futures = client.map(compute_basin, basins_ds_scattered, basin_names)
+    progress(futures)
+    basin_sums = xr.concat(client.gather(futures), dim="basin")
+    if "time_bounds" in ds.data_vars:
+        basin_sums["time_bounds"] = ds["time_bounds"]
+    basin_sums.to_netcdf(basins_file)
 
-        end = time.time()
-        time_elapsed = end - start
-        print(f"Time elapsed {time_elapsed:.0f}s")
-
-        client.close()
+    end = time.time()
+    time_elapsed = end - start
+    print(f"Time elapsed {time_elapsed:.0f}s")

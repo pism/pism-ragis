@@ -172,21 +172,21 @@ if __name__ == "__main__":
     initialize()
     path_to_sched = "~/dask_sch/sched.json"
     # with Client(scheduler_file=path_to_sched) as client:
-    with Client() as client:
-        print(f"Open client in browser: {client.dashboard_link}")
+    client = Client()
+    print(f"Open client in browser: {client.dashboard_link}")
 
-        start = time.time()
+    start = time.time()
 
-        basins_ds_scattered = client.scatter(
-            [ds.rio.clip([basin.geometry]) for _, basin in basins.iterrows()]
-        )
-        basin_names = [basin["SUBREGION1"] for _, basin in basins.iterrows()]
-        futures = client.map(compute_basin, basins_ds_scattered, basin_names)
-        basin_sums = xr.concat(client.gather(futures), dim="basin")
-        if "time_bounds" in ds.data_vars:
-            basin_sums["time_bounds"] = ds["time_bounds"]
-        basin_sums.to_netcdf(basins_file)
+    basins_ds_scattered = client.scatter(
+        [ds.rio.clip([basin.geometry]) for _, basin in basins.iterrows()]
+    )
+    basin_names = [basin["SUBREGION1"] for _, basin in basins.iterrows()]
+    futures = client.map(compute_basin, basins_ds_scattered, basin_names)
+    basin_sums = xr.concat(client.gather(futures), dim="basin")
+    if "time_bounds" in ds.data_vars:
+        basin_sums["time_bounds"] = ds["time_bounds"]
+    basin_sums.to_netcdf(basins_file)
 
-        end = time.time()
-        time_elapsed = end - start
-        print(f"Time elapsed {time_elapsed:.0f}s")
+    end = time.time()
+    time_elapsed = end - start
+    print(f"Time elapsed {time_elapsed:.0f}s")
