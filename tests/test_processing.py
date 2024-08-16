@@ -24,6 +24,25 @@ from pism_ragis.processing import days_in_year
 
 
 def test_days_in_year():
+    """
+    Test the days_in_year function.
+
+    This function tests the days_in_year function for various types of years:
+    - Common year
+    - Leap year
+    - Century year that is not a leap year
+    - Century year that is a leap year
+
+    The days_in_year function is expected to return:
+    - 365 days for a common year
+    - 366 days for a leap year
+    - 365 days for a century year that is not a leap year
+    - 366 days for a century year that is a leap year
+
+    Examples
+    --------
+    >>> test_days_in_year()
+    """
     # Test for a common year
     assert days_in_year(2021) == 365
 
