@@ -20,6 +20,9 @@
 Tests for procesing module
 """
 
+import numpy as np
+import xarray as xr
+
 from pism_ragis.processing import days_in_year
 
 
@@ -54,3 +57,32 @@ def test_days_in_year():
 
     # Test for a century year that is a leap year
     assert days_in_year(2000) == 366
+
+
+def test_drop_nonnumeric_vars():
+    """
+    Test the drop_nonnumeric_vars method of the UtilsMethods class.
+
+    This test creates a sample xarray Dataset with both numeric and non-numeric variables,
+    applies the drop_nonnumeric_vars method, and checks that non-numeric variables are dropped
+    and that the remaining variables are numeric.
+    """
+    data = xr.Dataset(
+        {
+            "temperature": (("x", "y"), [[15.5, 16.2], [14.8, 15.1]]),
+            "humidity": (("x", "y"), [[80, 85], [78, 82]]),
+            "location": (("x", "y"), [["A", "B"], ["C", "D"]]),
+        }
+    )
+
+    # Apply the drop_nonnumeric_vars method
+    numeric_data = data.utils.drop_nonnumeric_vars()
+
+    # Check that non-numeric variables are dropped
+    assert "location" not in numeric_data.data_vars
+    assert "temperature" in numeric_data.data_vars
+    assert "humidity" in numeric_data.data_vars
+
+    # Check the data types of the remaining variables
+    assert np.issubdtype(numeric_data["temperature"].dtype, np.number)
+    assert np.issubdtype(numeric_data["humidity"].dtype, np.number)

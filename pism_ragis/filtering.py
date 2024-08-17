@@ -137,7 +137,7 @@ def particle_filter(
         sample_with_replacement,
         weights,
         input_core_dims=[[dim]],
-        output_core_dims=[[dim + "_sampled"]],
+        output_core_dims=[[dim]],
         vectorize=True,
         dask="allowed",
         kwargs={

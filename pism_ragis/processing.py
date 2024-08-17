@@ -27,10 +27,13 @@ import re
 import shutil
 from calendar import isleap
 from datetime import datetime
-from typing import List, Union
+from pathlib import Path
+from typing import Any, Hashable, List, Mapping, Union
 
+import dask
 import joblib
 import numpy as np
+import pandas as pd
 import requests
 import xarray as xr
 from tqdm.auto import tqdm
@@ -289,3 +292,283 @@ def copy_file(
     if not os.path.exists(outdir):
         os.makedirs(outdir)
     shutil.copy(in_path, out_path)
+
+
+@xr.register_dataset_accessor("utils")
+class UtilsMethods:
+    """
+    Utils methods for xarray Dataset.
+
+    This class is used to add custom methods to xarray Dataset objects. The methods can be accessed via the 'utils' attribute.
+
+    Parameters
+    ----------
+
+    xarray_obj : xr.Dataset
+      The xarray Dataset to which to add the custom methods.
+    """
+
+    def __init__(self, xarray_obj: xr.Dataset):
+        """
+        Initialize the UtilsMethods class.
+
+        Parameters
+        ----------
+
+        xarray_obj : xr.Dataset
+            The xarray Dataset to which to add the custom methods.
+        """
+        self._obj = xarray_obj
+
+    def init(self):
+        """
+        Do-nothing method.
+
+        This method is needed to work with joblib Parallel.
+        """
+
+    def drop_nonnumeric_vars(self, errors: str = "ignore") -> xr.Dataset:
+        """
+        Drop non-numeric variables from the xarray Dataset.
+
+        This method removes all variables from the xarray Dataset that do not have a numeric data type.
+
+        Parameters
+        ----------
+        errors : {'ignore', 'raise'}, optional
+            If 'ignore', suppress error and only drop existing variables.
+            If 'raise', raise an error if any of the variables are not found in the dataset.
+            Default is 'ignore'.
+
+        Returns
+        -------
+        xarray.Dataset
+            A new xarray Dataset with only numeric variables.
+
+        Examples
+        --------
+        >>> import xarray as xr
+        >>> import numpy as np
+        >>> data = xr.Dataset({
+        ...     'temperature': (('x', 'y'), [[15.5, 16.2], [14.8, 15.1]]),
+        ...     'humidity': (('x', 'y'), [[80, 85], [78, 82]]),
+        ...     'location': (('x', 'y'), [['A', 'B'], ['C', 'D']])
+        ... })
+        >>> processor = DataProcessor(data)
+        >>> numeric_data = processor.drop_nonnumeric_vars()
+        >>> print(numeric_data)
+        <xarray.Dataset>
+        Dimensions:     (x: 2, y: 2)
+        Dimensions without coordinates: x, y
+        Data variables:
+            temperature  (x, y) float64 15.5 16.2 14.8 15.1
+            humidity     (x, y) int64 80 85 78 82
+        """
+        nonnumeric_vars = [
+            v
+            for v in self._obj.data_vars
+            if not np.issubdtype(self._obj[v].dtype, np.number)
+        ]
+
+        return self._obj.drop_vars(nonnumeric_vars, errors=errors)
+
+
+def load_ensemble(
+    filenames: List[Union[Path, str]],
+    parallel: bool = True,
+) -> xr.Dataset:
+    """
+    Load an ensemble of NetCDF files into an xarray Dataset.
+
+    Parameters
+    ----------
+    filenames : List[Union[Path, str]]
+        A list of file paths or strings representing the NetCDF files to be loaded.
+    parallel : bool, optional
+        Whether to load the files in parallel using Dask. Default is True.
+
+    Returns
+    -------
+    xr.Dataset
+        The loaded xarray Dataset containing the ensemble data.
+
+    Notes
+    -----
+    This function uses Dask to load the dataset in parallel and handle large chunks efficiently.
+    It sets the Dask configuration to split large chunks during array slicing.
+    """
+    with dask.config.set(**{"array.slicing.split_large_chunks": True}):
+        print("Loading ensemble files... ", end="", flush=True)
+        ds = xr.open_mfdataset(filenames, parallel=parallel, chunks="auto").drop_vars(
+            ["spatial_ref", "mapping"], errors="ignore"
+        )
+        if "time" in ds["pism_config"].coords:
+            ds["pism_config"] = ds["pism_config"].isel(time=0).drop_vars("time")
+        print("Done.")
+        return ds
+
+
+def normalize_cumulative_variables(
+    ds: xr.Dataset, variables, reference_year: int = 1992
+) -> xr.Dataset:
+    """
+    Normalize cumulative variables in an xarray Dataset by subtracting their values at a reference year.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        The xarray Dataset containing the cumulative variables to be normalized.
+    variables : str or list of str
+        The name(s) of the cumulative variables to be normalized.
+    reference_year : int, optional
+        The reference year to use for normalization. Default is 1992.
+
+    Returns
+    -------
+    xr.Dataset
+        The xarray Dataset with normalized cumulative variables.
+
+    Examples
+    --------
+    >>> import xarray as xr
+    >>> import pandas as pd
+    >>> time = pd.date_range("1990-01-01", "1995-01-01", freq="A")
+    >>> data = xr.Dataset({
+    ...     "cumulative_var": ("time", [10, 20, 30, 40, 50, 60]),
+    ... }, coords={"time": time})
+    >>> normalize_cumulative_variables(data, "cumulative_var", reference_year=1992)
+    <xarray.Dataset>
+    Dimensions:         (time: 6)
+    Coordinates:
+      * time            (time) datetime64[ns] 1990-12-31 1991-12-31 ... 1995-12-31
+    Data variables:
+        cumulative_var  (time) int64 0 10 20 30 40 50
+    """
+    ds[variables] -= ds[variables].sel(time=f"{reference_year}-01-01", method="nearest")
+    return ds
+
+
+def standardize_variable_names(
+    ds: xr.Dataset, name_dict: Mapping[Any, Hashable] | None
+) -> xr.Dataset:
+    """
+    Standardize variable names in an xarray Dataset.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        The xarray Dataset whose variable names need to be standardized.
+    name_dict : Mapping[Any, Hashable] or None
+        A dictionary mapping the current variable names to the new standardized names.
+        If None, no renaming is performed.
+
+    Returns
+    -------
+    xr.Dataset
+        The xarray Dataset with standardized variable names.
+
+    Examples
+    --------
+    >>> import xarray as xr
+    >>> ds = xr.Dataset({'temp': ('x', [1, 2, 3]), 'precip': ('x', [4, 5, 6])})
+    >>> name_dict = {'temp': 'temperature', 'precip': 'precipitation'}
+    >>> standarize_variable_names(ds, name_dict)
+    <xarray.Dataset>
+    Dimensions:      (x: 3)
+    Dimensions without coordinates: x
+    Data variables:
+        temperature   (x) int64 1 2 3
+        precipitation (x) int64 4 5 6
+    """
+    return ds.rename_vars(name_dict)
+
+
+def select_experiments(df: pd.DataFrame, ids_to_select: List[int]) -> pd.DataFrame:
+    """
+    Select rows from a DataFrame based on a list of experiment IDs, including duplicates.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The input DataFrame containing experiment data.
+    ids_to_select : List[int]
+        A list of experiment IDs to select from the DataFrame. Duplicates in this list
+        will result in duplicate rows in the output DataFrame.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame containing the selected rows, including duplicates as specified
+        in `ids_to_select`.
+    """
+    # Create a DataFrame with the rows to select
+    selected_rows = df[df["exp_id"].isin(ids_to_select)]
+
+    # Repeat the indices according to the number of times they appear in ids_to_select
+    repeated_indices = selected_rows.index.repeat(
+        [ids_to_select.count(id) for id in selected_rows["exp_id"]]
+    )
+
+    # Select the rows based on the repeated indices
+    return df.loc[repeated_indices]
+
+
+def select_experiment(ds, exp_id, n):
+    """
+    Reset the experiment id.
+    """
+    exp = ds.sel(exp_id=exp_id)
+    exp["exp_id"] = n
+    return exp
+
+
+def simplify(my_str: str) -> str:
+    """
+    Simplify string
+    """
+    return Path(my_str).name
+
+
+def convert_column_to_float(column):
+    """
+    Convert column to numeric if possible.
+    """
+    try:
+        return pd.to_numeric(column, errors="raise")
+    except ValueError:
+        return column
+
+
+def simplify_climate(my_str: str):
+    """
+    Simplify climate
+    """
+    if "MAR" in my_str:
+        return "MAR"
+    else:
+        return "HIRHAM"
+
+
+def simplify_ocean(my_str: str):
+    """
+    Simplify ocean
+    """
+    return "-".join(my_str.split("_")[1:2])
+
+
+def simplify_calving(my_str: str):
+    """
+    Simplify ocean
+    """
+    return int(my_str.split("_")[3])
+
+
+def transpose_dataframe(df, exp_id):
+    """
+    Transpose dataframe.
+    """
+    param_names = df["pism_config_axis"]
+    df = df[["pism_config"]].T
+    df.columns = param_names
+    df["exp_id"] = exp_id
+    return df
