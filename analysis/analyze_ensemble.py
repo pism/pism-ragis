@@ -602,26 +602,6 @@ if __name__ == "__main__":
         "calving.rate_scaling.file"
     ].apply(prp.simplify_calving)
 
-    # for filtering_var, simulated_filtered in simulated_filtered_all.items():
-    #     for basin in simulated_filtered.basin.values:
-    #         obs = observed.sel(basin=basin).rolling(time=390).mean()
-    #         sim_prior = (
-    #             simulated.sel(basin=basin, ensemble_id="RAGIS")
-    #             .drop_vars(["pism_config", "run_stats"], errors="ignore")
-    #             .rolling(time=13)
-    #             .mean()
-    #         )
-    #         sim_prior["Ensemble"] = "Prior"
-    #         sim_posterior = (
-    #             simulated_filtered.sel(basin=basin, ensemble_id="RAGIS")
-    #             .drop_vars(["pism_config", "run_stats"], errors="ignore")
-    #             .rolling(time=13)
-    #             .mean()
-    #         )
-    #         sim_posterior["Ensemble"] = "Posterior"
-
-    #         posterior_df = filtered_all[filtering_var]
-
     for (basin, filtering_var), df in prior_posterior.rename(
         columns=params_short_dict
     ).groupby(by=["basin", "filtered_by"]):
@@ -665,7 +645,9 @@ if __name__ == "__main__":
         fig.savefig(fn)
         plt.close()
 
-    ensemble_df = prior_posterior.drop(columns=["Ensemble", "exp_id"], errors="ignore")
+    ensemble_df = prior[prior["basin"] == "GIS"].drop(
+        columns=["Ensemble", "exp_id"], errors="ignore"
+    )
     climate_dict = {
         v: k for k, v in enumerate(ensemble_df["surface.given.file"].unique())
     }
@@ -693,17 +675,14 @@ if __name__ == "__main__":
     to_analyze = ds.sel(time=slice("1980-01-01", "2020-01-01"))
     print("Calculating Sensitivity Indices")
     print("===============================")
+
     cluster = LocalCluster(n_workers=options.n_jobs, threads_per_worker=1)
     client = Client(cluster, asynchronous=True)
-    # client = Client()
     print(f"Open client in browser: {client.dashboard_link}")
     dim = "time"
     all_delta_indices_list = []
-    for basin in to_analyze.basin.values:
-        for filter_var in [
-            "mass_balance",
-            "ice_discharge",
-        ]:
+    for basin in ["GIS"]:
+        for filter_var in list(flux_vars.values())[:2]:
             print(
                 f"  ...sensitivity indices for basin {basin} filtered by {filter_var} ",
             )
@@ -737,6 +716,82 @@ if __name__ == "__main__":
 
     all_delta_indices: xr.Dataset = xr.merge(all_delta_indices_list)
     client.close()
+
+    ensemble_df = (
+        prior[prior["basin"] == "GIS"]
+        .apply(prp.convert_column_to_float)
+        .drop(columns=["Ensemble", "exp_id"], errors="ignore")
+    )
+    climate_dict = {
+        v: k for k, v in enumerate(ensemble_df["surface.given.file"].unique())
+    }
+    ensemble_df["surface.given.file"] = ensemble_df["surface.given.file"].map(
+        climate_dict
+    )
+    ocean_dict = {v: k for k, v in enumerate(ensemble_df["ocean.th.file"].unique())}
+    ensemble_df["ocean.th.file"] = ensemble_df["ocean.th.file"].map(ocean_dict)
+    calving_dict = {
+        v: k for k, v in enumerate(ensemble_df["calving.rate_scaling.file"].unique())
+    }
+    ensemble_df["calving.rate_scaling.file"] = ensemble_df[
+        "calving.rate_scaling.file"
+    ].map(calving_dict)
+
+    problem = {
+        "num_vars": len(ensemble_df.columns),
+        "names": ensemble_df.columns,  # Parameter names
+        "bounds": zip(
+            ensemble_df.min().values,
+            ensemble_df.max().values,
+        ),  # Parameter bounds
+    }
+
+    # to_analyze = ds.sel(time=slice("1980-01-01", "2020-01-01"))
+    # print("Calculating Sensitivity Indices")
+    # print("===============================")
+    # cluster = LocalCluster(n_workers=options.n_jobs, threads_per_worker=1)
+    # client = Client(cluster, asynchronous=True)
+    # print(f"Open client in browser: {client.dashboard_link}")
+    # dim = "time"
+    # all_delta_indices_list = []
+    # for basin, df in ensemble_df.groupby(by="basin"):
+    #     for filter_var in [
+    #         "mass_balance",
+    #         "ice_discharge",
+    #     ]:
+    #         print(
+    #             f"  ...sensitivity indices for basin {basin} filtered by {filter_var} ",
+    #         )
+    #         start = time.time()
+
+    #         responses = to_analyze.sel(basin=basin, ensemble_id="RAGIS")[filter_var]
+    #         responses_scattered = client.scatter(
+    #             [responses.isel(time=k).to_numpy() for k in range(len(responses[dim]))]
+    #         )
+
+    #         futures = client.map(
+    #             delta_analysis,
+    #             responses_scattered,
+    #             problem=problem,
+    #             ensemble_df=df[params].to_numpy(),
+    #         )
+    #         progress(futures, notebook=notebook)
+    #         result = client.gather(futures)
+
+    #         end = time.time()
+    #         time_elapsed = end - start
+    #         print(f"  ...took {time_elapsed:.0f}s")
+
+    #         delta_indices = xr.concat([r.expand_dims(dim) for r in result], dim=dim)
+    #         delta_indices[dim] = responses[dim]
+    #         delta_indices = delta_indices.expand_dims("basin", axis=1)
+    #         delta_indices["basin"] = [basin]
+    #         delta_indices = delta_indices.expand_dims("filtered_by", axis=2)
+    #         delta_indices["filtered_by"] = [filter_var]
+    #         all_delta_indices_list.append(delta_indices)
+
+    # all_delta_indices: xr.Dataset = xr.merge(all_delta_indices_list)
+    # client.close()
 
     # Extract the prefix from each coordinate value
     prefixes = [
