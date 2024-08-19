@@ -15,10 +15,8 @@
 # You should have received a copy of the GNU General Public License
 # along with PISM; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-
-# pylint: disable=unused-import
 """
-Analyze RAGIS ensemble.
+Analyze RAGIS ensemble
 """
 
 import time
@@ -39,12 +37,12 @@ from dask.distributed import Client, LocalCluster, progress
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 
-import pism_ragis.processing as prp
 from pism_ragis.analysis import delta_analysis
 from pism_ragis.filtering import particle_filter
+from pism_ragis.processing import tqdm_joblib
 
-sim_alpha = 0.5
-sim_cmap = sns.color_palette("crest", n_colors=4).as_hex()[0:3:2]
+sim_alpha = 0.4
+sim_cmap = sns.color_palette("flare", n_colors=4)
 obs_alpha = 1.0
 obs_cmap = ["0.8", "0.7"]
 hist_cmap = ["#a6cee3", "#1f78b4"]
@@ -54,40 +52,17 @@ def plot_obs_sims(
     obs: xr.Dataset,
     sim_prior: xr.Dataset,
     sim_posterior: xr.Dataset,
-    config: dict,
+    config,
     filtering_var: str,
-    filter_range: List[int] = [1990, 2019],
+    filter_range: List = [1990, 2019],
     fig_dir: Union[str, Path] = "figures",
     sim_alpha: float = 0.4,
     obs_alpha: float = 1.0,
-) -> None:
+):
     """
     Plot figure with cumulative mass balance and ice discharge and climatic
     mass balance fluxes.
-
-    Parameters
-    ----------
-    obs : xr.Dataset
-        Observational dataset.
-    sim_prior : xr.Dataset
-        Prior simulation dataset.
-    sim_posterior : xr.Dataset
-        Posterior simulation dataset.
-    config : dict
-        Configuration dictionary containing variable names.
-    filtering_var : str
-        Variable used for filtering.
-    filter_range : List[int], optional
-        Range of years for filtering, by default [1990, 2019].
-    fig_dir : Union[str, Path], optional
-        Directory to save the figures, by default "figures".
-    sim_alpha : float, optional
-        Alpha value for simulation plots, by default 0.4.
-    obs_alpha : float, optional
-        Alpha value for observation plots, by default 1.0.
     """
-
-    import pism_ragis.processing  # pylint: disable=import-outside-toplevel,reimported
 
     Path(fig_dir).mkdir(exist_ok=True)
     obs_filtered = obs.sel(time=slice(str(filter_range[0]), str(filter_range[-1])))
@@ -163,16 +138,16 @@ def plot_obs_sims(
         warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
         quantiles = {}
         for q in [0.16, 0.5, 0.84]:
-            quantiles[q] = sim_prior.utils.drop_nonnumeric_vars().quantile(
-                q, dim="exp_id", skipna=True
-            )
+            quantiles[q] = sim_prior.drop_vars(
+                ["pism_config", "run_stats", "Ensemble"], errors="ignore"
+            ).quantile(q, dim="exp_id", skipna=True)
 
     for k, m_var in enumerate(
         [mass_cumulative_varname, discharge_flux_varname, smb_flux_varname]
     ):
         sim_prior[m_var].plot(
             hue="exp_id",
-            color=sim_cmap[0],
+            color=sim_cmap[1],
             ax=axs[k],
             lw=0.1,
             alpha=sim_alpha,
@@ -183,7 +158,7 @@ def plot_obs_sims(
             quantiles[0.16][m_var],
             quantiles[0.84][m_var],
             alpha=sim_alpha,
-            color=sim_cmap[0],
+            color=sim_cmap[1],
             label=sim_prior["Ensemble"].values,
             lw=0,
         )
@@ -194,9 +169,9 @@ def plot_obs_sims(
         warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
         quantiles = {}
         for q in [0.16, 0.5, 0.84]:
-            quantiles[q] = sim_posterior.utils.drop_nonnumeric_vars().quantile(
-                q, dim="exp_id", skipna=True
-            )
+            quantiles[q] = sim_posterior.drop_vars(
+                ["pism_config", "run_stats", "Ensemble"], errors="ignore"
+            ).quantile(q, dim="exp_id", skipna=True)
 
     for k, m_var in enumerate(
         [mass_cumulative_varname, discharge_flux_varname, smb_flux_varname]
@@ -206,14 +181,14 @@ def plot_obs_sims(
             quantiles[0.16][m_var],
             quantiles[0.84][m_var],
             alpha=sim_alpha,
-            color=sim_cmap[1],
+            color=sim_cmap[3],
             label=sim_posterior["Ensemble"].values,
             lw=0,
         )
         if k == 0:
             sim_cis.append(sim_ci)
         axs[k].plot(
-            quantiles[0.5].time, quantiles[0.5][m_var], lw=0.75, color=sim_cmap[1]
+            quantiles[0.5].time, quantiles[0.5][m_var], lw=0.75, color=sim_cmap[3]
         )
     legend_obs = axs[0].legend(
         handles=[obs_ci, obs_filtered_ci], loc="lower left", title="Observed"
@@ -252,6 +227,205 @@ def plot_obs_sims(
         fig_dir / Path(f"{basin}_mass_accounting_filtered_by_{filtering_var}.pdf")
     )
     plt.close()
+
+
+def normalize_cumulative_variables(
+    ds: xr.Dataset, variables, reference_year: int = 1992
+) -> xr.Dataset:
+    """
+    Normalize cumulative variables in an xarray Dataset by subtracting their values at a reference year.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        The xarray Dataset containing the cumulative variables to be normalized.
+    variables : str or list of str
+        The name(s) of the cumulative variables to be normalized.
+    reference_year : int, optional
+        The reference year to use for normalization. Default is 1992.
+
+    Returns
+    -------
+    xr.Dataset
+        The xarray Dataset with normalized cumulative variables.
+
+    Examples
+    --------
+    >>> import xarray as xr
+    >>> import pandas as pd
+    >>> time = pd.date_range("1990-01-01", "1995-01-01", freq="A")
+    >>> data = xr.Dataset({
+    ...     "cumulative_var": ("time", [10, 20, 30, 40, 50, 60]),
+    ... }, coords={"time": time})
+    >>> normalize_cumulative_variables(data, "cumulative_var", reference_year=1992)
+    <xarray.Dataset>
+    Dimensions:         (time: 6)
+    Coordinates:
+      * time            (time) datetime64[ns] 1990-12-31 1991-12-31 ... 1995-12-31
+    Data variables:
+        cumulative_var  (time) int64 0 10 20 30 40 50
+    """
+    ds[variables] -= ds[variables].sel(time=f"{reference_year}-01-01", method="nearest")
+    return ds
+
+
+def standarize_variable_names(
+    ds: xr.Dataset, name_dict: Mapping[Any, Hashable] | None
+) -> xr.Dataset:
+    """
+    Standardize variable names in an xarray Dataset.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        The xarray Dataset whose variable names need to be standardized.
+    name_dict : Mapping[Any, Hashable] or None
+        A dictionary mapping the current variable names to the new standardized names.
+        If None, no renaming is performed.
+
+    Returns
+    -------
+    xr.Dataset
+        The xarray Dataset with standardized variable names.
+
+    Examples
+    --------
+    >>> import xarray as xr
+    >>> ds = xr.Dataset({'temp': ('x', [1, 2, 3]), 'precip': ('x', [4, 5, 6])})
+    >>> name_dict = {'temp': 'temperature', 'precip': 'precipitation'}
+    >>> standarize_variable_names(ds, name_dict)
+    <xarray.Dataset>
+    Dimensions:      (x: 3)
+    Dimensions without coordinates: x
+    Data variables:
+        temperature   (x) int64 1 2 3
+        precipitation (x) int64 4 5 6
+    """
+    return ds.rename_vars(name_dict)
+
+
+def select_experiments(df: pd.DataFrame, ids_to_select: List[int]) -> pd.DataFrame:
+    """
+    Select rows from a DataFrame based on a list of experiment IDs, including duplicates.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The input DataFrame containing experiment data.
+    ids_to_select : List[int]
+        A list of experiment IDs to select from the DataFrame. Duplicates in this list
+        will result in duplicate rows in the output DataFrame.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame containing the selected rows, including duplicates as specified
+        in `ids_to_select`.
+    """
+    # Create a DataFrame with the rows to select
+    selected_rows = df[df["exp_id"].isin(ids_to_select)]
+
+    # Repeat the indices according to the number of times they appear in ids_to_select
+    repeated_indices = selected_rows.index.repeat(
+        [ids_to_select.count(id) for id in selected_rows["exp_id"]]
+    )
+
+    # Select the rows based on the repeated indices
+    return df.loc[repeated_indices]
+
+
+def load_ensemble(
+    filenames: List[Union[Path, str]],
+    parallel: bool = True,
+) -> xr.Dataset:
+    """
+    Load an ensemble of NetCDF files into an xarray Dataset.
+
+    Parameters
+    ----------
+    filenames : List[Union[Path, str]]
+        A list of file paths or strings representing the NetCDF files to be loaded.
+    parallel : bool, optional
+        Whether to load the files in parallel using Dask. Default is True.
+
+    Returns
+    -------
+    xr.Dataset
+        The loaded xarray Dataset containing the ensemble data.
+
+    Notes
+    -----
+    This function uses Dask to load the dataset in parallel and handle large chunks efficiently.
+    It sets the Dask configuration to split large chunks during array slicing.
+    """
+    with dask.config.set(**{"array.slicing.split_large_chunks": True}):
+        print("Loading ensemble files... ", end="", flush=True)
+        ds = xr.open_mfdataset(filenames, parallel=parallel, chunks="auto")
+        if "time" in ds["pism_config"].coords:
+            ds["pism_config"] = ds["pism_config"].isel(time=0).drop_vars("time")
+        print("Done.")
+        return ds
+
+
+def select_experiment(ds, exp_id, n):
+    """
+    Reset the experiment id.
+    """
+    exp = ds.sel(exp_id=exp_id)
+    exp["exp_id"] = n
+    return exp
+
+
+def simplify(my_str: str) -> str:
+    """
+    Simplify string
+    """
+    return Path(my_str).name
+
+
+def convert_column_to_float(column):
+    """
+    Convert column to numeric if possible.
+    """
+    try:
+        return pd.to_numeric(column, errors="raise")
+    except ValueError:
+        return column
+
+
+def simplify_climate(my_str: str):
+    """
+    Simplify climate
+    """
+    if "MAR" in my_str:
+        return "MAR"
+    else:
+        return "HIRHAM"
+
+
+def simplify_ocean(my_str: str):
+    """
+    Simplify ocean
+    """
+    return "-".join(my_str.split("_")[1:2])
+
+
+def simplify_calving(my_str: str):
+    """
+    Simplify ocean
+    """
+    return int(my_str.split("_")[3])
+
+
+def transpose_dataframe(df, exp_id):
+    """
+    Transpose dataframe.
+    """
+    param_names = df["pism_config_axis"]
+    df = df[["pism_config"]].T
+    df.columns = param_names
+    df["exp_id"] = exp_id
+    return df
 
 
 if __name__ == "__main__":
@@ -380,18 +554,19 @@ if __name__ == "__main__":
     }
 
     ds = (
-        prp.load_ensemble(basin_files, parallel=parallel)
+        load_ensemble(basin_files, parallel=parallel)
         .sortby("basin")
         .dropna(dim="exp_id")
+        .load()
     )
-    ds = prp.standardize_variable_names(ds, ragis_config["PISM"])
+    ds = standarize_variable_names(ds, ragis_config["PISM"])
     ds[ragis_config["Cumulative Variables"]["discharge_cumulative"]] = ds[
         ragis_config["Flux Variables"]["discharge_flux"]
     ].cumsum() / len(ds.time)
     ds[ragis_config["Cumulative Variables"]["smb_cumulative"]] = ds[
         ragis_config["Flux Variables"]["smb_flux"]
     ].cumsum() / len(ds.time)
-    ds = prp.normalize_cumulative_variables(
+    ds = normalize_cumulative_variables(
         ds,
         list(ragis_config["Cumulative Variables"].values()),
         reference_year=reference_year,
@@ -407,7 +582,7 @@ if __name__ == "__main__":
 
     outlier_filter = (
         ds.sel(basin="GIS", ensemble_id="RAGIS")
-        .utils.drop_nonnumeric_vars()["ice_discharge"]
+        .drop_vars(["pism_config", "run_stats"], errors="ignore")["ice_discharge"]
         .sel(time=slice(str(filter_start_year), str(filter_end_year)))
     )
     # filter_days_in_month = filter_ds.time.dt.days_in_month
@@ -433,32 +608,18 @@ if __name__ == "__main__":
 
     pism_config = ds.sel(basin="GIS").sel(pism_config_axis=params).pism_config
 
-    prior_df = pism_config.to_dataframe()
+    uq_df = pism_config.to_dataframe()
 
-    prior = pd.concat(
+    ragis = pd.concat(
         [
-            prp.transpose_dataframe(df, exp_id)
-            for exp_id, df in prior_df.reset_index().groupby(by="exp_id")
+            transpose_dataframe(df, exp_id)
+            for exp_id, df in uq_df.reset_index().groupby(by="exp_id")
         ]
     ).reset_index(drop=True)
 
-    # Apply the conversion function to each column
-    prior = prior.apply(prp.convert_column_to_float)
-    for col in ["surface.given.file", "ocean.th.file", "calving.rate_scaling.file"]:
-        prior[col] = prior[col].apply(prp.simplify)
-    prior["surface.given.file"] = prior["surface.given.file"].apply(
-        prp.simplify_climate
-    )
-    prior["ocean.th.file"] = prior["ocean.th.file"].apply(prp.simplify_ocean)
-    prior["calving.rate_scaling.file"] = prior["calving.rate_scaling.file"].apply(
-        prp.simplify_calving
-    )
-
-    prior["Ensemble"] = "Prior"
-
     observed = xr.open_dataset(options.obs_url).sel(time=slice("1986", "2021"))
     observed = observed.sortby("basin")
-    observed = prp.normalize_cumulative_variables(
+    observed = normalize_cumulative_variables(
         observed,
         list(cumulative_vars.values()) + list(cumulative_uncertainty_vars.values()),
         reference_year,
@@ -509,22 +670,33 @@ if __name__ == "__main__":
     )
     simulated_resampled["pism_config"] = simulated["pism_config"]
 
+    # Apply the conversion function to each column
+    ragis = ragis.apply(convert_column_to_float)
+    for col in ["surface.given.file", "ocean.th.file", "calving.rate_scaling.file"]:
+        ragis[col] = ragis[col].apply(simplify)
+    ragis["surface.given.file"] = ragis["surface.given.file"].apply(simplify_climate)
+    ragis["ocean.th.file"] = ragis["ocean.th.file"].apply(simplify_ocean)
+    ragis["calving.rate_scaling.file"] = ragis["calving.rate_scaling.file"].apply(
+        simplify_calving
+    )
+
+    ragis["Ensemble"] = "Prior"
+
     simulated_filtered_all = {}
     filtered_all = {}
-    prior_posterior_list = []
     for obs_mean_var, obs_std_var, sim_var in zip(
-        list(flux_vars.values())[:2],
-        list(flux_uncertainty_vars.values())[:2],
-        list(flux_vars.values())[:2],
+        flux_vars.values(),
+        flux_uncertainty_vars.values(),
+        flux_vars.values(),
     ):
         print(f"Particle filtering using {obs_mean_var}")
         filtered_ids = particle_filter(
             simulated=simulated_resampled.sel(
                 time=slice(str(filter_start_year), str(filter_end_year))
-            ).load(),
+            ),
             observed=observed_resampled.sel(
                 time=slice(str(filter_start_year), str(filter_end_year))
-            ).load(),
+            ),
             fudge_factor=fudge_factor,
             n_samples=len(simulated.exp_id),
             obs_mean_var=obs_mean_var,
@@ -532,45 +704,18 @@ if __name__ == "__main__":
             sim_var=sim_var,
         )
         filtered_ids["basin"] = filtered_ids["basin"].astype("<U3")
-
-        prior_config = ds.sel(pism_config_axis=params).pism_config
-        dims = [dim for dim in prior_config.dims if not dim in ["pism_config_axis"]]
-        prior_df = prior_config.to_dataframe().reset_index()
-        prior = prior_df.pivot(
-            index=dims, columns="pism_config_axis", values="pism_config"
+        simulated_filtered = simulated_resampled.sel(exp_id=filtered_ids).drop_vars(
+            "exp_id"
         )
-        prior.reset_index(inplace=True)
-        prior["Ensemble"] = "Prior"
-
-        posterior_config = (
-            ds.sel(pism_config_axis=params).sel(exp_id=filtered_ids).pism_config
-        )
-        dims = [dim for dim in prior_config.dims if not dim in ["pism_config_axis"]]
-        posterior_df = posterior_config.to_dataframe().reset_index()
-        posterior = posterior_df.pivot(
-            index=dims, columns="pism_config_axis", values="pism_config"
-        )
-        posterior.reset_index(inplace=True)
-        posterior["Ensemble"] = "Posterior"
-
-        prior_posterior_f = pd.concat([prior, posterior]).reset_index(drop=True)
-        prior_posterior_f["filtered_by"] = obs_mean_var
-        prior_posterior_list.append(prior_posterior_f)
-
-        filtered_all[obs_mean_var] = pd.concat([prior, posterior]).rename(
-            columns=params_short_dict
-        )
-
-        simulated_filtered = simulated_resampled.sel(exp_id=filtered_ids)
         simulated_filtered["Ensemble"] = "Posterior"
         simulated_filtered_all[obs_mean_var] = simulated_filtered
 
-        sim_prior = simulated_resampled.load()
+        sim_prior = simulated_resampled
         sim_prior["Ensemble"] = "Prior"
-        sim_posterior = simulated_filtered.load()
+        sim_posterior = simulated_filtered
         sim_posterior["Ensemble"] = "Posterior"
 
-        with prp.tqdm_joblib(
+        with tqdm_joblib(
             tqdm(desc="Plotting basins", total=len(observed_resampled.basin))
         ) as progress_bar:
             result = Parallel(n_jobs=options.n_jobs)(
@@ -588,66 +733,75 @@ if __name__ == "__main__":
                 for basin in observed_resampled.basin
             )
 
-    prior_posterior = pd.concat(prior_posterior_list).reset_index()
-    prior_posterior = prior_posterior.apply(prp.convert_column_to_float)
-    for col in ["surface.given.file", "ocean.th.file", "calving.rate_scaling.file"]:
-        prior_posterior[col] = prior_posterior[col].apply(prp.simplify)
-    prior_posterior["surface.given.file"] = prior_posterior["surface.given.file"].apply(
-        prp.simplify_climate
-    )
-    prior_posterior["ocean.th.file"] = prior_posterior["ocean.th.file"].apply(
-        prp.simplify_ocean
-    )
-    prior_posterior["calving.rate_scaling.file"] = prior_posterior[
-        "calving.rate_scaling.file"
-    ].apply(prp.simplify_calving)
+        ids_to_select = list(filtered_ids.sel(basin="GIS", ensemble_id="RAGIS").values)
 
-    for (basin, filtering_var), df in prior_posterior.rename(
-        columns=params_short_dict
-    ).groupby(by=["basin", "filtered_by"]):
-        n_params = len(params_short_dict)
-        plt.rcParams["font.size"] = 4
-        fig, axs = plt.subplots(
-            5,
-            3,
-            sharey=True,
-            figsize=[6.2, 5.2],
-        )
-        fig.subplots_adjust(hspace=1.0, wspace=0.1)
-        for k, v in enumerate(params_short_dict.values()):
-            try:
-                sns.histplot(
-                    data=df,
-                    x=v,
-                    hue="Ensemble",
-                    hue_order=["Prior", "Posterior"],
-                    palette=sim_cmap,
-                    common_norm=False,
-                    stat="probability",
-                    multiple="dodge",
-                    alpha=0.8,
-                    linewidth=0.2,
-                    ax=axs.ravel()[k],
-                    legend=False,
-                )
-            except:
-                pass
-        for ax in axs.flatten():
-            ax.set_ylabel("")
-            ticklabels = ax.get_xticklabels()
-            for tick in ticklabels:
-                tick.set_rotation(45)
-        fn = (
-            result_dir
-            / Path("figures")
-            / Path(f"{basin}_prior_posterior_filtered_by_{filtering_var}.pdf")
-        )
-        fig.savefig(fn)
-        plt.close()
+        ragis_filtered = select_experiments(ragis, ids_to_select)
+        ragis_filtered["Ensemble"] = "Posterior"
 
-    ensemble_df = prior.apply(prp.convert_column_to_float).drop(
-        columns=["Ensemble", "exp_id"], errors="ignore"
-    )
+        filtered_all[obs_mean_var] = pd.concat([ragis, ragis_filtered]).rename(
+            columns=params_short_dict
+        )
+
+    for filtering_var, simulated_filtered in simulated_filtered_all.items():
+        for basin in simulated_filtered.basin.values:
+            obs = observed.sel(basin=basin).rolling(time=390).mean()
+            sim_prior = (
+                simulated.sel(basin=basin, ensemble_id="RAGIS")
+                .drop_vars(["pism_config", "run_stats"], errors="ignore")
+                .rolling(time=13)
+                .mean()
+            )
+            sim_prior["Ensemble"] = "Prior"
+            sim_posterior = (
+                simulated_filtered.sel(basin=basin, ensemble_id="RAGIS")
+                .drop_vars(["pism_config", "run_stats"], errors="ignore")
+                .rolling(time=13)
+                .mean()
+            )
+            sim_posterior["Ensemble"] = "Posterior"
+
+            posterior_df = filtered_all[filtering_var]
+
+            n_params = len(params_short_dict)
+            plt.rcParams["font.size"] = 4
+            fig, axs = plt.subplots(
+                5,
+                3,
+                sharey=True,
+                figsize=[6.2, 5.2],
+            )
+            fig.subplots_adjust(hspace=1.0, wspace=0.1)
+            for k, v in enumerate(params_short_dict.values()):
+                try:
+                    sns.histplot(
+                        data=posterior_df,
+                        x=v,
+                        hue="Ensemble",
+                        palette=hist_cmap,
+                        common_norm=False,
+                        stat="probability",
+                        multiple="dodge",
+                        alpha=0.8,
+                        linewidth=0.2,
+                        ax=axs.ravel()[k],
+                        legend=False,
+                    )
+                except:
+                    pass
+            for ax in axs.flatten():
+                ax.set_ylabel("")
+                ticklabels = ax.get_xticklabels()
+                for tick in ticklabels:
+                    tick.set_rotation(45)
+            fn = (
+                result_dir
+                / Path("figures")
+                / Path(f"{basin}_hist_prior_posterior_filtered_by_{filtering_var}.pdf")
+            )
+            fig.savefig(fn)
+            plt.close()
+
+    ensemble_df = ragis.drop(columns=["Ensemble", "exp_id"], errors="ignore")
     climate_dict = {
         v: k for k, v in enumerate(ensemble_df["surface.given.file"].unique())
     }
@@ -663,29 +817,28 @@ if __name__ == "__main__":
         "calving.rate_scaling.file"
     ].map(calving_dict)
 
-    # It is imperative to load the dataset, if not each dask worker will load it,
-    # making the code 10x slower.
-    to_analyze = ds.sel(time=slice("1980-01-01", "2020-01-01")).load()
+    problem = {
+        "num_vars": len(ensemble_df.columns),
+        "names": ensemble_df.columns,  # Parameter names
+        "bounds": zip(
+            ensemble_df.min().values,
+            ensemble_df.max().values,
+        ),  # Parameter bounds
+    }
+
+    to_analyze = ds.sel(time=slice("1980-01-01", "2020-01-01"))
     print("Calculating Sensitivity Indices")
     print("===============================")
-
-    start_dask = time.time()
     cluster = LocalCluster(n_workers=options.n_jobs, threads_per_worker=1)
     client = Client(cluster, asynchronous=True)
+    # client = Client()
     print(f"Open client in browser: {client.dashboard_link}")
     dim = "time"
     all_delta_indices_list = []
-    for basin, df in ensemble_df.groupby(by="basin"):
-        df = df.drop(columns=["basin"])
-        problem = {
-            "num_vars": len(df.columns),
-            "names": df.columns,  # Parameter names
-            "bounds": zip(
-                df.min().values,
-                df.max().values,
-            ),  # Parameter bounds
-        }
-        for filter_var in ["mass_balance"]:
+    for basin in ["CE"]:
+        for filter_var in [
+            "mass_balance",
+        ]:
             print(
                 f"  ...sensitivity indices for basin {basin} filtered by {filter_var} ",
             )
@@ -700,7 +853,7 @@ if __name__ == "__main__":
                 delta_analysis,
                 responses_scattered,
                 problem=problem,
-                ensemble_df=df,
+                ensemble_df=ensemble_df,
             )
             progress(futures, notebook=notebook)
             result = client.gather(futures)
@@ -719,10 +872,6 @@ if __name__ == "__main__":
 
     all_delta_indices: xr.Dataset = xr.merge(all_delta_indices_list)
     client.close()
-
-    end_dask = time.time()
-    dask_time_elapsed = end_dask - start_dask
-    print(f"  ...took {dask_time_elapsed:.0f}s")
 
     # Extract the prefix from each coordinate value
     prefixes = [
