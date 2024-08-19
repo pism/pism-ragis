@@ -58,7 +58,7 @@ dists: Dict[str, Any] = {
     "ragis": {
         "uq": {
             "calving.vonmises_calving.sigma_max": uniform(loc=350_000, scale=300_000),
-            "calving.rate_scaling.file": randint(0, 7),
+            "calving.rate_scaling.file": randint(-1, 7),
             "ocean.th.gamma_T": uniform(loc=0.75e-4, scale=0.75e-4),
             "ocean_file": randint(0, len(gcms)),
             "climate_file": randint(0, 2),

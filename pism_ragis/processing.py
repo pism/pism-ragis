@@ -529,7 +529,7 @@ def simplify(my_str: str) -> str:
     return Path(my_str).name
 
 
-def convert_column_to_float(column):
+def convert_column_to_numeric(column):
     """
     Convert column to numeric if possible.
     """

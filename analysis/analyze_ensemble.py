@@ -50,6 +50,104 @@ obs_cmap = ["0.8", "0.7"]
 hist_cmap = ["#a6cee3", "#1f78b4"]
 
 
+def run_delta_analysis(
+    ds: xr.Dataset,
+    ensemble_df: pd.DataFrame,
+    filter_vars: List[str],
+    ensemble_id: str = "RAGIS",
+) -> xr.Dataset:
+    """
+    Run delta sensitivity analysis on the given dataset.
+
+    This function calculates sensitivity indices for each basin in the dataset,
+    filtered by the specified variables. It uses Dask for parallel processing
+    to improve performance.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        The input dataset containing the data to be analyzed.
+    ensemble_df : pd.DataFrame
+        DataFrame containing ensemble information, with a 'basin' column to group by.
+    filter_vars : List[str]
+        List of variables to filter by for sensitivity analysis.
+    ensemble_id : str, optional
+        The ensemble ID to select from the dataset, by default "RAGIS".
+
+    Returns
+    -------
+    xr.Dataset
+        A dataset containing the calculated sensitivity indices for each basin and filter variable.
+
+    Notes
+    -----
+    It is imperative to load the dataset before starting the Dask client,
+    to avoid each Dask worker loading the dataset separately, which would
+    significantly slow down the computation.
+    """
+
+    ds = ds.load()
+    print("Calculating Sensitivity Indices")
+    print("===============================")
+
+    start_dask = time.time()
+    cluster = LocalCluster(n_workers=options.n_jobs, threads_per_worker=1)
+    client = Client(cluster, asynchronous=True)
+    print(f"Open client in browser: {client.dashboard_link}")
+    dim = "time"
+    all_delta_indices_list = []
+    for basin, df in ensemble_df.groupby(by="basin"):
+        df = df.drop(columns=["basin"])
+        problem = {
+            "num_vars": len(df.columns),
+            "names": df.columns,  # Parameter names
+            "bounds": zip(
+                df.min().values,
+                df.max().values,
+            ),  # Parameter bounds
+        }
+        for filter_var in filter_vars:
+            print(
+                f"  ...sensitivity indices for basin {basin} filtered by {filter_var} ",
+            )
+            start = time.time()
+
+            responses = ds.sel(basin=basin, ensemble_id=ensemble_id)[filter_var]
+            responses_scattered = client.scatter(
+                [responses.isel(time=k).to_numpy() for k in range(len(responses[dim]))]
+            )
+
+            futures = client.map(
+                delta_analysis,
+                responses_scattered,
+                problem=problem,
+                ensemble_df=df,
+            )
+            progress(futures, notebook=notebook)
+            result = client.gather(futures)
+
+            end = time.time()
+            time_elapsed = end - start
+            print(f"  ...took {time_elapsed:.0f}s")
+
+            delta_indices = xr.concat([r.expand_dims(dim) for r in result], dim=dim)
+            delta_indices[dim] = responses[dim]
+            delta_indices = delta_indices.expand_dims("basin", axis=1)
+            delta_indices["basin"] = [basin]
+            delta_indices = delta_indices.expand_dims("filtered_by", axis=2)
+            delta_indices["filtered_by"] = [filter_var]
+            all_delta_indices_list.append(delta_indices)
+
+    all_delta_indices: xr.Dataset = xr.merge(all_delta_indices_list)
+    client.close()
+
+    end_dask = time.time()
+    dask_time_elapsed = end_dask - start_dask
+    print(f"  ...took {dask_time_elapsed:.0f}s")
+
+    return all_delta_indices
+
+
 def plot_obs_sims(
     obs: xr.Dataset,
     sim_prior: xr.Dataset,
@@ -443,7 +541,7 @@ if __name__ == "__main__":
     ).reset_index(drop=True)
 
     # Apply the conversion function to each column
-    prior = prior.apply(prp.convert_column_to_float)
+    prior = prior.apply(prp.convert_column_to_numeric)
     for col in ["surface.given.file", "ocean.th.file", "calving.rate_scaling.file"]:
         prior[col] = prior[col].apply(prp.simplify)
     prior["surface.given.file"] = prior["surface.given.file"].apply(
@@ -509,7 +607,6 @@ if __name__ == "__main__":
     )
     simulated_resampled["pism_config"] = simulated["pism_config"]
 
-    simulated_filtered_all = {}
     filtered_all = {}
     prior_posterior_list = []
     for obs_mean_var, obs_std_var, sim_var in zip(
@@ -563,7 +660,6 @@ if __name__ == "__main__":
 
         simulated_filtered = simulated_resampled.sel(exp_id=filtered_ids)
         simulated_filtered["Ensemble"] = "Posterior"
-        simulated_filtered_all[obs_mean_var] = simulated_filtered
 
         sim_prior = simulated_resampled.load()
         sim_prior["Ensemble"] = "Prior"
@@ -589,7 +685,7 @@ if __name__ == "__main__":
             )
 
     prior_posterior = pd.concat(prior_posterior_list).reset_index()
-    prior_posterior = prior_posterior.apply(prp.convert_column_to_float)
+    prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)
     for col in ["surface.given.file", "ocean.th.file", "calving.rate_scaling.file"]:
         prior_posterior[col] = prior_posterior[col].apply(prp.simplify)
     prior_posterior["surface.given.file"] = prior_posterior["surface.given.file"].apply(
@@ -645,7 +741,7 @@ if __name__ == "__main__":
         fig.savefig(fn)
         plt.close()
 
-    ensemble_df = prior.apply(prp.convert_column_to_float).drop(
+    ensemble_df = prior.apply(prp.convert_column_to_numeric).drop(
         columns=["Ensemble", "exp_id"], errors="ignore"
     )
     climate_dict = {
@@ -663,66 +759,10 @@ if __name__ == "__main__":
         "calving.rate_scaling.file"
     ].map(calving_dict)
 
-    # It is imperative to load the dataset, if not each dask worker will load it,
-    # making the code 10x slower.
-    to_analyze = ds.sel(time=slice("1980-01-01", "2020-01-01")).load()
-    print("Calculating Sensitivity Indices")
-    print("===============================")
-
-    start_dask = time.time()
-    cluster = LocalCluster(n_workers=options.n_jobs, threads_per_worker=1)
-    client = Client(cluster, asynchronous=True)
-    print(f"Open client in browser: {client.dashboard_link}")
-    dim = "time"
-    all_delta_indices_list = []
-    for basin, df in ensemble_df.groupby(by="basin"):
-        df = df.drop(columns=["basin"])
-        problem = {
-            "num_vars": len(df.columns),
-            "names": df.columns,  # Parameter names
-            "bounds": zip(
-                df.min().values,
-                df.max().values,
-            ),  # Parameter bounds
-        }
-        for filter_var in ["mass_balance"]:
-            print(
-                f"  ...sensitivity indices for basin {basin} filtered by {filter_var} ",
-            )
-            start = time.time()
-
-            responses = to_analyze.sel(basin=basin, ensemble_id="RAGIS")[filter_var]
-            responses_scattered = client.scatter(
-                [responses.isel(time=k).to_numpy() for k in range(len(responses[dim]))]
-            )
-
-            futures = client.map(
-                delta_analysis,
-                responses_scattered,
-                problem=problem,
-                ensemble_df=df,
-            )
-            progress(futures, notebook=notebook)
-            result = client.gather(futures)
-
-            end = time.time()
-            time_elapsed = end - start
-            print(f"  ...took {time_elapsed:.0f}s")
-
-            delta_indices = xr.concat([r.expand_dims(dim) for r in result], dim=dim)
-            delta_indices[dim] = responses[dim]
-            delta_indices = delta_indices.expand_dims("basin", axis=1)
-            delta_indices["basin"] = [basin]
-            delta_indices = delta_indices.expand_dims("filtered_by", axis=2)
-            delta_indices["filtered_by"] = [filter_var]
-            all_delta_indices_list.append(delta_indices)
-
-    all_delta_indices: xr.Dataset = xr.merge(all_delta_indices_list)
-    client.close()
-
-    end_dask = time.time()
-    dask_time_elapsed = end_dask - start_dask
-    print(f"  ...took {dask_time_elapsed:.0f}s")
+    to_analyze = ds.sel(time=slice("1980-01-01", "2020-01-01"))
+    all_delta_indices = run_delta_analysis(
+        to_analyze, ensemble_df, list(flux_vars.values())[:2]
+    )
 
     # Extract the prefix from each coordinate value
     prefixes = [
