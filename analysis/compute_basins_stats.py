@@ -78,12 +78,6 @@ if __name__ == "__main__":
         default="16GB",
     )
     parser.add_argument(
-        "--notebook",
-        help="""Do not use distributed Client.""",
-        action="store_true",
-        default=False,
-    )
-    parser.add_argument(
         "--n_jobs", help="""Number of parallel jobs.""", type=int, default=4
     )
     parser.add_argument("FILE", nargs=1, help="netCDF file to process", default=None)
