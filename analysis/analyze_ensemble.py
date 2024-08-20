@@ -43,6 +43,8 @@ import pism_ragis.processing as prp
 from pism_ragis.analysis import delta_analysis
 from pism_ragis.filtering import particle_filter
 
+xr.set_options(keep_attrs=True)
+
 sim_alpha = 0.5
 sim_cmap = sns.color_palette("crest", n_colors=4).as_hex()[0:3:2]
 obs_alpha = 1.0

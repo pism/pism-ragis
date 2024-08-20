@@ -449,7 +449,7 @@ def normalize_cumulative_variables(
 
 
 def standardize_variable_names(
-    ds: xr.Dataset, name_dict: Mapping[Any, Hashable] | None
+    ds: xr.Dataset, name_dict: Union[Mapping[Any, Hashable], None]
 ) -> xr.Dataset:
     """
     Standardize variable names in an xarray Dataset.
