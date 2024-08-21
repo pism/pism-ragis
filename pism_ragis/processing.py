@@ -214,7 +214,7 @@ def compute_basin(
     >>> ds = xr.Dataset({'var': (('x', 'y'), np.random.rand(5, 5))})
     >>> compute_basin(ds, 'new_basin')
     """
-    ds = ds.sum(dim=dim).expand_dims("basin")
+    ds = ds.sum(dim=dim).expand_dims("basin", axis=1)
     ds["basin"] = [name]
     return ds.compute()
 

@@ -128,7 +128,9 @@ if __name__ == "__main__":
         except:
             m_id = str(m_id_re.group(1))
 
-        ds = ds.expand_dims({"ensemble_id": [ensemble_id], "exp_id": [m_id]})
+        ds = ds.expand_dims(
+            {"ensemble_id": [ensemble_id], "exp_id": [m_id]}, axis=[-1, -2]
+        )
 
         if "ice_mass" in ds:
             ds["ice_mass"] /= 1e12
