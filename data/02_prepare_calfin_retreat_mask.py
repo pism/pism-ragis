@@ -29,7 +29,6 @@ from typing import Dict, Union
 
 import cf_xarray as cfxr
 import dask
-import earthaccess
 import geopandas as gp
 import numpy as np
 import pandas as pd
@@ -39,7 +38,7 @@ from geocube.api.core import make_geocube
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 
-from pism_ragis.processing import tqdm_joblib
+from pism_ragis.processing import download_earthacces_dataset, tqdm_joblib
 
 gp.options.io_engine = "pyogrio"
 xr.set_options(keep_attrs=True)
@@ -175,27 +174,6 @@ def create_ds(
     return fn
 
 
-def download_calfin(
-    doi: str = "10.5067/7FILV218JZA2",
-    filter_str: str = "Greenland_polygons",
-    result_dir: Union[Path, str] = "calfin",
-):
-    """
-    Download CALFIN.
-    """
-    p = Path(result_dir)
-    p.mkdir(parents=True, exist_ok=True)
-
-    earthaccess.login()
-    result = earthaccess.search_data(doi=doi)
-    result_filtered = [
-        granule
-        for granule in result
-        if filter_str in granule["umm"]["DataGranule"]["Identifiers"][0]["Identifier"]
-    ]
-    earthaccess.download(result_filtered, p)
-
-
 if __name__ == "__main__":
     __spec__ = None
 
@@ -219,7 +197,10 @@ if __name__ == "__main__":
     )
     options = parser.parse_args()
 
-    download_calfin()
+    doi = "10.5067/7FILV218JZA2"
+    filter_str = "Greenland_polygons"
+    result_dir = "calfin"
+    download_earthacces_dataset(doi=doi, filter_str=filter_str, result_dir=result_dir)
 
     crs = options.crs
     encoding = {

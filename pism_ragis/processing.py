@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any, Hashable, List, Mapping, Union
 
 import dask
+import earthaccess
 import joblib
 import numpy as np
 import pandas as pd
@@ -40,6 +41,27 @@ from tqdm.auto import tqdm
 
 kg2cmsle = 1 / 1e12 * 1.0 / 362.5 / 10.0
 gt2cmsle = 1 / 362.5 / 10.0
+
+
+def download_earthacces_dataset(
+    doi: str = "10.5067/7FILV218JZA2",
+    filter_str: str = "Greenland_polygons",
+    result_dir: Union[Path, str] = "calfin",
+):
+    """
+    Download datasets via Earthaccess.
+    """
+    p = Path(result_dir)
+    p.mkdir(parents=True, exist_ok=True)
+
+    earthaccess.login()
+    result = earthaccess.search_data(doi=doi)
+    result_filtered = [
+        granule
+        for granule in result
+        if filter_str in granule["umm"]["DataGranule"]["Identifiers"][0]["Identifier"]
+    ]
+    earthaccess.download(result_filtered, p)
 
 
 def download_dataset(

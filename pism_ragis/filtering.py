@@ -57,7 +57,7 @@ def sample_with_replacement(
     return ids
 
 
-def particle_filter(
+def importance_sampling(
     simulated: xr.Dataset,
     observed: xr.Dataset,
     dim: str = "exp_id",

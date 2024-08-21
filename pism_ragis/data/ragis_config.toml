@@ -33,23 +33,23 @@
 ['Flux Variables']
 
 mass_flux = "mass_balance"
-discharge_flux = "ice_discharge"
+grounding_line_flux = "grounding_line_flux"
 smb_flux = "surface_mass_balance"
 
 ['Cumulative Variables']
 
-mass_cumulative = "cumulative_mass_balance"
-discharge_cumulative = "cumulative_ice_discharge"
-smb_cumulative = "cumulative_surface_mass_balance"
+cumulative_mass_balance = "cumulative_mass_balance"
+cumulative_grounding_line_flux = "cumulative_grounding_line_flux"
+cumulative_smb = "cumulative_surface_mass_balance"
 
 [PISM]
 
 ice_mass = "cumulative_mass_balance"
-ice_mass_transport_across_grounding_line = "ice_discharge"
+ice_mass_transport_across_grounding_line = "grounding_line_flux"
 tendency_of_ice_mass_due_to_surface_mass_flux = "surface_mass_balance"
 tendency_of_ice_mass = "mass_balance"
 
 [Mankoff]
 
-basin = {D_ROI = "ice_discharge", MB_ROI = "mass_balance", SMB_ROI = "surface_mass_balance", BMB_ROI = "basal_mass_balance", D_ROI_err = "ice_discharge_uncertainty", MB_ROI_err = "mass_balance_uncertainty", SMB_ROI_err = "surface_mass_balance_uncertainty", BMB_ROI_err = "basal_mass_balance_uncertainty"}
-gis = {D = "ice_discharge", MB = "mass_balance", SMB = "surface_mass_balance", BMB = "basal_mass_balance", D_err = "ice_discharge_uncertainty", MB_err = "mass_balance_uncertainty", SMB_err = "surface_mass_balance_uncertainty", BMB_err = "basal_mass_balance_uncertainty"}
+basin = {D_ROI = "grounding_line_flux", MB_ROI = "mass_balance", SMB_ROI = "surface_mass_balance", BMB_ROI = "basal_mass_balance", D_ROI_err = "grounding_line_flux_uncertainty", MB_ROI_err = "mass_balance_uncertainty", SMB_ROI_err = "surface_mass_balance_uncertainty", BMB_ROI_err = "basal_mass_balance_uncertainty"}
+gis = {D = "grounding_line_flux", MB = "mass_balance", SMB = "surface_mass_balance", BMB = "basal_mass_balance", D_err = "grounding_line_flux_uncertainty", MB_err = "mass_balance_uncertainty", SMB_err = "surface_mass_balance_uncertainty", BMB_err = "basal_mass_balance_uncertainty"}

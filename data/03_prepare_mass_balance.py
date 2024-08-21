@@ -107,7 +107,7 @@ if __name__ == "__main__":
 
     discharge_sign = xr.DataArray(-1).pint.quantify("1")
 
-    ds["ice_discharge"] *= discharge_sign
+    ds["grounding_line_flux"] *= discharge_sign
 
     comp = {"zlib": True, "complevel": 2}
     encoding = {var: comp for var in ds.data_vars}

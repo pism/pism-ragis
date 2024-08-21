@@ -41,14 +41,14 @@ from tqdm.auto import tqdm
 
 import pism_ragis.processing as prp
 from pism_ragis.analysis import delta_analysis
-from pism_ragis.filtering import particle_filter
+from pism_ragis.filtering import importance_sampling
 
 xr.set_options(keep_attrs=True)
 
 sim_alpha = 0.5
 sim_cmap = sns.color_palette("crest", n_colors=4).as_hex()[0:3:2]
 obs_alpha = 1.0
-obs_cmap = ["0.8", "0.7"]
+obs_cmap = ["0.85", "0.75"]
 hist_cmap = ["#a6cee3", "#1f78b4"]
 
 
@@ -162,7 +162,7 @@ def plot_obs_sims(
     obs_alpha: float = 1.0,
 ) -> None:
     """
-    Plot figure with cumulative mass balance and ice discharge and climatic
+    Plot figure with cumulative mass balance and grounding line flux and climatic
     mass balance fluxes.
 
     Parameters
@@ -193,12 +193,14 @@ def plot_obs_sims(
     obs_filtered = obs.sel(time=slice(str(filter_range[0]), str(filter_range[-1])))
 
     basin = obs.basin.values
-    mass_cumulative_varname = config["Cumulative Variables"]["mass_cumulative"]
+    mass_cumulative_varname = config["Cumulative Variables"]["cumulative_mass_balance"]
     mass_cumulative_uncertainty_varname = mass_cumulative_varname + "_uncertainty"
-    discharge_flux_varname = config["Flux Variables"]["discharge_flux"]
-    discharge_flux_uncertainty_varname = discharge_flux_varname + "_uncertainty"
+    grounding_line_flux_varname = config["Flux Variables"]["grounding_line_flux"]
+    grounding_line_flux_uncertainty_varname = (
+        grounding_line_flux_varname + "_uncertainty"
+    )
     smb_flux_varname = config["Flux Variables"]["smb_flux"]
-    smb_flux_uncertainty_varname = discharge_flux_varname + "_uncertainty"
+    smb_flux_uncertainty_varname = smb_flux_varname + "_uncertainty"
 
     plt.rcParams["font.size"] = 6
 
@@ -231,8 +233,8 @@ def plot_obs_sims(
 
     axs[1].fill_between(
         obs["time"],
-        obs[discharge_flux_varname] - obs[discharge_flux_uncertainty_varname],
-        obs[discharge_flux_varname] + obs[discharge_flux_uncertainty_varname],
+        obs[grounding_line_flux_varname] - obs[grounding_line_flux_uncertainty_varname],
+        obs[grounding_line_flux_varname] + obs[grounding_line_flux_uncertainty_varname],
         color=obs_cmap[0],
         alpha=obs_alpha,
         lw=0,
@@ -240,10 +242,10 @@ def plot_obs_sims(
 
     axs[1].fill_between(
         obs_filtered["time"],
-        obs_filtered[discharge_flux_varname]
-        - obs_filtered[discharge_flux_uncertainty_varname],
-        obs_filtered[discharge_flux_varname]
-        + obs_filtered[discharge_flux_uncertainty_varname],
+        obs_filtered[grounding_line_flux_varname]
+        - obs_filtered[grounding_line_flux_uncertainty_varname],
+        obs_filtered[grounding_line_flux_varname]
+        + obs_filtered[grounding_line_flux_uncertainty_varname],
         color=obs_cmap[1],
         alpha=obs_alpha,
         lw=0,
@@ -268,7 +270,7 @@ def plot_obs_sims(
             )
 
     for k, m_var in enumerate(
-        [mass_cumulative_varname, discharge_flux_varname, smb_flux_varname]
+        [mass_cumulative_varname, grounding_line_flux_varname, smb_flux_varname]
     ):
         sim_prior[m_var].plot(
             hue="exp_id",
@@ -299,7 +301,7 @@ def plot_obs_sims(
             )
 
     for k, m_var in enumerate(
-        [mass_cumulative_varname, discharge_flux_varname, smb_flux_varname]
+        [mass_cumulative_varname, grounding_line_flux_varname, smb_flux_varname]
     ):
         sim_ci = axs[k].fill_between(
             quantiles[0.5].time,
@@ -379,7 +381,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--filter_range",
-        help="""Time slice used for the Particle Filter. Default="1990 2019". """,
+        help="""Time slice used for Importance Sampling. Default="1990 2019". """,
         type=str,
         nargs=2,
         default="1990 2019",
@@ -407,7 +409,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--resampling_frequency",
-        help="""Resampling data to resampling_frequency for particle filtering. Default is "MS".""",
+        help="""Resampling data to resampling_frequency for importance sampling. Default is "MS".""",
         type=str,
         default="MS",
     )
@@ -485,10 +487,10 @@ if __name__ == "__main__":
         .dropna(dim="exp_id")
     )
     ds = prp.standardize_variable_names(ds, ragis_config["PISM"])
-    ds[ragis_config["Cumulative Variables"]["discharge_cumulative"]] = ds[
-        ragis_config["Flux Variables"]["discharge_flux"]
+    ds[ragis_config["Cumulative Variables"]["cumulative_grounding_line_flux"]] = ds[
+        ragis_config["Flux Variables"]["grounding_line_flux"]
     ].cumsum() / len(ds.time)
-    ds[ragis_config["Cumulative Variables"]["smb_cumulative"]] = ds[
+    ds[ragis_config["Cumulative Variables"]["cumulative_smb"]] = ds[
         ragis_config["Flux Variables"]["smb_flux"]
     ].cumsum() / len(ds.time)
     ds = prp.normalize_cumulative_variables(
@@ -499,15 +501,15 @@ if __name__ == "__main__":
     fig, ax = plt.subplots(1, 1)
     ds.sel(time=slice(str(filter_start_year), str(filter_end_year))).sel(
         basin="GIS", ensemble_id="RAGIS"
-    ).ice_discharge.plot(hue="exp_id", add_legend=False, ax=ax, lw=0.5)
-    fig.savefig("ice_discharge_unfiltered.pdf")
+    ).grounding_line_flux.plot(hue="exp_id", add_legend=False, ax=ax, lw=0.5)
+    fig.savefig("grounding_line_flux_unfiltered.pdf")
 
     lower_bound = -750
     upper_bound = -150
 
     outlier_filter = (
         ds.sel(basin="GIS", ensemble_id="RAGIS")
-        .utils.drop_nonnumeric_vars()["ice_discharge"]
+        .utils.drop_nonnumeric_vars()["grounding_line_flux"]
         .sel(time=slice(str(filter_start_year), str(filter_end_year)))
     )
     # filter_days_in_month = filter_ds.time.dt.days_in_month
@@ -528,8 +530,8 @@ if __name__ == "__main__":
     fig, ax = plt.subplots(1, 1)
     ds.sel(time=slice(str(filter_start_year), str(filter_end_year))).sel(
         basin="GIS", ensemble_id="RAGIS"
-    ).ice_discharge.plot(hue="exp_id", add_legend=False, ax=ax, lw=0.5)
-    fig.savefig("ice_discharge_filtered.pdf")
+    ).grounding_line_flux.plot(hue="exp_id", add_legend=False, ax=ax, lw=0.5)
+    fig.savefig("grounding_line_flux_filtered.pdf")
 
     pism_config = ds.sel(basin="GIS").sel(pism_config_axis=params).pism_config
 
@@ -616,8 +618,8 @@ if __name__ == "__main__":
         list(flux_uncertainty_vars.values())[:2],
         list(flux_vars.values())[:2],
     ):
-        print(f"Particle filtering using {obs_mean_var}")
-        filtered_ids = particle_filter(
+        print(f"Importance sampling using {obs_mean_var}")
+        filtered_ids = importance_sampling(
             simulated=simulated_resampled.sel(
                 time=slice(str(filter_start_year), str(filter_end_year))
             ).load(),
@@ -673,7 +675,7 @@ if __name__ == "__main__":
         ) as progress_bar:
             result = Parallel(n_jobs=options.n_jobs)(
                 delayed(plot_obs_sims)(
-                    observed_resampled.sel(basin=basin).rolling(time=13).mean(),
+                    observed_resampled.sel(basin=basin),
                     sim_prior.sel(basin=basin, ensemble_id="RAGIS"),
                     sim_posterior.sel(basin=basin, ensemble_id="RAGIS"),
                     config=ragis_config,
