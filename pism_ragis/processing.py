@@ -177,14 +177,71 @@ def preprocess_nc(
     Add experiment 'exp_id'
     """
     m_id_re = re.search(regexp, ds.encoding["source"])
-    ds.expand_dims(dim)
+    ds = ds.expand_dims(dim)
     assert m_id_re is not None
     m_id: Union[str, int]
     try:
         m_id = int(m_id_re.group(1))
     except:
         m_id = str(m_id_re.group(1))
-    ds[dim] = m_id
+    ds[dim] = [m_id]
+
+    return ds.drop_vars(drop_vars, errors="ignore").drop_dims(
+        drop_dims, errors="ignore"
+    )
+
+
+def preprocess_scalar_nc(
+    ds,
+    regexp: str = "id_(.+?)_",
+    dim: str = "exp_id",
+    ensemble_dim: str = "ensemble_id",
+    basin_dim: str = "basin",
+    ensemble_id: str = "RAGIS",
+    basin: str = "GIS",
+    drop_vars: Union[List[str], None] = None,
+    drop_dims: List[str] = ["nv4"],
+):
+    """
+    Add experiment 'exp_id'
+    """
+    config = ds["pism_config"]
+    stats = ds["run_stats"]
+    encoding = ds.encoding
+
+    pism_config = xr.DataArray(
+        list(config.attrs.values()),
+        dims=["pism_config_axis"],
+        coords={"pism_config_axis": list(config.attrs.keys())},
+        name="pism_config",
+    )
+    run_stats = xr.DataArray(
+        list(stats.attrs.values()),
+        dims=["run_stats_axis"],
+        coords={"run_stats_axis": list(stats.attrs.keys())},
+        name="run_stats",
+    )
+    if "ice_mass" in ds:
+        ds["ice_mass"] /= 1e12
+        ds["ice_mass"].attrs["units"] = "Gt"
+    if "ice_mass_glacierized" in ds:
+        ds["ice_mass_glacierized"] /= 1e12
+        ds["ice_mass_glacierized"].attrs["units"] = "Gt"
+    ds = xr.merge([ds.drop_vars(["pism_config", "run_stats"]), pism_config, run_stats])
+    ds.encoding.update(encoding)
+    m_id_re = re.search(regexp, ds.encoding["source"])
+    ds = ds.expand_dims(dim)
+    ds = ds.expand_dims(ensemble_dim)
+    ds[ensemble_dim] = [ensemble_id]
+    ds = ds.expand_dims(basin_dim)
+    ds[basin_dim] = [basin]
+    assert m_id_re is not None
+    m_id: Union[str, int]
+    try:
+        m_id = int(m_id_re.group(1))
+    except:
+        m_id = str(m_id_re.group(1))
+    ds[dim] = [m_id]
 
     return ds.drop_vars(drop_vars, errors="ignore").drop_dims(
         drop_dims, errors="ignore"

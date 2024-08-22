@@ -486,7 +486,7 @@ if __name__ == "__main__":
         .sortby("basin")
         .dropna(dim="exp_id")
     )
-    ds = prp.standardize_variable_names(ds, ragis_config["PISM"])
+    ds = prp.standardize_variable_names(ds, ragis_config["PISM Spatial"])
     ds[ragis_config["Cumulative Variables"]["cumulative_grounding_line_flux"]] = ds[
         ragis_config["Flux Variables"]["grounding_line_flux"]
     ].cumsum() / len(ds.time)
