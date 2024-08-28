@@ -1,4 +1,4 @@
-# Copyright (C) 2023 Andy Aschwanden
+# Copyright (C) 2023-24 Andy Aschwanden
 #
 # This file is part of pism-ragis.
 #
@@ -23,7 +23,7 @@ Tests for procesing module
 import numpy as np
 import xarray as xr
 
-from pism_ragis.processing import days_in_year
+from pism_ragis.processing import calculate_area, days_in_year
 
 
 def test_days_in_year():
@@ -86,3 +86,47 @@ def test_drop_nonnumeric_vars():
     # Check the data types of the remaining variables
     assert np.issubdtype(numeric_data["temperature"].dtype, np.number)
     assert np.issubdtype(numeric_data["humidity"].dtype, np.number)
+
+
+def test_calculate_area():
+    """
+    Test the calculate_area function.
+
+    This test checks if the calculate_area function correctly calculates the area of each grid cell
+    given arrays of latitudes and longitudes.
+
+    The test uses predefined latitude and longitude arrays and compares the function output with
+    the expected output calculated manually.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+    # Define test inputs
+    lat = np.array([0, 1, 2])
+    lon = np.array([0, 1, 2])
+
+    # Expected output (calculated manually or using a trusted method)
+    R = 6371000  # Radius of the Earth in meters
+    lat_rad = np.deg2rad(lat)
+    lon_rad = np.deg2rad(lon)
+    dlon = np.diff(lon_rad)
+    expected_area = np.zeros((len(lat) - 1, len(lon) - 1))
+
+    for i in range(len(lat) - 1):
+        for j in range(len(lon) - 1):
+            expected_area[i, j] = (
+                (R**2)
+                * np.abs(np.sin(lat_rad[i + 1]) - np.sin(lat_rad[i]))
+                * np.abs(dlon[j])
+            )
+
+    # Call the function
+    result = calculate_area(lat, lon)
+
+    # Assert the result is as expected
+    np.testing.assert_array_almost_equal(result, expected_area, decimal=5)

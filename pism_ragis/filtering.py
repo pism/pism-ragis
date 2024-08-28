@@ -21,9 +21,56 @@ Module for filtering (calibration).
 """
 
 import warnings
+from typing import Union
 
 import numpy as np
 import xarray as xr
+
+
+def log_likelihood(
+    x: Union[np.ndarray, xr.DataArray],
+    mean: Union[np.ndarray, xr.DataArray],
+    std: Union[np.ndarray, xr.DataArray],
+    n: int,
+    kind: str = "gaussian",
+) -> Union[np.ndarray, xr.DataArray]:
+    """
+    Calculate the log-likelihood of data given a distribution.
+
+    This function computes the log-likelihood of the data `x` given the mean and standard deviation
+    for a specified distribution type. Currently, only the Gaussian distribution is implemented.
+
+    Parameters
+    ----------
+    x : Union[np.ndarray, xr.DataArray]
+        The data for which the log-likelihood is to be calculated. Can be an array of values or an xarray.DataArray.
+    mean : Union[float, np.ndarray, xr.DataArray]
+        The mean of the distribution. Can be a single value, an array of values or an xarray.DataArray.
+    std : Union[float, np.ndarray, xr.DataArray]
+        The standard deviation of the distribution. Can be a single value, an array of values, or an xarray.DataArray.
+    n : int
+        The number of data points.
+    kind : str, optional
+        The type of distribution. Currently, only "gaussian" is implemented. Default is "gaussian".
+
+    Returns
+    -------
+    Union[np.ndarray, xr.DataArray]
+        The log-likelihood of the data given the distribution parameters.
+
+    Raises
+    ------
+    NotImplementedError
+        If the specified distribution type `kind` is not implemented.
+    """
+    if kind == "gaussian":
+        log_like = -0.5 * ((x - mean) / std) ** 2 - n * 0.5 * np.log(
+            2 * np.pi * std**2
+        )
+    else:
+        err_mesg = f"{kind} not implemented"
+        raise NotImplementedError(err_mesg)
+    return log_like
 
 
 def sample_with_replacement(
@@ -48,7 +95,6 @@ def sample_with_replacement(
     np.ndarray
         An array of sampled experiment IDs.
     """
-
     rng = np.random.default_rng(seed)
     try:
         ids = rng.choice(exp_id, size=n_samples, p=weights)
@@ -57,12 +103,55 @@ def sample_with_replacement(
     return ids
 
 
+def sample_with_replacement_xr(
+    weights, n_samples: int = 100, seed: int = 0, dim="exp_id"
+) -> xr.DataArray:
+    """
+    Sample with replacement from a DataArray along a specified dimension.
+
+    Parameters
+    ----------
+    weights : xr.DataArray
+        The DataArray containing the weights for sampling.
+    n_samples : int, optional
+        The number of samples to draw, by default 100.
+    seed : int, optional
+        The random seed for reproducibility, by default 0.
+    dim : str, optional
+        The dimension along which to sample, by default "exp_id".
+
+    Returns
+    -------
+    xr.DataArray
+        A DataArray with the sampled values along the specified dimension.
+    """
+    # Apply the function along the 'exp_id' dimension
+    da = xr.apply_ufunc(
+        sample_with_replacement,
+        weights.chunk({dim: -1}),
+        input_core_dims=[[dim]],
+        output_core_dims=[["sample"]],
+        vectorize=True,
+        dask="parallelized",
+        kwargs={
+            dim: weights[dim].to_numpy(),
+            "n_samples": n_samples,
+            "seed": seed,
+        },
+        dask_gufunc_kwargs={"output_sizes": {"sample": n_samples}},
+    )
+    da.name = dim + "_sampled"
+    return da.rename({"sample": dim})
+
+
 def importance_sampling(
     simulated: xr.Dataset,
     observed: xr.Dataset,
     dim: str = "exp_id",
+    sum_dim=["time"],
     fudge_factor: float = 3.0,
     n_samples: int = 100,
+    likelihood: str = "gaussian",
     obs_mean_var: str = "mass_balance",
     obs_std_var: str = "mass_balance_uncertainty",
     sim_var: str = "mass_balance",
@@ -120,11 +209,9 @@ def importance_sampling(
     sim = simulated[sim_var]
 
     # Compute the log-likelihood of each simulated data point
-    n = len(obs_mean["time"])
-    log_likes = -0.5 * ((sim - obs_mean) / obs_std) ** 2 - n * 0.5 * np.log(
-        2 * np.pi * obs_std**2
-    )
-    log_likes_sum = log_likes.sum(dim="time")
+    n = np.prod([observed.sizes[d] for d in sum_dim])
+    log_likes = log_likelihood(sim, obs_mean, obs_std, n, kind=likelihood)
+    log_likes_sum = log_likes.sum(dim=sum_dim)
     log_likes_scaled = log_likes_sum - log_likes_sum.mean(dim=dim)
     # Convert log-likelihoods to weights
     with warnings.catch_warnings():
@@ -132,19 +219,4 @@ def importance_sampling(
         weights = np.exp(log_likes_scaled)
     weights /= weights.sum(dim=dim)
 
-    # Apply the function along the 'exp_id' dimension
-    da = xr.apply_ufunc(
-        sample_with_replacement,
-        weights,
-        input_core_dims=[[dim]],
-        output_core_dims=[[dim]],
-        vectorize=True,
-        dask="allowed",
-        kwargs={
-            "exp_id": weights[dim].to_numpy(),
-            "n_samples": n_samples,
-            "seed": seed,
-        },
-    )
-    da.name = dim + "_sampled"
-    return da
+    return sample_with_replacement_xr(weights, n_samples=n_samples, seed=seed)

@@ -26,7 +26,7 @@ import warnings
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from importlib.resources import files
 from pathlib import Path
-from typing import Any, Hashable, List, Mapping, Union
+from typing import Any, Dict, Hashable, List, Mapping, Union
 
 import dask
 import numpy as np
@@ -45,17 +45,76 @@ from pism_ragis.filtering import importance_sampling
 
 xr.set_options(keep_attrs=True)
 
+plt.style.use("tableau-colorblind10")
+
 sim_alpha = 0.5
 sim_cmap = sns.color_palette("crest", n_colors=4).as_hex()[0:3:2]
+sim_cmap = ["#a6cee3", "#1f78b4"]
+sim_cmap = ["#CC6677", "#882255"]
 obs_alpha = 1.0
-obs_cmap = ["0.85", "0.75"]
+obs_cmap = ["0.8", "0.7"]
+# obs_cmap = ["#88CCEE", "#44AA99"]
 hist_cmap = ["#a6cee3", "#1f78b4"]
+
+
+def filter_outliers(
+    ds: xr.Dataset,
+    outlier_range: List[float],
+    outlier_variable: str,
+    subset: Dict = {"basin": "GIS", "ensemble_id": "RAGIS"},
+) -> Dict[str, xr.Dataset]:
+    """
+    Filter outliers from a dataset based on a specified variable and range.
+
+    This function filters out ensemble members from the dataset `ds` where the values of
+    `outlier_variable` fall outside the specified `outlier_range`. The filtering is done
+    for the specified subset of the dataset.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        The input dataset containing the data to be filtered.
+    outlier_range : List[float]
+        A list containing the lower and upper bounds for the outlier range.
+    outlier_variable : str
+        The variable in the dataset to be used for outlier detection.
+    subset : Dict, optional
+        A dictionary specifying the subset of the dataset to apply the filter on, by default {"basin": "GIS", "ensemble_id": "RAGIS"}.
+
+    Returns
+    -------
+    Dict[str, xr.Dataset]
+        A dictionary with two keys:
+        - "filtered": The dataset with outliers removed.
+        - "outliers": The dataset containing only the outliers.
+    """
+    lower_bound, upper_bound = outlier_range
+    print(f"Filtering outliers [{lower_bound}, {upper_bound}] for {outlier_variable}")
+    days_in_month = ds.time.dt.days_in_month
+    wgts = days_in_month.groupby("time.year") / days_in_month.groupby("time.year").sum()
+
+    outlier_filter = ds.sel(subset).utils.drop_nonnumeric_vars()[outlier_variable]
+    outlier_filter = (outlier_filter * wgts).resample(time="YS").sum(dim="time")
+    mask = (outlier_filter >= lower_bound) & (outlier_filter <= upper_bound)
+    mask = ~(~mask).any(dim="time")
+    filtered_ds = outlier_filter.sel(exp_id=mask)
+    filtered_exp_ids = filtered_ds.exp_id.values
+    outlier_ds = outlier_filter.sel(exp_id=~mask)
+    outlier_exp_ids = outlier_ds.exp_id.values
+    n_members = len(ds.exp_id)
+    n_members_filtered = len(filtered_exp_ids)
+    print(f"Ensemble size: {n_members}, outlier-filtered size: {n_members_filtered}")
+    filtered_ds = ds.sel(exp_id=filtered_exp_ids)
+    outliers_ds = ds.sel(exp_id=outlier_exp_ids)
+    return {"filtered": filtered_ds, "outliers": outliers_ds}
 
 
 def run_delta_analysis(
     ds: xr.Dataset,
     ensemble_df: pd.DataFrame,
     filter_vars: List[str],
+    group_dim: str = "basin",
+    iter_dim: str = "time",
     ensemble_id: str = "RAGIS",
 ) -> xr.Dataset:
     """
@@ -96,10 +155,9 @@ def run_delta_analysis(
     cluster = LocalCluster(n_workers=options.n_jobs, threads_per_worker=1)
     client = Client(cluster, asynchronous=True)
     print(f"Open client in browser: {client.dashboard_link}")
-    dim = "time"
     all_delta_indices_list = []
-    for basin, df in ensemble_df.groupby(by="basin"):
-        df = df.drop(columns=["basin"])
+    for gdim, df in ensemble_df.groupby(by=group_dim):
+        df = df.drop(columns=[group_dim])
         problem = {
             "num_vars": len(df.columns),
             "names": df.columns,  # Parameter names
@@ -110,13 +168,16 @@ def run_delta_analysis(
         }
         for filter_var in filter_vars:
             print(
-                f"  ...sensitivity indices for basin {basin} filtered by {filter_var} ",
+                f"  ...sensitivity indices for basin {gdim} filtered by {filter_var} ",
             )
             start = time.time()
 
-            responses = ds.sel(basin=basin, ensemble_id=ensemble_id)[filter_var]
+            responses = ds.sel(basin=gdim, ensemble_id=ensemble_id)[filter_var]
             responses_scattered = client.scatter(
-                [responses.isel(time=k).to_numpy() for k in range(len(responses[dim]))]
+                [
+                    responses.isel(time=k).to_numpy()
+                    for k in range(len(responses[iter_dim]))
+                ]
             )
 
             futures = client.map(
@@ -132,10 +193,12 @@ def run_delta_analysis(
             time_elapsed = end - start
             print(f"  ...took {time_elapsed:.0f}s")
 
-            delta_indices = xr.concat([r.expand_dims(dim) for r in result], dim=dim)
-            delta_indices[dim] = responses[dim]
-            delta_indices = delta_indices.expand_dims("basin", axis=1)
-            delta_indices["basin"] = [basin]
+            delta_indices = xr.concat(
+                [r.expand_dims(iter_dim) for r in result], dim=iter_dim
+            )
+            delta_indices[iter_dim] = responses[iter_dim]
+            delta_indices = delta_indices.expand_dims(group_dim, axis=1)
+            delta_indices[group_dim] = [gdim]
             delta_indices = delta_indices.expand_dims("filtered_by", axis=2)
             delta_indices["filtered_by"] = [filter_var]
             all_delta_indices_list.append(delta_indices)
@@ -160,6 +223,9 @@ def plot_obs_sims(
     fig_dir: Union[str, Path] = "figures",
     sim_alpha: float = 0.4,
     obs_alpha: float = 1.0,
+    sigma: float = 2,
+    percentiles: List[float] = [0.025, 0.975],
+    fontsize: float = 6,
 ) -> None:
     """
     Plot figure with cumulative mass balance and grounding line flux and climatic
@@ -190,7 +256,181 @@ def plot_obs_sims(
     import pism_ragis.processing  # pylint: disable=import-outside-toplevel,reimported
 
     Path(fig_dir).mkdir(exist_ok=True)
-    obs_filtered = obs.sel(time=slice(str(filter_range[0]), str(filter_range[-1])))
+
+    percentile_range = (percentiles[1] - percentiles[0]) * 100
+
+    basin = obs.basin.values
+    mass_cumulative_varname = config["Cumulative Variables"]["cumulative_mass_balance"]
+    mass_cumulative_uncertainty_varname = mass_cumulative_varname + "_uncertainty"
+    grounding_line_flux_varname = config["Flux Variables"]["grounding_line_flux"]
+    grounding_line_flux_uncertainty_varname = (
+        grounding_line_flux_varname + "_uncertainty"
+    )
+
+    plt.rcParams["font.size"] = fontsize
+
+    fig, axs = plt.subplots(2, 1, sharex=True, figsize=(6.2, 3.2), height_ratios=[2, 1])
+    fig.subplots_adjust(hspace=0.05, wspace=0.05)
+
+    obs_ci = axs[0].fill_between(
+        obs["time"],
+        obs[mass_cumulative_varname] - sigma * obs[mass_cumulative_uncertainty_varname],
+        obs[mass_cumulative_varname] + sigma * obs[mass_cumulative_uncertainty_varname],
+        color=obs_cmap[0],
+        alpha=obs_alpha,
+        lw=0,
+        label=f"Observed ({sigma}-$\sigma$ uncertainty)",
+    )
+
+    axs[1].fill_between(
+        obs["time"],
+        obs[grounding_line_flux_varname]
+        - sigma * obs[grounding_line_flux_uncertainty_varname],
+        obs[grounding_line_flux_varname]
+        + sigma * obs[grounding_line_flux_uncertainty_varname],
+        color=obs_cmap[0],
+        alpha=obs_alpha,
+        lw=0,
+    )
+
+    sim_cis = []
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
+        quantiles = {}
+        for q in [percentiles[0], 0.5, percentiles[1]]:
+            quantiles[q] = sim_prior.utils.drop_nonnumeric_vars().quantile(
+                q, dim="exp_id", skipna=True
+            )
+
+    for k, m_var in enumerate([mass_cumulative_varname, grounding_line_flux_varname]):
+        # sim_posterior[m_var].plot(
+        #     hue="exp_id",
+        #     color=sim_cmap[1],
+        #     ax=axs[k],
+        #     lw=0.1,
+        #     alpha=sim_alpha,
+        #     add_legend=False,
+        # )
+        sim_ci = axs[k].fill_between(
+            quantiles[0.5].time,
+            quantiles[percentiles[0]][m_var],
+            quantiles[percentiles[1]][m_var],
+            alpha=sim_alpha,
+            color=sim_cmap[0],
+            label=f"""{sim_prior["Ensemble"].values} ({percentile_range:.0f}% credibility interval)""",
+            lw=0,
+        )
+        if k == 0:
+            sim_cis.append(sim_ci)
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
+        quantiles = {}
+        for q in [percentiles[0], 0.5, percentiles[1]]:
+            quantiles[q] = sim_posterior.utils.drop_nonnumeric_vars().quantile(
+                q, dim="exp_id", skipna=True
+            )
+
+    for k, m_var in enumerate([mass_cumulative_varname, grounding_line_flux_varname]):
+        sim_ci = axs[k].fill_between(
+            quantiles[0.5].time,
+            quantiles[percentiles[0]][m_var],
+            quantiles[percentiles[1]][m_var],
+            alpha=sim_alpha,
+            color=sim_cmap[1],
+            label=f"""{sim_posterior["Ensemble"].values} ({percentile_range:.0f}% credibility interval)""",
+            lw=0,
+        )
+        if k == 0:
+            sim_cis.append(sim_ci)
+        axs[k].plot(
+            quantiles[0.5].time, quantiles[0.5][m_var], lw=0.75, color=sim_cmap[1]
+        )
+
+    y_min, y_max = axs[1].get_ylim()
+    scaler = y_min + (y_max - y_min) * 0.05
+    obs_filtered = obs.sel(time=slice(filter_range[0], filter_range[-1]))
+    filter_range_ds = obs_filtered[mass_cumulative_varname]
+    filter_range_ds *= 0
+    filter_range_ds += scaler
+    _ = filter_range_ds.plot(
+        ax=axs[1], lw=1, ls="solid", color="k", label="Filtering Range"
+    )
+    x_s = (
+        filter_range_ds.time.values[0]
+        + (filter_range_ds.time.values[-1] - filter_range_ds.time.values[0]) / 2
+    )
+    y_s = scaler
+    axs[1].text(
+        x_s, y_s, "Filtering Range", horizontalalignment="center", fontweight="medium"
+    )
+    legend = axs[0].legend(
+        handles=[obs_ci, *sim_cis],
+    )
+    legend.get_frame().set_linewidth(0.0)
+    legend.get_frame().set_alpha(0.0)
+
+    axs[0].add_artist(legend)
+
+    axs[0].xaxis.set_tick_params(labelbottom=False)
+
+    axs[0].set_ylabel(f"Cumulative mass\nloss since {reference_year} (Gt)")
+    axs[0].set_xlabel("")
+    axs[0].set_title(f"{basin} filtered by {filtering_var}")
+    axs[1].set_title("")
+    axs[1].set_ylabel("Grounding Line\nFlux (Gt/yr)")
+    axs[-1].set_xlim(np.datetime64("1980-01-01"), np.datetime64("2021-01-01"))
+    fig.tight_layout()
+    fig.savefig(
+        fig_dir / Path(f"{basin}_mass_accounting_filtered_by_{filtering_var}.pdf")
+    )
+    plt.close()
+
+
+def plot_obs_sims_3(
+    obs: xr.Dataset,
+    sim_prior: xr.Dataset,
+    sim_posterior: xr.Dataset,
+    config: dict,
+    filtering_var: str,
+    filter_range: List[int] = [1990, 2019],
+    fig_dir: Union[str, Path] = "figures",
+    sim_alpha: float = 0.4,
+    obs_alpha: float = 1.0,
+    sigma: float = 2,
+    percentiles: List[float] = [0.025, 0.975],
+) -> None:
+    """
+    Plot figure with cumulative mass balance and grounding line flux and climatic
+    mass balance fluxes.
+
+    Parameters
+    ----------
+    obs : xr.Dataset
+        Observational dataset.
+    sim_prior : xr.Dataset
+        Prior simulation dataset.
+    sim_posterior : xr.Dataset
+        Posterior simulation dataset.
+    config : dict
+        Configuration dictionary containing variable names.
+    filtering_var : str
+        Variable used for filtering.
+    filter_range : List[int], optional
+        Range of years for filtering, by default [1990, 2019].
+    fig_dir : Union[str, Path], optional
+        Directory to save the figures, by default "figures".
+    sim_alpha : float, optional
+        Alpha value for simulation plots, by default 0.4.
+    obs_alpha : float, optional
+        Alpha value for observation plots, by default 1.0.
+    """
+
+    import pism_ragis.processing  # pylint: disable=import-outside-toplevel,reimported
+
+    Path(fig_dir).mkdir(exist_ok=True)
+
+    percentile_range = (percentiles[1] - percentiles[0]) * 100
 
     basin = obs.basin.values
     mass_cumulative_varname = config["Cumulative Variables"]["cumulative_mass_balance"]
@@ -211,50 +451,29 @@ def plot_obs_sims(
 
     obs_ci = axs[0].fill_between(
         obs["time"],
-        obs[mass_cumulative_varname] - obs[mass_cumulative_uncertainty_varname],
-        obs[mass_cumulative_varname] + obs[mass_cumulative_uncertainty_varname],
+        obs[mass_cumulative_varname] - sigma * obs[mass_cumulative_uncertainty_varname],
+        obs[mass_cumulative_varname] + sigma * obs[mass_cumulative_uncertainty_varname],
         color=obs_cmap[0],
         alpha=obs_alpha,
         lw=0,
-        label="1-$\sigma$",
-    )
-
-    obs_filtered_ci = axs[0].fill_between(
-        obs_filtered["time"],
-        obs_filtered[mass_cumulative_varname]
-        - obs_filtered[mass_cumulative_uncertainty_varname],
-        obs_filtered[mass_cumulative_varname]
-        + obs_filtered[mass_cumulative_uncertainty_varname],
-        color=obs_cmap[1],
-        alpha=obs_alpha,
-        lw=0,
-        label="Filter Interval",
+        label=f"Observed ({sigma}-$\sigma$ uncertainty)",
     )
 
     axs[1].fill_between(
         obs["time"],
-        obs[grounding_line_flux_varname] - obs[grounding_line_flux_uncertainty_varname],
-        obs[grounding_line_flux_varname] + obs[grounding_line_flux_uncertainty_varname],
+        obs[grounding_line_flux_varname]
+        - sigma * obs[grounding_line_flux_uncertainty_varname],
+        obs[grounding_line_flux_varname]
+        + sigma * obs[grounding_line_flux_uncertainty_varname],
         color=obs_cmap[0],
-        alpha=obs_alpha,
-        lw=0,
-    )
-
-    axs[1].fill_between(
-        obs_filtered["time"],
-        obs_filtered[grounding_line_flux_varname]
-        - obs_filtered[grounding_line_flux_uncertainty_varname],
-        obs_filtered[grounding_line_flux_varname]
-        + obs_filtered[grounding_line_flux_uncertainty_varname],
-        color=obs_cmap[1],
         alpha=obs_alpha,
         lw=0,
     )
 
     axs[2].fill_between(
         obs["time"],
-        obs[smb_flux_varname] - obs[smb_flux_uncertainty_varname],
-        obs[smb_flux_varname] + obs[smb_flux_uncertainty_varname],
+        obs[smb_flux_varname] - sigma * obs[smb_flux_uncertainty_varname],
+        obs[smb_flux_varname] + sigma * obs[smb_flux_uncertainty_varname],
         color=obs_cmap[0],
         alpha=obs_alpha,
         lw=0,
@@ -264,7 +483,7 @@ def plot_obs_sims(
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
         quantiles = {}
-        for q in [0.16, 0.5, 0.84]:
+        for q in [percentiles[0], 0.5, percentiles[1]]:
             quantiles[q] = sim_prior.utils.drop_nonnumeric_vars().quantile(
                 q, dim="exp_id", skipna=True
             )
@@ -272,9 +491,9 @@ def plot_obs_sims(
     for k, m_var in enumerate(
         [mass_cumulative_varname, grounding_line_flux_varname, smb_flux_varname]
     ):
-        sim_prior[m_var].plot(
+        sim_posterior[m_var].plot(
             hue="exp_id",
-            color=sim_cmap[0],
+            color=sim_cmap[1],
             ax=axs[k],
             lw=0.1,
             alpha=sim_alpha,
@@ -282,11 +501,11 @@ def plot_obs_sims(
         )
         sim_ci = axs[k].fill_between(
             quantiles[0.5].time,
-            quantiles[0.16][m_var],
-            quantiles[0.84][m_var],
+            quantiles[percentiles[0]][m_var],
+            quantiles[percentiles[1]][m_var],
             alpha=sim_alpha,
             color=sim_cmap[0],
-            label=sim_prior["Ensemble"].values,
+            label=f"""{sim_prior["Ensemble"].values} ({percentile_range:.0f}% c.i.)""",
             lw=0,
         )
         if k == 0:
@@ -295,7 +514,7 @@ def plot_obs_sims(
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
         quantiles = {}
-        for q in [0.16, 0.5, 0.84]:
+        for q in [percentiles[0], 0.5, percentiles[1]]:
             quantiles[q] = sim_posterior.utils.drop_nonnumeric_vars().quantile(
                 q, dim="exp_id", skipna=True
             )
@@ -305,11 +524,11 @@ def plot_obs_sims(
     ):
         sim_ci = axs[k].fill_between(
             quantiles[0.5].time,
-            quantiles[0.16][m_var],
-            quantiles[0.84][m_var],
+            quantiles[percentiles[0]][m_var],
+            quantiles[percentiles[1]][m_var],
             alpha=sim_alpha,
             color=sim_cmap[1],
-            label=sim_posterior["Ensemble"].values,
+            label=f"""{sim_posterior["Ensemble"].values} ({percentile_range:.0f}% c.i.)""",
             lw=0,
         )
         if k == 0:
@@ -317,26 +536,36 @@ def plot_obs_sims(
         axs[k].plot(
             quantiles[0.5].time, quantiles[0.5][m_var], lw=0.75, color=sim_cmap[1]
         )
-    legend_obs = axs[0].legend(
-        handles=[obs_ci, obs_filtered_ci], loc="lower left", title="Observed"
-    )
-    legend_obs.get_frame().set_linewidth(0.0)
-    legend_obs.get_frame().set_alpha(0.0)
 
-    legend_sim = axs[0].legend(
-        handles=sim_cis,
-        loc="center left",
-        title="Simulated (66% c.i.)",
+    y_min, y_max = axs[0].get_ylim()
+    scaler = y_min + (y_max - y_min) * 0.05
+    obs_filtered = obs.sel(time=slice(filter_range[0], filter_range[-1]))
+    filter_range_ds = obs_filtered[mass_cumulative_varname]
+    filter_range_ds *= 0
+    filter_range_ds += scaler
+    _ = filter_range_ds.plot(
+        ax=axs[0], lw=1, ls="solid", color="k", label="Filtering Range"
     )
-    legend_sim.get_frame().set_linewidth(0.0)
-    legend_sim.get_frame().set_alpha(0.0)
+    x_s = (
+        filter_range_ds.time.values[0]
+        + (filter_range_ds.time.values[-1] - filter_range_ds.time.values[0]) / 2
+    )
+    y_s = scaler
+    axs[0].text(
+        x_s, y_s, "Filtering Range", horizontalalignment="center", fontweight="medium"
+    )
+    legend = axs[0].legend(
+        handles=[obs_ci, *sim_cis],
+    )
+    legend.get_frame().set_linewidth(0.0)
+    legend.get_frame().set_alpha(0.0)
 
-    axs[0].add_artist(legend_obs)
-    axs[0].add_artist(legend_sim)
+    axs[0].add_artist(legend)
 
     # axs[0].set_ylim(-10_000, 5_000)
     # axs[1].set_ylim(-750, -250)
     # axs[2].set_ylim(-500, 1_000)
+
     axs[0].xaxis.set_tick_params(labelbottom=False)
     axs[1].xaxis.set_tick_params(labelbottom=False)
 
@@ -374,17 +603,24 @@ if __name__ == "__main__":
         default="data/mankoff/mankoff_mass_balance.nc",
     )
     parser.add_argument(
-        "--crs",
-        help="""Coordinate reference system. Default is EPSG:3413.""",
-        type=str,
-        default="EPSG:3413",
-    )
-    parser.add_argument(
         "--filter_range",
         help="""Time slice used for Importance Sampling. Default="1990 2019". """,
         type=str,
         nargs=2,
-        default="1990 2019",
+        default="1986 2019",
+    )
+    parser.add_argument(
+        "--outlier_range",
+        help="""Ensemble members outside this range are removed. Default="-1_250 250". """,
+        type=str,
+        nargs=2,
+        default="-1250 -250",
+    )
+    parser.add_argument(
+        "--outlier_variable",
+        help="""Quantity to filter outliers. Default="grounding_line_flux".""",
+        type=str,
+        default="grounding_line_flux",
     )
     parser.add_argument(
         "--fudge_factor",
@@ -434,14 +670,14 @@ if __name__ == "__main__":
 
     options = parser.parse_args()
     basin_files = options.FILES
-    crs = options.crs
     filter_start_year, filter_end_year = options.filter_range.split(" ")
     fudge_factor = options.fudge_factor
     notebook = options.notebook
     parallel = options.parallel
     reference_year = options.reference_year
     resampling_frequency = options.resampling_frequency
-
+    outlier_variable = options.outlier_variable
+    outlier_range = [float(v) for v in options.outlier_range.split(" ")]
     ragis_config_file = Path(
         str(files("pism_ragis.data").joinpath("ragis_config.toml"))
     )
@@ -504,28 +740,11 @@ if __name__ == "__main__":
     ).grounding_line_flux.plot(hue="exp_id", add_legend=False, ax=ax, lw=0.5)
     fig.savefig("grounding_line_flux_unfiltered.pdf")
 
-    lower_bound = -750
-    upper_bound = -150
-
-    outlier_filter = (
-        ds.sel(basin="GIS", ensemble_id="RAGIS")
-        .utils.drop_nonnumeric_vars()["grounding_line_flux"]
-        .sel(time=slice(str(filter_start_year), str(filter_end_year)))
+    result = filter_outliers(
+        ds, outlier_range=outlier_range, outlier_variable=outlier_variable
     )
-    # filter_days_in_month = filter_ds.time.dt.days_in_month
-    # filter_wgts = filter_days_in_month.groupby(
-    #     "time.year"
-    # ) / filter_days_in_month.groupby("time.year").sum(dim="time")
-    # outlier_filter = (filter_ds * filter_wgts).resample({"time": "YS"}).sum()
-    # Identify exp_id values that fall within the 99% credibility interval
-    mask = (outlier_filter >= lower_bound) & (outlier_filter <= upper_bound)
-    mask = ~(~mask).any(dim="time")
-    filtered_ds = outlier_filter.sel(exp_id=mask)
-    filtered_exp_ids = filtered_ds.exp_id.values
-    n_members = len(ds.exp_id)
-    n_members_filtered = len(filtered_exp_ids)
-    print(f"Ensemble size: {n_members}, outlier-filtered size: {n_members_filtered}")
-    ds = ds.sel(exp_id=filtered_exp_ids)
+    filtered_ds = result["filtered"]
+    outliers_ds = result["outliers"]
 
     fig, ax = plt.subplots(1, 1)
     ds.sel(time=slice(str(filter_start_year), str(filter_end_year))).sel(
@@ -533,32 +752,85 @@ if __name__ == "__main__":
     ).grounding_line_flux.plot(hue="exp_id", add_legend=False, ax=ax, lw=0.5)
     fig.savefig("grounding_line_flux_filtered.pdf")
 
-    pism_config = ds.sel(basin="GIS").sel(pism_config_axis=params).pism_config
-
-    prior_df = pism_config.to_dataframe()
-
-    prior = pd.concat(
-        [
-            prp.transpose_dataframe(df, exp_id)
-            for exp_id, df in prior_df.reset_index().groupby(by="exp_id")
-        ]
-    ).reset_index(drop=True)
-
-    # Apply the conversion function to each column
-    prior = prior.apply(prp.convert_column_to_numeric)
-    for col in ["surface.given.file", "ocean.th.file", "calving.rate_scaling.file"]:
-        prior[col] = prior[col].apply(prp.simplify)
-    prior["surface.given.file"] = prior["surface.given.file"].apply(
-        prp.simplify_climate
-    )
-    prior["ocean.th.file"] = prior["ocean.th.file"].apply(prp.simplify_ocean)
-    prior["calving.rate_scaling.file"] = prior["calving.rate_scaling.file"].apply(
-        prp.simplify_calving
-    )
-
+    prior_config = ds.sel(pism_config_axis=params).pism_config
+    dims = [dim for dim in prior_config.dims if not dim in ["pism_config_axis"]]
+    prior_df = prior_config.to_dataframe().reset_index()
+    prior = prior_df.pivot(index=dims, columns="pism_config_axis", values="pism_config")
+    prior.reset_index(inplace=True)
     prior["Ensemble"] = "Prior"
 
-    observed = xr.open_dataset(options.obs_url).sel(time=slice("1986", "2021"))
+    outlier_config = outliers_ds.sel(pism_config_axis=params).pism_config
+    dims = [dim for dim in outlier_config.dims if not dim in ["pism_config_axis"]]
+    outlier_df = outlier_config.to_dataframe().reset_index()
+    outlier_df = outlier_df.pivot(
+        index=dims, columns="pism_config_axis", values="pism_config"
+    )
+    outlier_df.reset_index(inplace=True)
+    outlier_df["Ensemble"] = "Outliers"
+
+    filtered_config = filtered_ds.sel(pism_config_axis=params).pism_config
+    dims = [dim for dim in filtered_config.dims if not dim in ["pism_config_axis"]]
+    filtered_df = filtered_config.to_dataframe().reset_index()
+    filtered_df = filtered_df.pivot(
+        index=dims, columns="pism_config_axis", values="pism_config"
+    )
+    filtered_df.reset_index(inplace=True)
+    filtered_df["Ensemble"] = "Filtered"
+
+    outliers_filtered_df = pd.concat([outlier_df, filtered_df]).reset_index(drop=True)
+    # Apply the conversion function to each column
+    outliers_filtered_df = outliers_filtered_df.apply(prp.convert_column_to_numeric)
+    for col in ["surface.given.file", "ocean.th.file", "calving.rate_scaling.file"]:
+        outliers_filtered_df[col] = outliers_filtered_df[col].apply(prp.simplify)
+    outliers_filtered_df["surface.given.file"] = outliers_filtered_df[
+        "surface.given.file"
+    ].apply(prp.simplify_climate)
+    outliers_filtered_df["ocean.th.file"] = outliers_filtered_df["ocean.th.file"].apply(
+        prp.simplify_ocean
+    )
+    outliers_filtered_df["calving.rate_scaling.file"] = outliers_filtered_df[
+        "calving.rate_scaling.file"
+    ].apply(prp.simplify_calving)
+
+    df = outliers_filtered_df.rename(columns=params_short_dict)
+    n_params = len(params_short_dict)
+    plt.rcParams["font.size"] = 4
+    fig, axs = plt.subplots(
+        5,
+        3,
+        sharey=True,
+        figsize=[6.2, 6.2],
+    )
+    fig.subplots_adjust(hspace=1.0, wspace=0.1)
+    for k, v in enumerate(params_short_dict.values()):
+        legend = bool(k == 0)
+        try:
+            sns.histplot(
+                data=df,
+                x=v,
+                hue="Ensemble",
+                hue_order=["Filtered", "Outliers"],
+                palette=sim_cmap,
+                common_norm=False,
+                stat="probability",
+                multiple="dodge",
+                alpha=0.8,
+                linewidth=0.2,
+                ax=axs.ravel()[k],
+                legend=legend,
+            )
+        except:
+            pass
+    for ax in axs.flatten():
+        ax.set_ylabel("")
+        ticklabels = ax.get_xticklabels()
+        for tick in ticklabels:
+            tick.set_rotation(45)
+    fn = result_dir / Path("figures") / Path("outliers_hist.pdf")
+    fig.savefig(fn)
+    plt.close()
+
+    observed = xr.open_dataset(options.obs_url).sel(time=slice("1980", "2022"))
     observed = observed.sortby("basin")
     observed = prp.normalize_cumulative_variables(
         observed,
@@ -567,7 +839,6 @@ if __name__ == "__main__":
     )
 
     observed_days_in_month = observed["time"].dt.days_in_month
-    observed_days_in_month = observed.time.dt.days_in_month
 
     observed_wgts = 1 / (observed_days_in_month)
     observed_resampled = (
@@ -578,30 +849,7 @@ if __name__ == "__main__":
         .mean()
     )
 
-    # observed_resampled = observed_resampled.rolling(time=13).mean()
-    # simulated = (
-    #     ds.drop_vars(["pism_config", "run_stats"], errors="ignore")
-    #     .rolling(time=13)
-    #     .mean()
-    # )
-    # simulated = xr.merge([simulated, ds[["pism_config", "run_stats"]]])
-
-    # simulated_days_in_month = simulated["time"].dt.days_in_month
-    # simulated_wgts = (
-    #     simulated_days_in_month.groupby(f"""time.{freq_dict[resampling_frequency]}""")
-    #     / simulated_days_in_month.groupby(
-    #         f"""time.{freq_dict[resampling_frequency]}"""
-    #     ).sum()
-    # )
-    # simulated_resampled = (
-    #     (
-    #         simulated.drop_vars(["pism_config", "run_stats"], errors="ignore")
-    #         * simulated_wgts
-    #     )
-    #     .resample(time=resampling_frequency)
-    #     .sum(dim="time")
-    # )
-    simulated = ds
+    simulated = filtered_ds
     simulated_resampled = (
         simulated.drop_vars(["pism_config", "run_stats"], errors="ignore")
         .resample(time=resampling_frequency)
@@ -619,13 +867,15 @@ if __name__ == "__main__":
         list(flux_vars.values())[:2],
     ):
         print(f"Importance sampling using {obs_mean_var}")
+        start = time.time()
+
         filtered_ids = importance_sampling(
             simulated=simulated_resampled.sel(
                 time=slice(str(filter_start_year), str(filter_end_year))
-            ).load(),
+            ),
             observed=observed_resampled.sel(
                 time=slice(str(filter_start_year), str(filter_end_year))
-            ).load(),
+            ),
             fudge_factor=fudge_factor,
             n_samples=len(simulated.exp_id),
             obs_mean_var=obs_mean_var,
@@ -633,15 +883,9 @@ if __name__ == "__main__":
             sim_var=sim_var,
         )
         filtered_ids["basin"] = filtered_ids["basin"].astype("<U3")
-
-        prior_config = ds.sel(pism_config_axis=params).pism_config
-        dims = [dim for dim in prior_config.dims if not dim in ["pism_config_axis"]]
-        prior_df = prior_config.to_dataframe().reset_index()
-        prior = prior_df.pivot(
-            index=dims, columns="pism_config_axis", values="pism_config"
-        )
-        prior.reset_index(inplace=True)
-        prior["Ensemble"] = "Prior"
+        end = time.time()
+        time_elapsed = end - start
+        print(f"  ...took {time_elapsed:.0f}s")
 
         posterior_config = (
             ds.sel(pism_config_axis=params).sel(exp_id=filtered_ids).pism_config
@@ -711,10 +955,11 @@ if __name__ == "__main__":
             5,
             3,
             sharey=True,
-            figsize=[6.2, 5.2],
+            figsize=[6.2, 6.2],
         )
         fig.subplots_adjust(hspace=1.0, wspace=0.1)
         for k, v in enumerate(params_short_dict.values()):
+            legend = bool(k == 0)
             try:
                 sns.histplot(
                     data=df,
@@ -728,7 +973,7 @@ if __name__ == "__main__":
                     alpha=0.8,
                     linewidth=0.2,
                     ax=axs.ravel()[k],
-                    legend=False,
+                    legend=legend,
                 )
             except:
                 pass
@@ -802,17 +1047,18 @@ if __name__ == "__main__":
         .mean()
     )
 
-    for basin in aggregated_data.basin.values:
-        for filter_var in aggregated_data.filtered_by.values:
-            fig, ax = plt.subplots(1, 1)
-            aggregated_data.sel(filtered_by=filter_var, basin=basin).S1.plot(
-                hue="sensitivity_indices_group", ax=ax
-            )
-            ax.set_title(f"S1 for {basin} filtered by {filter_var}")
-            fn = (
-                result_dir
-                / Path("figures")
-                / Path(f"S1_{basin}_filtered_by_{filter_var}.pdf")
-            )
-            fig.savefig(fn)
-            plt.close()
+    for index in ["S1", "delta"]:
+        for basin in aggregated_data.basin.values:
+            for filter_var in aggregated_data.filtered_by.values:
+                fig, ax = plt.subplots(1, 1)
+                aggregated_data.sel(filtered_by=filter_var, basin=basin)[index].plot(
+                    hue="sensitivity_indices_group", ax=ax
+                )
+                ax.set_title(f"S1 for {basin} filtered by {filter_var}")
+                fn = (
+                    result_dir
+                    / Path("figures")
+                    / Path(f"{basin}_{index}_filtered_by_{filter_var}.pdf")
+                )
+                fig.savefig(fn)
+                plt.close()

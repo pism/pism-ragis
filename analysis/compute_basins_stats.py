@@ -90,9 +90,6 @@ if __name__ == "__main__":
     result_dir = Path(options.result_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
 
-    fig_dir = result_dir / "figures"
-    fig_dir.mkdir(exist_ok=True)
-
     # Load basins, merge all ICE_CAP geometries
     basin_url = Path(options.basin_url)
     basins = gp.read_file(basin_url).to_crs(crs)

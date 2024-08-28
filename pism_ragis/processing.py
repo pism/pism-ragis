@@ -43,13 +43,26 @@ kg2cmsle = 1 / 1e12 * 1.0 / 362.5 / 10.0
 gt2cmsle = 1 / 362.5 / 10.0
 
 
-def download_earthacces_dataset(
+def download_earthaccess_dataset(
     doi: str = "10.5067/7FILV218JZA2",
     filter_str: str = "Greenland_polygons",
     result_dir: Union[Path, str] = "calfin",
-):
+) -> List:
     """
     Download datasets via Earthaccess.
+
+    Parameters
+    ----------
+    doi : str, optional
+        The DOI of the dataset to download. Default is "10.5067/7FILV218JZA2".
+    filter_str : str, optional
+        A string to filter the search results. Default is "Greenland_polygons".
+    result_dir : Union[Path, str], optional
+        The directory where the downloaded files will be saved. Default is "calfin".
+
+    Returns
+    -------
+    None
     """
     p = Path(result_dir)
     p.mkdir(parents=True, exist_ok=True)
@@ -61,7 +74,7 @@ def download_earthacces_dataset(
         for granule in result
         if filter_str in granule["umm"]["DataGranule"]["Identifiers"][0]["Identifier"]
     ]
-    earthaccess.download(result_filtered, p)
+    return earthaccess.download(result_filtered, p)
 
 
 def download_dataset(
@@ -478,9 +491,9 @@ def load_ensemble(
     """
     with dask.config.set(**{"array.slicing.split_large_chunks": True}):
         print("Loading ensemble files... ", end="", flush=True)
-        ds = xr.open_mfdataset(filenames, parallel=parallel, chunks="auto").drop_vars(
-            ["spatial_ref", "mapping"], errors="ignore"
-        )
+        ds = xr.open_mfdataset(
+            filenames, parallel=parallel, chunks={"exp_id": -1}
+        ).drop_vars(["spatial_ref", "mapping"], errors="ignore")
         if "time" in ds["pism_config"].coords:
             ds["pism_config"] = ds["pism_config"].isel(time=0).drop_vars("time")
         print("Done.")
