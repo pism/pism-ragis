@@ -63,6 +63,7 @@ repos:
           [
             "-rn", # Only display messages
             "-sn", # Don't display the score
+            "--extension-pkg-whitelist=scipy",
           ]
 
   # - repo: https://github.com/srstevenson/nb-clean

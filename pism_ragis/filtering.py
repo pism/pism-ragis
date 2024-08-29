@@ -21,56 +21,10 @@ Module for filtering (calibration).
 """
 
 import warnings
-from typing import Union
+from typing import Callable
 
 import numpy as np
 import xarray as xr
-
-
-def log_likelihood(
-    x: Union[np.ndarray, xr.DataArray],
-    mean: Union[np.ndarray, xr.DataArray],
-    std: Union[np.ndarray, xr.DataArray],
-    n: int,
-    kind: str = "gaussian",
-) -> Union[np.ndarray, xr.DataArray]:
-    """
-    Calculate the log-likelihood of data given a distribution.
-
-    This function computes the log-likelihood of the data `x` given the mean and standard deviation
-    for a specified distribution type. Currently, only the Gaussian distribution is implemented.
-
-    Parameters
-    ----------
-    x : Union[np.ndarray, xr.DataArray]
-        The data for which the log-likelihood is to be calculated. Can be an array of values or an xarray.DataArray.
-    mean : Union[float, np.ndarray, xr.DataArray]
-        The mean of the distribution. Can be a single value, an array of values or an xarray.DataArray.
-    std : Union[float, np.ndarray, xr.DataArray]
-        The standard deviation of the distribution. Can be a single value, an array of values, or an xarray.DataArray.
-    n : int
-        The number of data points.
-    kind : str, optional
-        The type of distribution. Currently, only "gaussian" is implemented. Default is "gaussian".
-
-    Returns
-    -------
-    Union[np.ndarray, xr.DataArray]
-        The log-likelihood of the data given the distribution parameters.
-
-    Raises
-    ------
-    NotImplementedError
-        If the specified distribution type `kind` is not implemented.
-    """
-    if kind == "gaussian":
-        log_like = -0.5 * ((x - mean) / std) ** 2 - n * 0.5 * np.log(
-            2 * np.pi * std**2
-        )
-    else:
-        err_mesg = f"{kind} not implemented"
-        raise NotImplementedError(err_mesg)
-    return log_like
 
 
 def sample_with_replacement(
@@ -147,11 +101,12 @@ def sample_with_replacement_xr(
 def importance_sampling(
     simulated: xr.Dataset,
     observed: xr.Dataset,
+    log_likelihood: Callable,
+    likelihood_kwargs={"delta": 2},
     dim: str = "exp_id",
     sum_dim=["time"],
     fudge_factor: float = 3.0,
     n_samples: int = 100,
-    likelihood: str = "gaussian",
     obs_mean_var: str = "mass_balance",
     obs_std_var: str = "mass_balance_uncertainty",
     sim_var: str = "mass_balance",
@@ -210,7 +165,7 @@ def importance_sampling(
 
     # Compute the log-likelihood of each simulated data point
     n = np.prod([observed.sizes[d] for d in sum_dim])
-    log_likes = log_likelihood(sim, obs_mean, obs_std, n, kind=likelihood)
+    log_likes = log_likelihood(sim, obs_mean, obs_std, n=n, **likelihood_kwargs)
     log_likes_sum = log_likes.sum(dim=sum_dim)
     log_likes_scaled = log_likes_sum - log_likes_sum.mean(dim=dim)
     # Convert log-likelihoods to weights

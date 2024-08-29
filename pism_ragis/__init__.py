@@ -7,6 +7,7 @@ name = "pismragis"
 __all__ = [
     "analysis",
     "observations",
+    "likelihood",
     "filtering",
     "processing",
     "computing",
