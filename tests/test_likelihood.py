@@ -16,6 +16,7 @@
 # along with PISM; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
+# mypy: disable-error-code="no-redef"
 """
 Tests for filtering module
 """
@@ -23,8 +24,9 @@ Tests for filtering module
 import numpy as np
 import pytest
 import xarray as xr
+from scipy.special import pseudo_huber
 
-from pism_ragis.likelihood import log_normal
+from pism_ragis.likelihood import log_normal, log_pseudo_huber
 
 
 @pytest.fixture(name="weights_da")
@@ -79,13 +81,45 @@ def test_log_normal_ndarray() -> None:
     when the inputs are numpy arrays.
     """
     x: np.ndarray = np.array([1.0, 2.0, 3.0])
-    mean: np.ndarray = np.array([0.0, 0.0, 0.0])
+    mu: np.ndarray = np.array([0.0, 0.0, 0.0])
     std: np.ndarray = np.array([1.0, 1.0, 1.0])
-    n: int = 3
-    expected: np.ndarray = -0.5 * ((x - mean) / std) ** 2 - n * 0.5 * np.log(
+
+    n: int = 0
+    expected: np.ndarray = -0.5 * ((x - mu) / std) ** 2 - n * 0.5 * np.log(
         2 * np.pi * std**2
     )
-    result: np.ndarray = log_normal(x, mean, std, n)
+    result: np.ndarray = log_normal(x, mu, std, n)
+    assert np.allclose(result, expected), f"Expected {expected}, got {result}"
+
+    n: int = 3
+    expected: np.ndarray = -0.5 * ((x - mu) / std) ** 2 - n * 0.5 * np.log(
+        2 * np.pi * std**2
+    )
+    result: np.ndarray = log_normal(x, mu, std, n)
+    assert np.allclose(result, expected), f"Expected {expected}, got {result}"
+
+
+def test_log_pseudo_huber_ndarray() -> None:
+    """
+    Test log_pseudo_huber likelihood with np.ndarray inputs.
+
+    This test checks if the log_likelihood function correctly computes the log-likelihood
+    when the inputs are numpy arrays.
+    """
+    x: np.ndarray = np.array([1.0, 2.0, 3.0])
+    mu: np.ndarray = np.array([0.0, 0.0, 0.0])
+    std: np.ndarray = np.array([1.0, 1.0, 1.0])
+
+    n: int = 3
+    delta: float = 2
+    expected: np.ndarray = -pseudo_huber(delta, (x - mu) / std) - n
+    result: np.ndarray = log_pseudo_huber(x, mu, std, delta=delta, n=n)
+    assert np.allclose(result, expected), f"Expected {expected}, got {result}"
+
+    n: int = 0
+    delta: float = 0
+    expected: np.ndarray = -pseudo_huber(delta, (x - mu) / std) - n
+    result: np.ndarray = log_pseudo_huber(x, mu, std, delta=delta, n=n)
     assert np.allclose(result, expected), f"Expected {expected}, got {result}"
 
 
@@ -101,10 +135,10 @@ def test_log_normal_xarray() -> None:
         coords={"x": [0, 1], "y": [0, 1, 2]},
         name="X",
     )
-    mean: xr.DataArray = xr.DataArray(
+    mu: xr.DataArray = xr.DataArray(
         [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
         coords={"x": [0, 1], "y": [0, 1, 2]},
-        name="mean",
+        name="mu",
     )
     std: xr.DataArray = xr.DataArray(
         [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]],
@@ -112,8 +146,37 @@ def test_log_normal_xarray() -> None:
         name="std",
     )
     n: int = 6
-    expected: np.ndarray = -0.5 * ((x - mean) / std) ** 2 - n * 0.5 * np.log(
+    expected: xr.DataArray = -0.5 * ((x - mu) / std) ** 2 - n * 0.5 * np.log(
         2 * np.pi * std**2
     )
-    result: np.ndarray = log_normal(x, mean, std, n)
+    result: xr.DataArray = log_normal(x, mu, std, n)
+    assert np.allclose(result, expected), f"Expected {expected}, got {result}"
+
+
+def test_log_pseudo_huber_xarray() -> None:
+    """
+    Test log_normal likelihood with xr.DataArray inputs.
+
+    This test checks if the log_likelihood function correctly computes the log-likelihood
+    when the inputs are numpy arrays.
+    """
+    x: xr.DataArray = xr.DataArray(
+        ([[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]]),
+        coords={"x": [0, 1], "y": [0, 1, 2]},
+        name="X",
+    )
+    mu: xr.DataArray = xr.DataArray(
+        [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+        coords={"x": [0, 1], "y": [0, 1, 2]},
+        name="mu",
+    )
+    std: xr.DataArray = xr.DataArray(
+        [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]],
+        coords={"x": [0, 1], "y": [0, 1, 2]},
+        name="std",
+    )
+    n: int = 6
+    delta: float = 2.0
+    expected = -pseudo_huber(delta, (x - mu) / std) - n
+    result: xr.DataArray = log_pseudo_huber(x, mu, std, delta=delta, n=n)
     assert np.allclose(result, expected), f"Expected {expected}, got {result}"

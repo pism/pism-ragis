@@ -79,7 +79,6 @@ def sample_with_replacement_xr(
     xr.DataArray
         A DataArray with the sampled values along the specified dimension.
     """
-    # Apply the function along the 'exp_id' dimension
     da = xr.apply_ufunc(
         sample_with_replacement,
         weights.chunk({dim: -1}),
@@ -102,7 +101,7 @@ def importance_sampling(
     simulated: xr.Dataset,
     observed: xr.Dataset,
     log_likelihood: Callable,
-    likelihood_kwargs={"delta": 2},
+    likelihood_kwargs={},
     dim: str = "exp_id",
     sum_dim=["time"],
     fudge_factor: float = 3.0,
@@ -166,6 +165,7 @@ def importance_sampling(
     # Compute the log-likelihood of each simulated data point
     n = np.prod([observed.sizes[d] for d in sum_dim])
     log_likes = log_likelihood(sim, obs_mean, obs_std, n=n, **likelihood_kwargs)
+    log_likes.name = "log_likes"
     log_likes_sum = log_likes.sum(dim=sum_dim)
     log_likes_scaled = log_likes_sum - log_likes_sum.mean(dim=dim)
     # Convert log-likelihoods to weights
@@ -173,5 +173,7 @@ def importance_sampling(
         warnings.filterwarnings("ignore", r"overflow encountered")
         weights = np.exp(log_likes_scaled)
     weights /= weights.sum(dim=dim)
+    weights.name = "weights"
 
-    return sample_with_replacement_xr(weights, n_samples=n_samples, seed=seed)
+    samples = sample_with_replacement_xr(weights, n_samples=n_samples, seed=seed)
+    return xr.merge([log_likes, weights, samples])

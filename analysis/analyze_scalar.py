@@ -35,6 +35,7 @@ import pylab as plt
 import seaborn as sns
 import toml
 import xarray as xr
+from dask.diagnostics import ProgressBar
 from dask.distributed import Client, LocalCluster, progress
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
@@ -42,6 +43,7 @@ from tqdm.auto import tqdm
 import pism_ragis.processing as prp
 from pism_ragis.analysis import delta_analysis
 from pism_ragis.filtering import importance_sampling
+from pism_ragis.likelihood import log_normal
 
 xr.set_options(keep_attrs=True)
 
@@ -867,25 +869,25 @@ if __name__ == "__main__":
         list(flux_vars.values())[:2],
     ):
         print(f"Importance sampling using {obs_mean_var}")
-        start = time.time()
 
-        filtered_ids = importance_sampling(
+        f = importance_sampling(
             simulated=simulated_resampled.sel(
                 time=slice(str(filter_start_year), str(filter_end_year))
             ),
             observed=observed_resampled.sel(
                 time=slice(str(filter_start_year), str(filter_end_year))
             ),
+            log_likelihood=log_normal,
             fudge_factor=fudge_factor,
             n_samples=len(simulated.exp_id),
             obs_mean_var=obs_mean_var,
             obs_std_var=obs_std_var,
             sim_var=sim_var,
         )
+        with ProgressBar():
+            result = f.compute()
+        filtered_ids = result["exp_id_sampled"]
         filtered_ids["basin"] = filtered_ids["basin"].astype("<U3")
-        end = time.time()
-        time_elapsed = end - start
-        print(f"  ...took {time_elapsed:.0f}s")
 
         posterior_config = (
             ds.sel(pism_config_axis=params).sel(exp_id=filtered_ids).pism_config
