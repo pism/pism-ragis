@@ -117,7 +117,7 @@ def run_delta_analysis(
     filter_vars: List[str],
     group_dim: str = "basin",
     iter_dim: str = "time",
-    ensemble_id: str = "RAGIS",
+    ensemble: str = "RAGIS",
 ) -> xr.Dataset:
     """
     Run delta sensitivity analysis on the given dataset.
@@ -149,11 +149,11 @@ def run_delta_analysis(
     significantly slow down the computation.
     """
 
-    ds = ds.load()
     print("Calculating Sensitivity Indices")
     print("===============================")
 
     start_dask = time.time()
+    ds = ds.load()
     cluster = LocalCluster(n_workers=options.n_jobs, threads_per_worker=1)
     client = Client(cluster, asynchronous=True)
     print(f"Open client in browser: {client.dashboard_link}")
@@ -174,7 +174,7 @@ def run_delta_analysis(
             )
             start = time.time()
 
-            responses = ds.sel(basin=gdim, ensemble_id=ensemble_id)[filter_var]
+            responses = ds.sel(basin=gdim, ensemble_id=ensemble)[filter_var]
             responses_scattered = client.scatter(
                 [
                     responses.isel(time=k).to_numpy()
@@ -269,6 +269,12 @@ def plot_obs_sims(
         grounding_line_flux_varname + "_uncertainty"
     )
 
+    sim_prior = sim_prior[
+        [mass_cumulative_varname, grounding_line_flux_varname, "Ensemble"]
+    ].load()
+    sim_posterior = sim_posterior[
+        [mass_cumulative_varname, grounding_line_flux_varname, "Ensemble"]
+    ].load()
     plt.rcParams["font.size"] = fontsize
 
     fig, axs = plt.subplots(2, 1, sharex=True, figsize=(6.2, 3.2), height_ratios=[2, 1])
@@ -305,14 +311,6 @@ def plot_obs_sims(
             )
 
     for k, m_var in enumerate([mass_cumulative_varname, grounding_line_flux_varname]):
-        # sim_posterior[m_var].plot(
-        #     hue="exp_id",
-        #     color=sim_cmap[1],
-        #     ax=axs[k],
-        #     lw=0.1,
-        #     alpha=sim_alpha,
-        #     add_legend=False,
-        # )
         sim_ci = axs[k].fill_between(
             quantiles[0.5].time,
             quantiles[percentiles[0]][m_var],
@@ -625,6 +623,12 @@ if __name__ == "__main__":
         default="grounding_line_flux",
     )
     parser.add_argument(
+        "--ensemble",
+        help="""Name of the ensemble. Default=RAGIS.""",
+        type=str,
+        default="RAGIS",
+    )
+    parser.add_argument(
         "--fudge_factor",
         help="""Observational uncertainty multiplier. Default=3""",
         type=int,
@@ -672,6 +676,7 @@ if __name__ == "__main__":
 
     options = parser.parse_args()
     basin_files = options.FILES
+    ensemble = options.ensemble
     filter_start_year, filter_end_year = options.filter_range.split(" ")
     fudge_factor = options.fudge_factor
     notebook = options.notebook
@@ -738,7 +743,7 @@ if __name__ == "__main__":
     )
     fig, ax = plt.subplots(1, 1)
     ds.sel(time=slice(str(filter_start_year), str(filter_end_year))).sel(
-        basin="GIS", ensemble_id="RAGIS"
+        basin="GIS", ensemble_id=ensemble
     ).grounding_line_flux.plot(hue="exp_id", add_legend=False, ax=ax, lw=0.5)
     fig.savefig("grounding_line_flux_unfiltered.pdf")
 
@@ -750,7 +755,7 @@ if __name__ == "__main__":
 
     fig, ax = plt.subplots(1, 1)
     ds.sel(time=slice(str(filter_start_year), str(filter_end_year))).sel(
-        basin="GIS", ensemble_id="RAGIS"
+        basin="GIS", ensemble_id=ensemble
     ).grounding_line_flux.plot(hue="exp_id", add_legend=False, ax=ax, lw=0.5)
     fig.savefig("grounding_line_flux_filtered.pdf")
 
@@ -861,6 +866,7 @@ if __name__ == "__main__":
     )
     simulated_resampled["pism_config"] = simulated["pism_config"]
 
+    start = time.time()
     filtered_all = {}
     prior_posterior_list = []
     for obs_mean_var, obs_std_var, sim_var in zip(
@@ -911,9 +917,9 @@ if __name__ == "__main__":
         simulated_filtered = simulated_resampled.sel(exp_id=filtered_ids)
         simulated_filtered["Ensemble"] = "Posterior"
 
-        sim_prior = simulated_resampled.load()
+        sim_prior = simulated_resampled
         sim_prior["Ensemble"] = "Prior"
-        sim_posterior = simulated_filtered.load()
+        sim_posterior = simulated_filtered
         sim_posterior["Ensemble"] = "Posterior"
 
         with prp.tqdm_joblib(
@@ -922,8 +928,8 @@ if __name__ == "__main__":
             result = Parallel(n_jobs=options.n_jobs)(
                 delayed(plot_obs_sims)(
                     observed_resampled.sel(basin=basin),
-                    sim_prior.sel(basin=basin, ensemble_id="RAGIS"),
-                    sim_posterior.sel(basin=basin, ensemble_id="RAGIS"),
+                    sim_prior.sel(basin=basin, ensemble_id=ensemble),
+                    sim_posterior.sel(basin=basin, ensemble_id=ensemble),
                     config=ragis_config,
                     filtering_var=obs_mean_var,
                     filter_range=[filter_start_year, filter_end_year],
@@ -933,6 +939,9 @@ if __name__ == "__main__":
                 )
                 for basin in observed_resampled.basin
             )
+    end = time.time()
+    time_elapsed = end - start
+    print(f"IS Plotting  ...took {time_elapsed:.0f}s")
 
     prior_posterior = pd.concat(prior_posterior_list).reset_index()
     prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)

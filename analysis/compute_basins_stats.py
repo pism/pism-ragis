@@ -41,7 +41,7 @@ if __name__ == "__main__":
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Compute ensemble statistics."
     parser.add_argument(
-        "--ensemble_id",
+        "--ensemble",
         help="""Name of the ensemble. Default=RAGIS.""",
         type=str,
         default="RAGIS",
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     crs = options.crs
     n_jobs = options.n_jobs
 
-    ensemble_id = options.ensemble_id
+    ensemble = options.ensemble
     result_dir = Path(options.result_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
 
@@ -125,7 +125,7 @@ if __name__ == "__main__":
             m_id = str(m_id_re.group(1))
 
         ds = ds.expand_dims(
-            {"ensemble_id": [ensemble_id], "exp_id": [m_id]}, axis=[-1, -2]
+            {"ensemble_id": [ensemble], "exp_id": [m_id]}, axis=[-1, -2]
         )
 
         if "ice_mass" in ds:
@@ -165,7 +165,7 @@ if __name__ == "__main__":
 
     print(f"Size in memory: {(ds.nbytes / 1024**3):.1f} GB")
 
-    basins_file = result_dir / f"basins_sums_ensemble_{ensemble_id}_id_{m_id}.nc"
+    basins_file = result_dir / f"basins_sums_ensemble_{ensemble}_id_{m_id}.nc"
 
     cluster = LocalCluster(n_workers=options.n_jobs, threads_per_worker=1)
     client = Client(cluster, asynchronous=True)
