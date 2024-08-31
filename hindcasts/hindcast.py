@@ -140,11 +140,7 @@ if __name__ == "__main__":
         "-d",
         "--domain",
         dest="domain",
-        choices=[
-            "gris",
-            "gris_ext",
-            "qaamerujup",
-        ],
+        choices=["gris", "gris_ext", "qaamerujup", "sermeq-kangaarsuup"],
         help="sets the modeling domain",
         default="gris",
     )
