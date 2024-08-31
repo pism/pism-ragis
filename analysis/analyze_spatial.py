@@ -184,8 +184,9 @@ if __name__ == "__main__":
 
     print("Importance sampling using v")
     f = importance_sampling(
-        observed=observed_resampled,
-        simulated=ds,
+        observed=(observed_resampled - observed_resampled.mean())
+        / observed_resampled.std(),
+        simulated=(ds - ds.mean()) / ds.std(),
         log_likelihood=log_pseudo_huber,
         n_samples=len(ds.exp_id),
         fudge_factor=5,
