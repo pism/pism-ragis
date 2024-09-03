@@ -66,12 +66,18 @@ def generate_domain(domain):
 
     if domain.lower() in ("greenland", "gris", "gris_ext"):
         pism_exec = "pismr"
+    elif domain.lower() in ("sermeq-kangaarsuup"):
+        x_min = -290300.0
+        x_max = -24475.0
+        y_min = -2964800.0
+        y_max = -2832500.0
+        pism_exec = f"""pismr -regional -x_range {x_min},{x_max} -y_range {y_min},{y_max}  -bootstrap -regional.zero_gradient true -regional.no_model_strip 1.5"""
     elif domain.lower() in ("qaamerujup"):
         x_min = -250000.0
         x_max = -153000.0
         y_min = -2075000.0
         y_max = -2021000.0
-        pism_exec = f"""pismr -regional -x_range {x_min},{x_max} -y_range {y_min},{y_max}  -bootstrap -regional.zero_gradient true -regional.no_model_strip 4.5"""
+        pism_exec = f"""pismr -regional -x_range {x_min},{x_max} -y_range {y_min},{y_max}  -bootstrap -regional.zero_gradient true -regional.no_model_strip 1.5"""
     else:
         print(f"Domain {domain} not recognized, exiting")
 
