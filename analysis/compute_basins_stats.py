@@ -29,6 +29,7 @@ from typing import Union
 
 import dask
 import geopandas as gp
+import numpy as np
 import xarray as xr
 from dask.distributed import Client, LocalCluster, progress
 
@@ -40,6 +41,12 @@ if __name__ == "__main__":
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Compute ensemble statistics."
+    parser.add_argument(
+        "--engine",
+        help="""Engine for xarray. Default="netcdf4".""",
+        type=str,
+        default="netcdf4",
+    )
     parser.add_argument(
         "--ensemble",
         help="""Name of the ensemble. Default=RAGIS.""",
@@ -85,7 +92,7 @@ if __name__ == "__main__":
     options = parser.parse_args()
     crs = options.crs
     n_jobs = options.n_jobs
-
+    engine = options.engine
     ensemble = options.ensemble
     result_dir = Path(options.result_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
@@ -150,15 +157,15 @@ if __name__ == "__main__":
     ds.rio.write_crs(crs, inplace=True)
 
     pism_config = xr.DataArray(
-        list(config.attrs.values()),
+        np.array(list(config.attrs.values()), dtype="S128"),
         dims=["pism_config_axis"],
-        coords={"pism_config_axis": list(config.attrs.keys())},
+        coords={"pism_config_axis": np.array(list(config.attrs.keys()), dtype="S1024")},
         name="pism_config",
     )
     run_stats = xr.DataArray(
-        list(stats.attrs.values()),
+        np.array(list(stats.attrs.values()), dtype="S128"),
         dims=["run_stats_axis"],
-        coords={"run_stats_axis": list(stats.attrs.keys())},
+        coords={"run_stats_axis": np.array(list(stats.attrs.keys()), dtype="S128")},
         name="run_stats",
     )
     ds = xr.merge([ds, pism_config, run_stats])
@@ -182,7 +189,7 @@ if __name__ == "__main__":
     basin_sums = xr.concat(client.gather(futures), dim="basin")
     if "time_bounds" in ds.data_vars:
         basin_sums["time_bounds"] = ds["time_bounds"]
-    basin_sums.to_netcdf(basins_file)
+    basin_sums.to_netcdf(basins_file, engine=engine)
 
     end = time.time()
     time_elapsed = end - start

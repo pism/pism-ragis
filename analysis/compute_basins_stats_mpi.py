@@ -30,6 +30,7 @@ from typing import Union
 
 import dask
 import geopandas as gp
+import numpy as np
 import xarray as xr
 from dask.distributed import Client
 from dask_mpi import initialize
@@ -154,15 +155,15 @@ if __name__ == "__main__":
     ds.rio.write_crs(crs, inplace=True)
 
     pism_config = xr.DataArray(
-        list(config.attrs.values()),
+        np.array(list(config.attrs.values()), dtype="S128"),
         dims=["pism_config_axis"],
-        coords={"pism_config_axis": list(config.attrs.keys())},
+        coords={"pism_config_axis": np.array(list(config.attrs.keys()), dtype="S1024")},
         name="pism_config",
     )
     run_stats = xr.DataArray(
-        list(stats.attrs.values()),
+        np.array(list(stats.attrs.values()), dtype="S128"),
         dims=["run_stats_axis"],
-        coords={"run_stats_axis": list(stats.attrs.keys())},
+        coords={"run_stats_axis": np.array(list(stats.attrs.keys()), dtype="S128")},
         name="run_stats",
     )
     ds = xr.merge([ds, pism_config, run_stats])
