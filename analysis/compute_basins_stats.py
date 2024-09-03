@@ -184,9 +184,11 @@ if __name__ == "__main__":
         [ds.rio.clip([basin.geometry]) for _, basin in basins.iterrows()]
     )
     basin_names = [basin["SUBREGION1"] for _, basin in basins.iterrows()]
+    n_basins = len(basin_names)
     futures = client.map(compute_basin, basins_ds_scattered, basin_names)
     progress(futures)
     basin_sums = xr.concat(client.gather(futures), dim="basin")
+    basin_sums["basin"] = basin_sums["basin"].astype(f"S{n_basins}")
     if "time_bounds" in ds.data_vars:
         basin_sums["time_bounds"] = ds["time_bounds"]
     basin_sums.to_netcdf(basins_file, engine=engine)
