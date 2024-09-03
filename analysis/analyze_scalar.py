@@ -603,6 +603,12 @@ if __name__ == "__main__":
         default="data/mankoff/mankoff_mass_balance.nc",
     )
     parser.add_argument(
+        "--engine",
+        help="""Engine for xarray. Default="netcdf4".""",
+        type=str,
+        default="netcdf4",
+    )
+    parser.add_argument(
         "--filter_range",
         help="""Time slice used for Importance Sampling. Default="1990 2019". """,
         type=str,
@@ -677,6 +683,7 @@ if __name__ == "__main__":
     options = parser.parse_args()
     basin_files = options.FILES
     ensemble = options.ensemble
+    engine = options.engine
     filter_start_year, filter_end_year = options.filter_range.split(" ")
     fudge_factor = options.fudge_factor
     notebook = options.notebook
@@ -725,7 +732,7 @@ if __name__ == "__main__":
     }
 
     ds = (
-        prp.load_ensemble(basin_files, parallel=parallel)
+        prp.load_ensemble(basin_files, parallel=parallel, engine=engine)
         .sortby("basin")
         .dropna(dim="exp_id")
     )

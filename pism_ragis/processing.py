@@ -468,6 +468,7 @@ class UtilsMethods:
 def load_ensemble(
     filenames: List[Union[Path, str]],
     parallel: bool = True,
+    engine: str = "netcdf4"
 ) -> xr.Dataset:
     """
     Load an ensemble of NetCDF files into an xarray Dataset.
@@ -492,7 +493,7 @@ def load_ensemble(
     with dask.config.set(**{"array.slicing.split_large_chunks": True}):
         print("Loading ensemble files... ", end="", flush=True)
         ds = xr.open_mfdataset(
-            filenames, parallel=parallel, chunks={"exp_id": -1}
+            filenames, parallel=parallel, chunks={"exp_id": -1}, engine=engine
         ).drop_vars(["spatial_ref", "mapping"], errors="ignore")
         if "time" in ds["pism_config"].coords:
             ds["pism_config"] = ds["pism_config"].isel(time=0).drop_vars("time")
