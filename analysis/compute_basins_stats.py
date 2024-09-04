@@ -194,7 +194,10 @@ if __name__ == "__main__":
     basin_sums["ensemble_id"] = basin_sums["ensemble_id"].astype(f"S{n_ensemble}")
     basin_sums.attrs["Conventions"] = "CF-1.8"
     basin_sums.to_netcdf(basins_file, engine=engine)
+    
     client.close()
     end = time.time()
     time_elapsed = end - start
     print(f"Time elapsed {time_elapsed:.0f}s")
+
+    client.close()

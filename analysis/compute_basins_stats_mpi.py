@@ -34,6 +34,8 @@ import numpy as np
 import xarray as xr
 from dask.distributed import Client
 from dask_mpi import initialize
+from distributed.scheduler import logger
+import socket
 
 from pism_ragis.processing import compute_basin
 
@@ -45,7 +47,7 @@ if __name__ == "__main__":
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Compute ensemble statistics."
     parser.add_argument(
-        "--ensemble_id",
+        "--ensemble",
         help="""Name of the ensemble. Default=RAGIS.""",
         type=str,
         default="RAGIS",
@@ -90,7 +92,7 @@ if __name__ == "__main__":
     crs = options.crs
     n_jobs = options.n_jobs
 
-    ensemble_id = options.ensemble_id
+    ensemble = options.ensemble
 
     result_dir = Path(options.result_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
@@ -129,8 +131,10 @@ if __name__ == "__main__":
         except:
             m_id = str(m_id_re.group(1))
 
+        n_ensemble = len(ensemble)
+        
         ds = ds.expand_dims(
-            {"ensemble_id": [ensemble_id], "exp_id": [m_id]}, axis=[-1, -2]
+            {"ensemble_id": [ensemble], "exp_id": [m_id]}, axis=[-1, -2]
         )
 
         if "ice_mass" in ds:
@@ -170,12 +174,16 @@ if __name__ == "__main__":
 
     print(f"Size in memory: {(ds.nbytes / 1024**3):.1f} GB")
 
-    basins_file = result_dir / f"basins_sums_ensemble_{ensemble_id}_id_{m_id}.nc"
+    basins_file = result_dir / f"basins_sums_ensemble_{ensemble}_id_{m_id}.nc"
 
     initialize()
     client = Client()
-    print(f"Open client in browser: {client.dashboard_link}")
+    host = client.run_on_scheduler(socket.gethostname)
+    port = client.scheduler_info()['services']['dashboard']
+    login_node_address = "supercomputer.university.edu" # Provide address/domain of login node
 
+    logger.info(f"ssh -N -L {port}:{host}:{port} {login_node_address}")
+    
     start = time.time()
 
     basins_ds_scattered = client.scatter(
@@ -187,8 +195,12 @@ if __name__ == "__main__":
     basin_sums = xr.concat(client.gather(futures), dim="basin")
     del basin_sums["time"].attrs["bounds"]
     basin_sums["basin"] = basin_sums["basin"].astype(f"S{n_basins}")
+    basin_sums["ensemble_id"] = basin_sums["ensemble_id"].astype(f"S{n_ensemble}")
+    basin_sums.attrs["Conventions"] = "CF-1.8"
     basin_sums.to_netcdf(basins_file)
 
     end = time.time()
     time_elapsed = end - start
     print(f"Time elapsed {time_elapsed:.0f}s")
+
+    client.close()
