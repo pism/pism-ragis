@@ -159,15 +159,15 @@ if __name__ == "__main__":
     ds.rio.write_crs(crs, inplace=True)
 
     pism_config = xr.DataArray(
-        list(config.attrs.values()),
+        np.array(list(config.attrs.values()), dtype="S128"),
         dims=["pism_config_axis"],
-        coords={"pism_config_axis": list(config.attrs.keys())},
+        coords={"pism_config_axis": np.array(list(config.attrs.keys()), dtype="S1024")},
         name="pism_config",
     )
     run_stats = xr.DataArray(
-        list(stats.attrs.values()),
+        np.array(list(stats.attrs.values()), dtype="S128"),
         dims=["run_stats_axis"],
-        coords={"run_stats_axis": list(stats.attrs.keys())},
+        coords={"run_stats_axis": np.array(list(stats.attrs.keys()), dtype="S128")},
         name="run_stats",
     )
     ds = xr.merge([ds[mb_vars], pism_config, run_stats])
@@ -190,6 +190,9 @@ if __name__ == "__main__":
     progress(futures)
     basin_sums = xr.concat(client.gather(futures), dim="basin").drop_vars(["mapping", "spatial_ref"])
     del basin_sums["time"].attrs["bounds"]
+    basin_sums["basin"] = basin_sums["basin"].astype(f"S{n_basins}")
+    basin_sums["ensemble_id"] = basin_sums["ensemble_id"].astype(f"S{n_ensemble}")
+    basin_sums.attrs["Conventions"] = "CF-1.8"
     basin_sums.to_netcdf(basins_file, engine=engine)
     client.close()
     end = time.time()
