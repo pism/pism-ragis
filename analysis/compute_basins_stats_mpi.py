@@ -138,7 +138,7 @@ if __name__ == "__main__":
             ds["ice_mass"].attrs["units"] = "Gt"
 
         if options.temporal_range:
-            ds = ds.sel(time=slice(options.temporal_range))
+            ds = ds.sel(time=slice(options.temporal_range[0], options.temporal_range[1]))
 
     bmb_var = "tendency_of_ice_mass_due_to_basal_mass_flux"
     if bmb_var in ds:
@@ -173,8 +173,6 @@ if __name__ == "__main__":
     basins_file = result_dir / f"basins_sums_ensemble_{ensemble_id}_id_{m_id}.nc"
 
     initialize()
-    path_to_sched = "~/dask_sch/sched.json"
-    # with Client(scheduler_file=path_to_sched) as client:
     client = Client()
     print(f"Open client in browser: {client.dashboard_link}")
 
@@ -187,8 +185,7 @@ if __name__ == "__main__":
     n_basins = len(basin_names)
     futures = client.map(compute_basin, basins_ds_scattered, basin_names)
     basin_sums = xr.concat(client.gather(futures), dim="basin")
-    if "time_bounds" in ds.data_vars:
-        basin_sums["time_bounds"] = ds["time_bounds"]
+    del basin_sums["time"].attrs["bounds"]
     basin_sums["basin"] = basin_sums["basin"].astype(f"S{n_basins}")
     basin_sums.to_netcdf(basins_file)
 

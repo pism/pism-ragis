@@ -35,6 +35,8 @@ from dask.distributed import Client, LocalCluster, progress
 
 from pism_ragis.processing import compute_basin
 
+xr.set_options(keep_attrs=True)
+
 if __name__ == "__main__":
     __spec__ = None
 
@@ -131,6 +133,7 @@ if __name__ == "__main__":
         except:
             m_id = str(m_id_re.group(1))
 
+        n_ensemble = len(ensemble)
         ds = ds.expand_dims(
             {"ensemble_id": [ensemble], "exp_id": [m_id]}, axis=[-1, -2]
         )
@@ -140,7 +143,7 @@ if __name__ == "__main__":
             ds["ice_mass"].attrs["units"] = "Gt"
 
         if options.temporal_range:
-            ds = ds.sel(time=slice(options.temporal_range))
+            ds = ds.sel(time=slice(options.temporal_range[0], options.temporal_range[1]))
 
     bmb_var = "tendency_of_ice_mass_due_to_basal_mass_flux"
     if bmb_var in ds:
@@ -152,7 +155,6 @@ if __name__ == "__main__":
 
     config = ds["pism_config"]
     stats = ds["run_stats"]
-    ds = ds[mb_vars]
     ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
     ds.rio.write_crs(crs, inplace=True)
 
@@ -168,14 +170,13 @@ if __name__ == "__main__":
         coords={"run_stats_axis": np.array(list(stats.attrs.keys()), dtype="S128")},
         name="run_stats",
     )
-    ds = xr.merge([ds, pism_config, run_stats])
+    ds = xr.merge([ds[mb_vars], pism_config, run_stats])
 
     print(f"Size in memory: {(ds.nbytes / 1024**3):.1f} GB")
 
     basins_file = result_dir / f"basins_sums_ensemble_{ensemble}_id_{m_id}.nc"
 
-    cluster = LocalCluster(n_workers=options.n_jobs, threads_per_worker=1)
-    client = Client(cluster, asynchronous=True)
+    client = Client()
     print(f"Open client in browser: {client.dashboard_link}")
 
     start = time.time()
@@ -187,12 +188,13 @@ if __name__ == "__main__":
     n_basins = len(basin_names)
     futures = client.map(compute_basin, basins_ds_scattered, basin_names)
     progress(futures)
-    basin_sums = xr.concat(client.gather(futures), dim="basin")
+    basin_sums = xr.concat(client.gather(futures), dim="basin").drop_vars(["mapping", "spatial_ref"])
+    del basin_sums["time"].attrs["bounds"]
     basin_sums["basin"] = basin_sums["basin"].astype(f"S{n_basins}")
-    if "time_bounds" in ds.data_vars:
-        basin_sums["time_bounds"] = ds["time_bounds"]
+    basin_sums["ensemble_id"] = basin_sums["ensemble_id"].astype(f"S{n_ensemble}")
+    basin_sums.attrs["Conventions"] = "CF-1.8"
     basin_sums.to_netcdf(basins_file, engine=engine)
-
+    client.close()
     end = time.time()
     time_elapsed = end - start
     print(f"Time elapsed {time_elapsed:.0f}s")
