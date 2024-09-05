@@ -813,8 +813,19 @@ if __name__ == "__main__":
     start = time.time()
     prior_config = ds.sel(pism_config_axis=params).pism_config
     dims = [dim for dim in prior_config.dims if not dim in ["pism_config_axis"]]
+    end = time.time()
+    time_elapsed = end - start
+    print(f"Select dims  ...took {time_elapsed:.0f}s")
+    start = time.time()
     prior_df = prior_config.to_dataframe().reset_index()
+    end = time.time()
+    time_elapsed = end - start
+    print(f"Conversion to prior dataframe  ...took {time_elapsed:.0f}s")
+    start = time.time()
     prior = prior_df.pivot(index=dims, columns="pism_config_axis", values="pism_config")
+    end = time.time()
+    time_elapsed = end - start
+    print(f"Pivot table  ...took {time_elapsed:.0f}s")
     prior.reset_index(inplace=True)
     prior["Ensemble"] = "Prior"
     end = time.time()
