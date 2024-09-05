@@ -58,11 +58,26 @@ obs_cmap = ["0.8", "0.7"]
 # obs_cmap = ["#88CCEE", "#44AA99"]
 hist_cmap = ["#a6cee3", "#1f78b4"]
 
-# Function to convert byte strings to regular strings
-def convert_bstrings_to_str(element):
+
+def convert_bstrings_to_str(element: Any) -> Any:
+    """
+    Convert byte strings to regular strings.
+
+    Parameters
+    ----------
+    element : Any
+        The element to be checked and potentially converted. If the element is a byte string,
+        it will be converted to a regular string. Otherwise, the element will be returned as is.
+
+    Returns
+    -------
+    Any
+        The converted element if it was a byte string, otherwise the original element.
+    """
     if isinstance(element, bytes):
-        return element.decode('utf-8')
+        return element.decode("utf-8")
     return element
+
 
 def filter_outliers(
     ds: xr.Dataset,
@@ -727,7 +742,7 @@ if __name__ == "__main__":
     result_dir = Path(options.result_dir)
     fig_dir = result_dir / Path("figures")
     fig_dir.mkdir(parents=True, exist_ok=True)
-    
+
     plt.rcParams["font.size"] = 6
 
     flux_vars = ragis_config["Flux Variables"]
@@ -739,10 +754,8 @@ if __name__ == "__main__":
         k + "_uncertainty": v + "_uncertainty" for k, v in cumulative_vars.items()
     }
 
-    ds = (
-        prp.load_ensemble(basin_files, parallel=parallel, engine=engine)
-        .sortby("basin")
-        .dropna(dim="exp_id")
+    ds = prp.load_ensemble(basin_files, parallel=parallel, engine=engine).sortby(
+        "basin"
     )
     for v in ds.data_vars:
         if ds[v].dtype.kind == "S":
@@ -751,7 +764,14 @@ if __name__ == "__main__":
         if ds[c].dtype.kind == "S":
             ds.coords[c] = ds.coords[c].astype(str)
 
-    ds = xr.apply_ufunc(np.vectorize(convert_bstrings_to_str), ds, dask="allowed")
+    start = time.time()
+    ds = xr.apply_ufunc(np.vectorize(convert_bstrings_to_str), ds, dask="parallelized")
+    ds = ds.dropna(dim="exp_id")
+    end = time.time()
+    time_elapsed = end - start
+    print(f"Preps  ...took {time_elapsed:.0f}s")
+
+    start = time.time()
     ds = prp.standardize_variable_names(ds, ragis_config["PISM Spatial"])
     ds[ragis_config["Cumulative Variables"]["cumulative_grounding_line_flux"]] = ds[
         ragis_config["Flux Variables"]["grounding_line_flux"]
@@ -764,17 +784,25 @@ if __name__ == "__main__":
         list(ragis_config["Cumulative Variables"].values()),
         reference_year=reference_year,
     )
+    end = time.time()
+    time_elapsed = end - start
+    print(f"Normalization  ...took {time_elapsed:.0f}s")
+
     fig, ax = plt.subplots(1, 1)
     ds.sel(time=slice(str(filter_start_year), str(filter_end_year))).sel(
         basin="GIS", ensemble_id=ensemble
     ).grounding_line_flux.plot(hue="exp_id", add_legend=False, ax=ax, lw=0.5)
     fig.savefig("grounding_line_flux_unfiltered.pdf")
 
+    start = time.time()
     result = filter_outliers(
         ds, outlier_range=outlier_range, outlier_variable=outlier_variable
     )
     filtered_ds = result["filtered"]
     outliers_ds = result["outliers"]
+    end = time.time()
+    time_elapsed = end - start
+    print(f"Filter outliers  ...took {time_elapsed:.0f}s")
 
     fig, ax = plt.subplots(1, 1)
     ds.sel(time=slice(str(filter_start_year), str(filter_end_year))).sel(
@@ -782,13 +810,18 @@ if __name__ == "__main__":
     ).grounding_line_flux.plot(hue="exp_id", add_legend=False, ax=ax, lw=0.5)
     fig.savefig("grounding_line_flux_filtered.pdf")
 
+    start = time.time()
     prior_config = ds.sel(pism_config_axis=params).pism_config
     dims = [dim for dim in prior_config.dims if not dim in ["pism_config_axis"]]
     prior_df = prior_config.to_dataframe().reset_index()
     prior = prior_df.pivot(index=dims, columns="pism_config_axis", values="pism_config")
     prior.reset_index(inplace=True)
     prior["Ensemble"] = "Prior"
+    end = time.time()
+    time_elapsed = end - start
+    print(f"Conversion to prior dataframe  ...took {time_elapsed:.0f}s")
 
+    start = time.time()
     outlier_config = outliers_ds.sel(pism_config_axis=params).pism_config
     dims = [dim for dim in outlier_config.dims if not dim in ["pism_config_axis"]]
     outlier_df = outlier_config.to_dataframe().reset_index()
@@ -797,7 +830,11 @@ if __name__ == "__main__":
     )
     outlier_df.reset_index(inplace=True)
     outlier_df["Ensemble"] = "Outliers"
+    end = time.time()
+    time_elapsed = end - start
+    print(f"Conversion to outlier dataframe  ...took {time_elapsed:.0f}s")
 
+    start = time.time()
     filtered_config = filtered_ds.sel(pism_config_axis=params).pism_config
     dims = [dim for dim in filtered_config.dims if not dim in ["pism_config_axis"]]
     filtered_df = filtered_config.to_dataframe().reset_index()
@@ -806,6 +843,9 @@ if __name__ == "__main__":
     )
     filtered_df.reset_index(inplace=True)
     filtered_df["Ensemble"] = "Filtered"
+    end = time.time()
+    time_elapsed = end - start
+    print(f"Conversion to filtered dataframe  ...took {time_elapsed:.0f}s")
 
     outliers_filtered_df = pd.concat([outlier_df, filtered_df]).reset_index(drop=True)
     # Apply the conversion function to each column
@@ -823,6 +863,11 @@ if __name__ == "__main__":
     ].apply(prp.simplify_calving)
 
     df = outliers_filtered_df.rename(columns=params_short_dict)
+
+    end = time.time()
+    time_elapsed = end - start
+    print(f"Conversion to dataframe  ...took {time_elapsed:.0f}s")
+
     n_params = len(params_short_dict)
     plt.rcParams["font.size"] = 4
     fig, axs = plt.subplots(
@@ -860,7 +905,9 @@ if __name__ == "__main__":
     fig.savefig(fn)
     plt.close()
 
-    observed = xr.open_dataset(options.obs_url, engine=engine, chunks="auto").sel(time=slice("1980", "2022"))
+    observed = xr.open_dataset(options.obs_url, engine=engine, chunks="auto").sel(
+        time=slice("1980", "2022")
+    )
     observed = observed.sortby("basin")
     observed = prp.normalize_cumulative_variables(
         observed,

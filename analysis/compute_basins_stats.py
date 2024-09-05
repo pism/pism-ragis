@@ -31,7 +31,7 @@ import dask
 import geopandas as gp
 import numpy as np
 import xarray as xr
-from dask.distributed import Client, LocalCluster, progress
+from dask.distributed import Client, progress
 
 from pism_ragis.processing import compute_basin
 
@@ -43,6 +43,18 @@ if __name__ == "__main__":
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Compute ensemble statistics."
+    parser.add_argument(
+        "--cf",
+        help="""Make output file CF Convetions compliant. Default="False".""",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "--crs",
+        help="""Coordinate reference system. Default is EPSG:3413.""",
+        type=str,
+        default="EPSG:3413",
+    )
     parser.add_argument(
         "--engine",
         help="""Engine for xarray. Default="netcdf4".""",
@@ -74,24 +86,10 @@ if __name__ == "__main__":
         nargs=2,
         default=None,
     )
-    parser.add_argument(
-        "--crs",
-        help="""Coordinate reference system. Default is EPSG:3413.""",
-        type=str,
-        default="EPSG:3413",
-    )
-    parser.add_argument(
-        "--memory_limit",
-        help="""Maximum memory used by Client. Default=16GB.""",
-        type=str,
-        default="16GB",
-    )
-    parser.add_argument(
-        "--n_jobs", help="""Number of parallel jobs.""", type=int, default=4
-    )
     parser.add_argument("FILE", nargs=1, help="netCDF file to process", default=None)
 
     options = parser.parse_args()
+    cf = options.cf
     crs = options.crs
     n_jobs = options.n_jobs
     engine = options.engine
@@ -99,7 +97,6 @@ if __name__ == "__main__":
     result_dir = Path(options.result_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
 
-    # Load basins, merge all ICE_CAP geometries
     basin_url = Path(options.basin_url)
     basins = gp.read_file(basin_url).to_crs(crs)
 
@@ -143,7 +140,9 @@ if __name__ == "__main__":
             ds["ice_mass"].attrs["units"] = "Gt"
 
         if options.temporal_range:
-            ds = ds.sel(time=slice(options.temporal_range[0], options.temporal_range[1]))
+            ds = ds.sel(
+                time=slice(options.temporal_range[0], options.temporal_range[1])
+            )
 
     bmb_var = "tendency_of_ice_mass_due_to_basal_mass_flux"
     if bmb_var in ds:
@@ -158,16 +157,27 @@ if __name__ == "__main__":
     ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
     ds.rio.write_crs(crs, inplace=True)
 
+    if cf:
+        pc_keys = np.array(list(config.attrs.keys()), dtype="S1024")
+        pc_vals = np.array(list(config.attrs.values()), dtype="S128")
+        rs_keys = np.array(list(stats.attrs.keys()), dtype="S1024")
+        rs_vals = np.array(list(stats.attrs.values()), dtype="S128")
+    else:
+        pc_keys = list(config.attrs.keys())
+        pc_vals = list(config.attrs.values())
+        rs_keys = list(stats.attrs.keys())
+        rs_vals = list(stats.attrs.values())
+
     pism_config = xr.DataArray(
-        np.array(list(config.attrs.values()), dtype="S128"),
+        pc_vals,
         dims=["pism_config_axis"],
-        coords={"pism_config_axis": np.array(list(config.attrs.keys()), dtype="S1024")},
+        coords={"pism_config_axis": pc_keys},
         name="pism_config",
     )
     run_stats = xr.DataArray(
-        np.array(list(stats.attrs.values()), dtype="S128"),
+        rs_vals,
         dims=["run_stats_axis"],
-        coords={"run_stats_axis": np.array(list(stats.attrs.keys()), dtype="S128")},
+        coords={"run_stats_axis": rs_keys},
         name="run_stats",
     )
     ds = xr.merge([ds[mb_vars], pism_config, run_stats])
@@ -188,13 +198,16 @@ if __name__ == "__main__":
     n_basins = len(basin_names)
     futures = client.map(compute_basin, basins_ds_scattered, basin_names)
     progress(futures)
-    basin_sums = xr.concat(client.gather(futures), dim="basin").drop_vars(["mapping", "spatial_ref"])
+    basin_sums = xr.concat(client.gather(futures), dim="basin").drop_vars(
+        ["mapping", "spatial_ref"]
+    )
     del basin_sums["time"].attrs["bounds"]
-    basin_sums["basin"] = basin_sums["basin"].astype(f"S{n_basins}")
-    basin_sums["ensemble_id"] = basin_sums["ensemble_id"].astype(f"S{n_ensemble}")
-    basin_sums.attrs["Conventions"] = "CF-1.8"
+    if cf:
+        basin_sums["basin"] = basin_sums["basin"].astype(f"S{n_basins}")
+        basin_sums["ensemble_id"] = basin_sums["ensemble_id"].astype(f"S{n_ensemble}")
+        basin_sums.attrs["Conventions"] = "CF-1.8"
     basin_sums.to_netcdf(basins_file, engine=engine)
-    
+
     client.close()
     end = time.time()
     time_elapsed = end - start

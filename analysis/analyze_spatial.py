@@ -157,7 +157,6 @@ if __name__ == "__main__":
     )
     ragis_config = toml.load(ragis_config_file)
 
-    crs = "EPSG:3413"
     ds = (
         xr.open_mfdataset(
             spatial_files,
@@ -170,12 +169,8 @@ if __name__ == "__main__":
         .squeeze()
         .sortby("exp_id")
     )
-    ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
-    ds.rio.write_crs(crs, inplace=True)
 
     observed = xr.open_dataset(options.obs_url)
-    observed.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
-    observed.rio.write_crs(crs, inplace=True)
 
     time = pd.date_range("1985-01-01", periods=1, freq="YS")
     observed = observed[["v", "v_err", "ice"]].expand_dims({"time": time})
@@ -184,9 +179,8 @@ if __name__ == "__main__":
 
     print("Importance sampling using v")
     f = importance_sampling(
-        observed=(observed_resampled - observed_resampled.mean())
-        / observed_resampled.std(),
-        simulated=(ds - ds.mean()) / ds.std(),
+        observed=observed_resampled,
+        simulated=ds,
         log_likelihood=log_pseudo_huber,
         n_samples=len(ds.exp_id),
         fudge_factor=5,
