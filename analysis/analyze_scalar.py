@@ -58,6 +58,11 @@ obs_cmap = ["0.8", "0.7"]
 # obs_cmap = ["#88CCEE", "#44AA99"]
 hist_cmap = ["#a6cee3", "#1f78b4"]
 
+# Function to convert byte strings to regular strings
+def convert_bstrings_to_str(element):
+    if isinstance(element, bytes):
+        return element.decode('utf-8')
+    return element
 
 def filter_outliers(
     ds: xr.Dataset,
@@ -606,7 +611,7 @@ if __name__ == "__main__":
         "--engine",
         help="""Engine for xarray. Default="netcdf4".""",
         type=str,
-        default="netcdf4",
+        default="h5netcdf",
     )
     parser.add_argument(
         "--filter_range",
@@ -720,6 +725,9 @@ if __name__ == "__main__":
     params_short_dict = {key: all_params_dict[key] for key in params}
 
     result_dir = Path(options.result_dir)
+    fig_dir = result_dir / Path("figures")
+    fig_dir.mkdir(parents=True, exist_ok=True)
+    
     plt.rcParams["font.size"] = 6
 
     flux_vars = ragis_config["Flux Variables"]
@@ -736,6 +744,14 @@ if __name__ == "__main__":
         .sortby("basin")
         .dropna(dim="exp_id")
     )
+    for v in ds.data_vars:
+        if ds[v].dtype.kind == "S":
+            ds[v] = ds[v].astype(str)
+    for c in ds.coords:
+        if ds[c].dtype.kind == "S":
+            ds.coords[c] = ds.coords[c].astype(str)
+
+    ds = xr.apply_ufunc(np.vectorize(convert_bstrings_to_str), ds, dask="allowed")
     ds = prp.standardize_variable_names(ds, ragis_config["PISM Spatial"])
     ds[ragis_config["Cumulative Variables"]["cumulative_grounding_line_flux"]] = ds[
         ragis_config["Flux Variables"]["grounding_line_flux"]
@@ -844,7 +860,7 @@ if __name__ == "__main__":
     fig.savefig(fn)
     plt.close()
 
-    observed = xr.open_dataset(options.obs_url).sel(time=slice("1980", "2022"))
+    observed = xr.open_dataset(options.obs_url, engine=engine, chunks="auto").sel(time=slice("1980", "2022"))
     observed = observed.sortby("basin")
     observed = prp.normalize_cumulative_variables(
         observed,

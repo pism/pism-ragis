@@ -71,7 +71,7 @@ def prepare_basin(basin_dict: Dict, col: str = "SUBREGION1"):
     )
     basin_dissolved_by_basin = basin_gp.dissolve(col)
     shelves_dissolved_by_basin = shelves.dissolve(col)
-    basin_plus_shelves_geom = basin_dissolved_by_basin.union(shelves_dissolved_by_basin)
+    basin_plus_shelves_geom = basin_dissolved_by_basin.union(shelves_dissolved_by_basin, align=True)
     basin_plus_shelves = gp.GeoDataFrame(
         basin_dissolved_by_basin, geometry=basin_plus_shelves_geom
     )
