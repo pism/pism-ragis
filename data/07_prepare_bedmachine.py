@@ -27,11 +27,8 @@ from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from pathlib import Path
 from typing import Dict, Union
 
-import dask
 import numpy as np
-import rioxarray as rxr
 import xarray as xr
-import xdem
 
 from pism_ragis.processing import download_earthaccess_dataset
 
@@ -65,43 +62,12 @@ if __name__ == "__main__":
 
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
-    parser.description = "Prepare GrIMP."
+    parser.description = "Prepare BedMachine."
     options = parser.parse_args()
 
-    filter_str = "90m_v"
-    result_dir = Path("grimp")
-    doi = "10.5067/NV34YUIXLP9W"
+    filter_str = "v5.nc"
+    result_dir = Path("bedmachine")
+    doi = "10.5067/GMEVBWFLWA7X"
     result = download_earthaccess_dataset(
         doi=doi, filter_str=filter_str, result_dir=result_dir
     )
-    r = Path(result[0])
-    dem_file = result_dir / Path("egm96_gimpdem_90m_v01.1.tif")
-    print(
-        f"Converting Ellipsoid to EGM96 and saving as {dem_file}...", end="", flush=True
-    )
-    dem = xdem.DEM(r)
-    dem_egm96 = dem.to_vcrs("EGM96", force_source_vcrs="Ellipsoid")
-    dem_egm96.save(dem_file)
-    print("Done")
-
-    doi = "10.5067/B8X58MQBFUPA"
-    result = download_earthaccess_dataset(
-        doi=doi, filter_str=filter_str, result_dir=result_dir
-    )
-    mask_file = result[0]
-
-    dem_da = rxr.open_rasterio(dem_file).squeeze()
-    dem_da.name = "usurf"
-    dem_da = dem_da.assign_attrs({"units": "m", "standard_name": "surface_altitude"})
-    dem_uncertainty_da = xr.zeros_like(dem_da) + 30
-    dem_uncertainty_da.name = "usurf_uncertainty"
-    dem_uncertainty_da = dem_uncertainty_da.assign_attrs({"units": "m"})
-    mask_da = rxr.open_rasterio(mask_file).squeeze()
-    mask_da.name = "mask"
-    mask_da = mask_da.assign_attrs({"mask": "m"})
-    grimp_ds = xr.merge([dem_da, dem_uncertainty_da, mask_da])
-    grimp_file = result_dir / Path("grimp_90m.nc")
-
-    comp = {"zlib": True, "complevel": 2}
-    encoding = {var: comp for var in grimp_ds.data_vars}
-    grimp_ds.to_netcdf(grimp_file, encoding=encoding)
