@@ -138,6 +138,7 @@ def run_delta_analysis(
     group_dim: str = "basin",
     iter_dim: str = "time",
     ensemble: str = "RAGIS",
+    notebook: bool = False,
 ) -> xr.Dataset:
     """
     Run delta sensitivity analysis on the given dataset.
@@ -174,8 +175,7 @@ def run_delta_analysis(
 
     start_dask = time.time()
     ds = ds.load()
-    cluster = LocalCluster(n_workers=options.n_jobs, threads_per_worker=1)
-    client = Client(cluster, asynchronous=True)
+    client = Client()
     print(f"Open client in browser: {client.dashboard_link}")
     all_delta_indices_list = []
     for gdim, df in ensemble_df.groupby(by=group_dim):
@@ -661,9 +661,6 @@ if __name__ == "__main__":
         default=3,
     )
     parser.add_argument(
-        "--n_jobs", help="""Number of parallel jobs.""", type=int, default=4
-    )
-    parser.add_argument(
         "--notebook",
         help="""Use when running in a notebook to display a nicer progress bar. Default=False.""",
         action="store_true",
@@ -1102,7 +1099,7 @@ if __name__ == "__main__":
 
     to_analyze = ds.sel(time=slice("1980-01-01", "2020-01-01"))
     all_delta_indices = run_delta_analysis(
-        to_analyze, ensemble_df, list(flux_vars.values())[:2]
+        to_analyze, ensemble_df, list(flux_vars.values())[:2], notebook=notebook
     )
 
     # Extract the prefix from each coordinate value

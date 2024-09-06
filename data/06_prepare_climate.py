@@ -21,13 +21,16 @@ Prepare ITS_LIVE.
 """
 # pylint: disable=unused-import
 
-from typing import Union
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
-from pathlib import Path
-import requests
-from tqdm import tqdm
-import xarray as xr
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+from typing import Union
+from ast import literal_eval
+
+import requests
+import xarray as xr
+from tqdm import tqdm
+
 
 def download_file(url: str, output_path: Path) -> None:
     """
@@ -42,19 +45,25 @@ def download_file(url: str, output_path: Path) -> None:
 
     if output_path.exists():
         return
-    response = requests.get(url, stream=True)
-    total_size = int(response.headers.get('content-length', 0))
+    response = requests.get(url, stream=True, timeout=10)
+    total_size = int(response.headers.get("content-length", 0))
     block_size = 1024  # 1 Kilobyte
-    with open(output_path, 'wb') as file, tqdm(
-        total=total_size, unit='iB', unit_scale=True
+    with open(output_path, "wb") as file, tqdm(
+        total=total_size, unit="iB", unit_scale=True
     ) as progress_bar:
         for data in response.iter_content(block_size):
             progress_bar.update(len(data))
             file.write(data)
-            
-def download_files_in_parallel(base_url: str, start_year: int, end_year: int,
-                               file_template: str = "MARv3.14-monthly-ERA5-${year}.nc",
-                               output_dir: Union[str, Path] = ".", max_workers: int = 4) -> None:
+
+
+def download_files_in_parallel(
+    base_url: str,
+    start_year: int,
+    end_year: int,
+    file_template: str = "MARv3.14-monthly-ERA5-${year}.nc",
+    output_dir: Union[str, Path] = ".",
+    max_workers: int = 4,
+) -> None:
     """
     Download files in parallel.
     Parameters
@@ -79,10 +88,10 @@ def download_files_in_parallel(base_url: str, start_year: int, end_year: int,
             except Exception as e:
                 print(f"An error occurred: {e}")
 
+
 hirham_url = "http://ensemblesrt3.dmi.dk/data/prudence/temp/nichan/Daily2D_GrIS/"
 mar_url = "http://ftp.climato.be/fettweis/MARv3.14/Greenland/ERA5-1km-monthly"
 xr.set_options(keep_attrs=True)
-
 
 
 if __name__ == "__main__":
@@ -103,7 +112,13 @@ if __name__ == "__main__":
     mar_dir.mkdir(parents=True, exist_ok=True)
 
     # Download files from 1980 to 2020 in parallel
-    download_files_in_parallel(mar_url, 1975, 2023, file_template="MARv3.14-monthly-ERA5-${year}.nc",  output_dir=mar_dir)
-    download_files_in_parallel(hirham_url, 1980, 2021, file_template="{year}.zip", output_dir=hirham_dir)
-        
-
+    download_files_in_parallel(
+        mar_url,
+        1975,
+        2023,
+        file_template="MARv3.14-monthly-ERA5-${year}.nc",
+        output_dir=mar_dir,
+    )
+    download_files_in_parallel(
+        hirham_url, 1980, 2021, file_template="{year}.zip", output_dir=hirham_dir
+    )
