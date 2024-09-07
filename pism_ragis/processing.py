@@ -179,6 +179,29 @@ def calculate_area(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
     return area
 
 
+def preprocess_mar(
+    ds,
+    regexp: str = "ERA5-(.+?).nc",
+    drop_vars: Union[List[str], None] = None,
+    drop_dims: List[str] = ["nv4"],
+):
+    """
+    Add correct time and time_bounds.
+    """
+    m_year_re = re.search(regexp, ds.encoding["source"])
+    assert m_year_re is not None
+    m_year = m_year_re.group(1)
+
+    time = xr.date_range(m_year, freq="MS", periods=ds.time.size + 1)
+    time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
+    ds = ds.assign_coords(time=time_centered)
+    ds = ds.cf.add_bounds("time")
+
+    return ds.drop_vars(drop_vars, errors="ignore").drop_dims(
+        drop_dims, errors="ignore"
+    )
+
+
 def preprocess_nc(
     ds,
     regexp: str = "id_(.+?)_",
