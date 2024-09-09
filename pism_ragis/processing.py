@@ -179,7 +179,7 @@ def calculate_area(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
     return area
 
 
-def preprocess_mar(
+def preprocess_time(
     ds,
     regexp: str = "ERA5-(.+?).nc",
     drop_vars: Union[List[str], None] = None,

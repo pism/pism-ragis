@@ -19,12 +19,14 @@
 """
 Prepare ITS_LIVE.
 """
-# pylint: disable=unused-import
+# pylint: disable=unused-import,broad-exception-caught
+# mypy: ignore-errors
 
+import zipfile
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import List, Union
+from typing import Dict, List, Union
 
 import cf_xarray
 import numpy as np
@@ -33,7 +35,305 @@ import xarray as xr
 from dask.diagnostics import ProgressBar
 from tqdm import tqdm
 
-from pism_ragis.processing import preprocess_mar
+from pism_ragis.processing import preprocess_time
+
+
+def process_hirham(
+    data_dir: Union[str, Path], output_file: Union[str, Path], base_url: str
+) -> None:
+    """
+    Process HIRHAM data and save the output to a NetCDF file.
+
+    Parameters
+    ----------
+    data_dir : str
+        Directory containing the input data.
+    output_file : str
+        Path to the output NetCDF file.
+
+    Returns
+    -------
+    None
+    """
+    start_year = 1980
+    end_year = 2021
+    start_date = "1975"
+
+    hirham_dir = data_dir / Path("hirham")
+    hirham_dir.mkdir(parents=True, exist_ok=True)
+    hirham_nc_dir = hirham_dir / Path("nc")
+    hirham_nc_dir.mkdir(parents=True, exist_ok=True)
+    hirham_zip_dir = hirham_dir / Path("zip")
+    hirham_zip_dir.mkdir(parents=True, exist_ok=True)
+
+    responses = download_hirham(
+        base_url,
+        start_year,
+        end_year,
+        output_dir=hirham_zip_dir,
+        max_workers=max_workers,
+    )
+
+    responses = unzip_files(
+        responses,
+        output_dir=hirham_nc_dir,
+        overwrite=overwrite,
+        max_workers=max_workers,
+    )
+
+    ds = xr.open_mfdataset(
+        responses,
+        chunks="auto",
+        parallel=True,
+        engine="netcdf4",
+        decode_cf=False,
+    ).squeeze()
+
+    ds = ds[list(hirham_vars_dict.keys()) + ["lat", "lon"]]
+
+    for v in ["lat", "lon", "gld", "rogl"]:
+        ds[v] = ds[v].swap_dims({"x": "rlon", "y": "rlat"})
+        if "_CoordinateAxisType" in ds[v].attrs:
+            del ds[v].attrs["_CoordinateAxisType"]
+
+    for k, v in hirham_vars_dict.items():
+        if k in ds:
+            ds[k].attrs["units"] = v["units"]
+            if "missing_value" in ds[k].attrs:
+                del ds[k].attrs["missing_value"]
+
+    time = xr.date_range(str(start_year), freq="D", periods=ds.time.size + 1)
+    time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
+    ds = ds.assign_coords(time=time_centered)
+    ds = ds.cf.add_bounds("time")
+
+    ds = ds.rename_vars({k: v["pism_name"] for k, v in hirham_vars_dict.items()})
+
+    # Use 1981 to 1985 to match the calendar / month lengths from 75 to 79
+    pre_ds = ds.sel(time=slice("1981", "1985"))
+    time = xr.date_range("1975", freq="D", periods=pre_ds.time.size + 1)
+    time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
+    pre_ds = pre_ds.assign_coords(time=time_centered)
+    pre_ds["time_bounds"].values = np.array([time[:-1], time[1:]]).T
+    ds = xr.concat([pre_ds, ds], dim="time")
+
+    ds["time"].attrs.update(
+        {
+            "axis": "T",
+            "long_name": "time",
+        }
+    )
+    ds.attrs["Conventions"] = "CF-1.8"
+
+    mon_ds = ds.resample(time="MS").mean()
+    time = xr.date_range(start_date, freq="MS", periods=mon_ds.time.size + 1)
+    time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
+    mon_ds = mon_ds.assign_coords(time=time_centered)
+    mon_ds = mon_ds.cf.add_bounds("time")
+    mon_ds["time_bounds"].values = np.array([time[:-1], time[1:]]).T
+    mon_ds["time"].encoding = {
+        "units": f"hours since {start_date}",
+    }
+
+    mon_ds["time"].attrs.update(
+        {
+            "axis": "T",
+            "long_name": "time",
+        }
+    )
+    mon_ds.attrs["Conventions"] = "CF-1.8"
+
+    encoding = {var: {"_FillValue": False} for var in ["rlat", "rlon", "lon", "lat"]}
+    comp = {"zlib": True, "complevel": 2}
+    encoding_compression = {
+        var: comp for var in ds.data_vars if var not in ("time", "time_bounds")
+    }
+    encoding.update(encoding_compression)
+
+    with ProgressBar():
+        mon_ds.to_netcdf(output_file, encoding=encoding)
+
+
+def process_racmo(data_dir: Union[str, Path], output_file: Union[str, Path]) -> None:
+    """
+    Process RACMO data and save the output to a NetCDF file.
+
+    Parameters
+    ----------
+    data_dir : str
+        Directory containing the input data.
+    output_file : str
+        Path to the output NetCDF file.
+
+    Returns
+    -------
+    None
+    """
+    print("Processing RACMO")
+
+    racmo_dir = data_dir / Path("racmo")
+    racmo_dir.mkdir(parents=True, exist_ok=True)
+    responses = download_racmo(output_dir=racmo_dir, max_workers=max_workers)
+
+    ds = (
+        xr.open_mfdataset(
+            responses,
+            chunks="auto",
+            parallel=True,
+            compat="override",
+            engine="h5netcdf",
+        )
+        .squeeze()
+        .drop_vars(
+            [
+                "block1",
+                "block2",
+                "assigned",
+                "date_bnds",
+                "dir",
+                "dtg",
+                "hms_bnds",
+                "height",
+                "time_bnds",
+            ]
+        )
+    )
+
+    start_date = "1939-09-01"
+    time = xr.date_range(start_date, freq="MS", periods=ds.time.size + 1)
+    time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
+    ds = ds.assign_coords(time=time_centered)
+    ds["time"].encoding = {
+        "units": f"hours since {start_date}",
+    }
+    ds = ds.cf.add_bounds("time")
+    ds["time_bounds"].values = np.array([time[:-1], time[1:]]).T
+
+    del ds["smb"].attrs["standard_name"]
+
+    for k, v in racmo_vars_dict.items():
+        ds[k].attrs["units"] = v["units"]
+
+    ds = ds.rename_vars({k: v["pism_name"] for k, v in racmo_vars_dict.items()})
+
+    for v in ds.data_vars:
+        if "cell_methods" in ds[v].attrs:
+            del ds[v].attrs["cell_methods"]
+        if "_FillValue" in ds[v].attrs:
+            del ds[v].attrs["_FillValue"]
+
+    ds["time"].attrs.update(
+        {
+            "axis": "T",
+            "long_name": "time",
+        }
+    )
+    ds.attrs["Conventions"] = "CF-1.8"
+
+    encoding = {var: {"_FillValue": False} for var in ["rlat", "rlon", "lon", "lat"]}
+    comp = {"zlib": True, "complevel": 2}
+
+    encoding_compression = {
+        var: comp
+        for var in ds.data_vars
+        if var not in ("time", "time_bounds", "time_bnds")
+    }
+    encoding.update(encoding_compression)
+
+    print(f"Writing to {output_file}")
+
+    with ProgressBar():
+        ds.to_netcdf(output_file, encoding=encoding)
+
+
+def process_mar(data_dir: str, output_file: str) -> None:
+    """
+    Process MAR data and save the output to a NetCDF file.
+
+    Parameters
+    ----------
+    data_dir : str
+        Directory containing the input data.
+    output_file : str
+        Path to the output NetCDF file.
+
+    Returns
+    -------
+    None
+    """
+    print("Processing MAR")
+
+    mar_dir = data_dir / Path("mar")
+    mar_dir.mkdir(parents=True, exist_ok=True)
+    responses = download_mar(
+        mar_url, 1975, 2023, output_dir=mar_dir, max_workers=max_workers
+    )
+
+    ds = xr.open_mfdataset(
+        responses,
+        preprocess=preprocess_time,
+        chunks="auto",
+        parallel=True,
+        engine="h5netcdf",
+        decode_cf=False,
+    ).squeeze()
+
+    for k, v in ds.attrs.items():
+        ds.attrs[k] = v.encode("ASCII", "surrogateescape").decode("UTF-8")
+
+    start_date = "1975-01-01"
+
+    # Fix global attribute encoding, xr.open_mfdataset seems to cause issues with some characters
+    ds = ds[list(mar_vars_dict.keys()) + ["time_bounds"]]
+
+    for k, v in mar_vars_dict.items():
+        ds[k].attrs["units"] = v["units"]
+        del ds[k].attrs["standard_name"]
+
+    ds = ds.rename_vars({k: v["pism_name"] for k, v in mar_vars_dict.items()})
+
+    ds["time"].encoding = {
+        "units": f"hours since {start_date}",
+    }
+
+    ds.attrs["Conventions"] = "CF-1.8"
+
+    ds.coords["x"].attrs.update(
+        {
+            "axis": "X",
+            "long_name": "X-coordinate in Cartesian system",
+            "standard_name": "projection_x_coordinate",
+        }
+    )
+
+    ds.coords["y"].attrs.update(
+        {
+            "axis": "Y",
+            "long_name": "Y-coordinate in Cartesian system",
+            "standard_name": "projection_y_coordinate",
+        }
+    )
+
+    ds.coords["time"].attrs.update(
+        {
+            "axis": "T",
+            "long_name": "time",
+        }
+    )
+
+    encoding = {var: {"_FillValue": False} for var in ["x", "y"]}
+    comp = {"zlib": True, "complevel": 2}
+
+    encoding_compression = {
+        var: comp for var in ds.data_vars if var not in ("time", "time_bounds")
+    }
+
+    encoding.update(encoding_compression)
+
+    print(f"Writing to {output_file}")
+
+    with ProgressBar():
+        ds.to_netcdf(output_file, encoding=encoding)
 
 
 def download_file(url: str, output_path: Path) -> None:
@@ -52,9 +352,10 @@ def download_file(url: str, output_path: Path) -> None:
     response = requests.get(url, stream=True, timeout=10)
     total_size = int(response.headers.get("content-length", 0))
     block_size = 1024  # 1 Kilobyte
-    with open(output_path, "wb") as file, tqdm(
-        total=total_size, unit="iB", unit_scale=True
-    ) as progress_bar:
+    with (
+        open(output_path, "wb") as file,
+        tqdm(total=total_size, unit="iB", unit_scale=True) as progress_bar,
+    ):
         for data in response.iter_content(block_size):
             progress_bar.update(len(data))
             file.write(data)
@@ -128,6 +429,100 @@ def download_mar(
     return responses
 
 
+def download_hirham(
+    base_url: str,
+    start_year: int,
+    end_year: int,
+    output_dir: Union[str, Path] = ".",
+    max_workers: int = 4,
+) -> List[Path]:
+    """
+    Download files in parallel.
+    Parameters
+    ----------
+    start_year : int
+        The starting year of the files to download.
+    end_year : int
+        The ending year of the files to download.
+    max_workers : int, optional
+        The maximum number of threads to use for downloading, by default 4.
+    """
+    responses = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = []
+        for year in range(start_year, end_year + 1):
+            year_file = f"{year}.zip"
+            url = base_url + year_file
+            output_path = output_dir / Path(year_file)
+            futures.append(executor.submit(download_file, url, output_path))
+            responses.append(output_path)
+        for future in as_completed(futures):
+            try:
+                future.result()
+            except Exception as e:
+                print(f"An error occurred: {e}")
+
+    return responses
+
+
+def unzip_files(
+    files=List[Union[str, Path]],
+    output_dir: Union[str, Path] = ".",
+    overwrite: bool = False,
+    max_workers: int = 4,
+) -> List[Path]:
+    """
+    Unzip files in parallel.
+
+    Parameters
+    ----------
+    max_workers : int, optional
+        The maximum number of threads to use for downloading, by default 4.
+    """
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = []
+        for f in files:
+            futures.append(
+                executor.submit(unzip_file, f, output_dir, overwrite=overwrite)
+            )
+        for future in as_completed(futures):
+            try:
+                future.result()
+            except Exception as e:
+                print(f"An error occurred: {e}")
+
+    responses = list(output_dir.rglob("*.nc"))
+    return responses
+
+
+def unzip_file(zip_path: str, extract_to: str, overwrite: bool = False) -> None:
+    """
+    Unzip a file to a specified directory with a progress bar and optional overwrite.
+
+    Parameters
+    ----------
+    zip_path : str
+        The path to the ZIP file.
+    extract_to : str
+        The directory where the contents will be extracted.
+    overwrite : bool, optional
+        Whether to overwrite existing files, by default False.
+    """
+    # Ensure the extract_to directory exists
+    Path(extract_to).mkdir(parents=True, exist_ok=True)
+
+    # Open the ZIP file
+    with zipfile.ZipFile(zip_path, "r") as zip_ref:
+        # Get the list of file names in the zip file
+        file_list = zip_ref.namelist()
+
+        # Iterate over the file names with a progress bar
+        for file in tqdm(file_list, desc="Extracting files", unit="file"):
+            file_path = Path(extract_to) / file
+            if not file_path.exists() or overwrite:
+                zip_ref.extract(member=file, path=extract_to)
+
+
 hirham_url = "http://ensemblesrt3.dmi.dk/data/prudence/temp/nichan/Daily2D_GrIS/"
 mar_url = "http://ftp.climato.be/fettweis/MARv3.14/Greenland/ERA5-1km-monthly/"
 xr.set_options(keep_attrs=True)
@@ -139,95 +534,40 @@ if __name__ == "__main__":
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Prepare climate forcing."
+    parser.add_argument(
+        "--n_jobs", help="""Number of parallel jobs.""", type=int, default=8
+    )
     options = parser.parse_args()
+    max_workers = options.n_jobs
+    overwrite = False
 
     result_dir = Path("climate")
     result_dir.mkdir(parents=True, exist_ok=True)
-    hirham_dir = result_dir / Path("hirham")
-    hirham_dir.mkdir(parents=True, exist_ok=True)
-    racmo_dir = result_dir / Path("racmo")
-    racmo_dir.mkdir(parents=True, exist_ok=True)
-    mar_dir = result_dir / Path("mar")
-    mar_dir.mkdir(parents=True, exist_ok=True)
 
-    mar_vars_dict = {
+    mar_vars_dict: Dict[str, Dict[str, str]] = {
         "STcorr": {"pism_name": "ice_surface_temp", "units": "degC"},
         "T2Mcorr": {"pism_name": "air_temp", "units": "degC"},
         "RUcorr": {"pism_name": "water_input_rate", "units": "kg m-2 month-1"},
-        "SMBcorr": {"pism_name": "climatic_mass_balance", "units": "kg m-2 month"},
+        "SMBcorr": {"pism_name": "climatic_mass_balance", "units": "kg m-2 month-1"},
     }
-    racmo_vars_dict = {
+    racmo_vars_dict: Dict[str, Dict[str, str]] = {
         "t2m": {"pism_name": "ice_surface_temp", "units": "K"},
         "runoff": {"pism_name": "water_input_rate", "units": "kg m-2 month-1"},
-        "precip": {"pism_name": "precipitation", "units": "kg m-2 month"},
-        "smb": {"pism_name": "climatic_mass_balance", "units": "kg m-2 month"},
+        "precip": {"pism_name": "precipitation", "units": "kg m-2 month-1"},
+        "smb": {"pism_name": "climatic_mass_balance", "units": "kg m-2 month-1"},
+    }
+    hirham_vars_dict: Dict[str, Dict[str, str]] = {
+        "tas": {"pism_name": "ice_surface_temp", "units": "K"},
+        "rogl": {"pism_name": "water_input_rate", "units": "kg m-2 day-1"},
+        "gld": {"pism_name": "climatic_mass_balance", "units": "kg m-2 day-1"},
     }
 
-    print("Processing RACMO")
-    responses = download_racmo(output_dir=racmo_dir)
-    ds = (
-        xr.open_mfdataset(
-            responses,
-            chunks="auto",
-            parallel=True,
-            compat="override",
-            engine="h5netcdf",
-        )
-        .squeeze()
-        .drop_vars(["block1", "block2", "assigned"])
-    )
-    for k, v in racmo_vars_dict.items():
-        ds[k].attrs["units"] = v["units"]
-    ds = ds.rename_vars({k: v["pism_name"] for k, v in racmo_vars_dict.items()})
-    nt = ds.time.size
-    times = xr.date_range("1939-10-01", freq="MS", periods=nt + 1)
-    ds.time_bnds.values = np.array([times[:-1], times[1:]]).T
-    ds = ds.sel(time=slice("1940", "2023"))
+    # output_file = result_dir / Path("RACMO2.3p2_ERA5_FGRN055_1940_2023.nc")
+    # process_racmo(data_dir=result_dir, output_file=output_file)
 
-    encoding = {}
-    comp = {"zlib": True, "complevel": 2}
-    encoding_compression = {
-        var: comp for var in ds.data_vars if var not in ("time", "time_bounds")
-    }
-    encoding.update(encoding_compression)
-    output_file = Path("RACMO2.3p2_ERA5_FGRN055_1940_2023.nc")
-    with ProgressBar():
-        ds.to_netcdf(output_file, encoding=encoding)
+    # output_file = result_dir / Path("MARv3.14-monthly-ERA5_1975_2023.nc")
+    # process_mar(data_dir=result_dir, output_file=output_file)
 
-    print("Processing MAR")
-    responses = download_mar(
-        mar_url,
-        1975,
-        2023,
-        output_dir=mar_dir,
-    )
-    ds = xr.open_mfdataset(
-        responses,
-        preprocess=preprocess_mar,
-        chunks="auto",
-        parallel=True,
-        engine="h5netcdf",
-        attrs_file=responses[0],
-        decode_cf=False,
-    ).squeeze()
-    # Fix global attribute encoding, xr.open_mfdataset seems to cause issues with some characters
-    for k, v in ds.attrs.items():
-        ds.attrs[k] = v.encode("ASCII", "surrogateescape").decode("UTF-8")
-    ds = ds[mar_vars_dict.keys()]
-    for k, v in mar_vars_dict.items():
-        ds[k].attrs["units"] = v["units"]
-    ds = ds.rename_vars({k: v["pism_name"] for k, v in mar_vars_dict.items()})
-    encoding = {}
-    comp = {"zlib": True, "complevel": 2}
-    encoding_compression = {
-        var: comp for var in ds.data_vars if var not in ("time", "time_bounds")
-    }
-    encoding.update(encoding_compression)
-    output_file = Path("MARv3.14-monthly-ERA5_1975_2023.nc")
-    with ProgressBar():
-        ds.to_netcdf(output_file, encoding=encoding)
-
+    output_file = result_dir / Path("HIRHAM5-monthly-ERA5_1975_2021.nc")
     print("Processing HIRHAM")
-    # responses = download_files_in_parallel_years(
-    #     hirham_url, 1980, 2021, file_template="{year}.zip", output_dir=hirham_dir
-    # )
+    process_hirham(data_dir=result_dir, output_file=output_file, base_url=hirham_url)

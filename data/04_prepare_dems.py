@@ -65,14 +65,18 @@ if __name__ == "__main__":
 
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
-    parser.description = "Prepare GrIMP."
+    parser.description = "Prepare GrIMP and BedMachine."
     options = parser.parse_args()
 
     filter_str = "90m_v"
-    result_dir = Path("grimp")
+    result_dir = Path("dem")
+    result_dir.mkdir(parents=True, exist_ok=True)
+    grimp_dir = result_dir / Path("grimp")
+    grimp_dir.mkdir(parents=True, exist_ok=True)
+
     doi = "10.5067/NV34YUIXLP9W"
     result = download_earthaccess_dataset(
-        doi=doi, filter_str=filter_str, result_dir=result_dir
+        doi=doi, filter_str=filter_str, result_dir=grimp_dir
     )
     r = Path(result[0])
     dem_file = result_dir / Path("egm96_gimpdem_90m_v01.1.tif")
@@ -105,3 +109,10 @@ if __name__ == "__main__":
     comp = {"zlib": True, "complevel": 2}
     encoding = {var: comp for var in grimp_ds.data_vars}
     grimp_ds.to_netcdf(grimp_file, encoding=encoding)
+
+    result_dir = Path("dem")
+    filter_str = "v5.nc"
+    doi = "10.5067/GMEVBWFLWA7X"
+    result = download_earthaccess_dataset(
+        doi=doi, filter_str=filter_str, result_dir=result_dir
+    )
