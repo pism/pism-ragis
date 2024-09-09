@@ -83,8 +83,9 @@ def process_hirham(
         max_workers=max_workers,
     )
 
+    print("  ..loading files")
     ds = xr.open_mfdataset(
-        responses,
+        sorted(responses),
         chunks="auto",
         parallel=True,
         engine="netcdf4",

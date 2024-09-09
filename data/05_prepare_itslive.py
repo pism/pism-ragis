@@ -27,11 +27,8 @@ from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from pathlib import Path
 from typing import Dict, Union
 
-import dask
 import numpy as np
-import rioxarray as rxr
 import xarray as xr
-import xdem
 
 from pism_ragis.processing import download_earthaccess_dataset
 
@@ -48,10 +45,10 @@ if __name__ == "__main__":
     parser.description = "Prepare ITS_LIVE."
     options = parser.parse_args()
 
+    print("Prepare ITS_LIVE")
     filter_str = "GRE_G0240"
     result_dir = Path("itslive")
     doi = "10.5067/6II6VW8LLWJ7"
     result = download_earthaccess_dataset(
         doi=doi, filter_str=filter_str, result_dir=result_dir
     )
-    print(result)
