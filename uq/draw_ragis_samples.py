@@ -25,8 +25,9 @@ short2long: Dict[str, str] = {
 }
 
 climate: Dict[int, str] = {
-    0: "DMI-HIRHAM5_ERA_1975_2021_EPSG3413_4500M_MM.nc",
+    0: "HIRHAM5-monthly-ERA5_1975_2021.nc",
     1: "MARv3.14-monthly-ERA5-1975_2023.nc",
+    2: "RACMO2.3p2_ERA5_FGRN055_1940_2023.nc"
 }
 gcms: Dict[int, str] = {
     0: "ACCESS1-3_rcp85",
@@ -61,7 +62,7 @@ dists: Dict[str, Any] = {
             "calving.rate_scaling.file": randint(0, 7),
             "ocean.th.gamma_T": uniform(loc=0.75e-4, scale=0.75e-4),
             "ocean_file": randint(0, len(gcms)),
-            "climate_file": randint(0, 2),
+            "climate_file": randint(0, len(climate)),
             "frontal_melt.routing.parameter_a": uniform(loc=2.4e-4, scale=1.2e-4),
             "frontal_melt.routing.parameter_b": uniform(loc=1.0, scale=0.70),
             "frontal_melt.routing.power_alpha": uniform(loc=0.3, scale=0.55),
@@ -142,7 +143,7 @@ parser.add_argument(
     dest="distribution",
     choices=dists.keys(),
     help="""Choose set.""",
-    default="calving",
+    default="ragis",
 )
 parser.add_argument(
     "--calc_second_order",

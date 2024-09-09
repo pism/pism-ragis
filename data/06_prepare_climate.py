@@ -39,7 +39,7 @@ from pism_ragis.processing import preprocess_time
 
 
 def process_hirham(
-    data_dir: Union[str, Path], output_file: Union[str, Path], base_url: str
+        data_dir: Union[str, Path], output_file: Union[str, Path], base_url: str, max_workers: int = 4
 ) -> None:
     """
     Process HIRHAM data and save the output to a NetCDF file.
@@ -55,6 +55,8 @@ def process_hirham(
     -------
     None
     """
+    print("Processing HIRHAM")
+    
     start_year = 1980
     end_year = 2021
     start_date = "1975"
@@ -154,7 +156,7 @@ def process_hirham(
         mon_ds.to_netcdf(output_file, encoding=encoding)
 
 
-def process_racmo(data_dir: Union[str, Path], output_file: Union[str, Path]) -> None:
+def process_racmo(data_dir: Union[str, Path], output_file: Union[str, Path], max_workers: int = 4) -> None:
     """
     Process RACMO data and save the output to a NetCDF file.
 
@@ -246,7 +248,7 @@ def process_racmo(data_dir: Union[str, Path], output_file: Union[str, Path]) -> 
         ds.to_netcdf(output_file, encoding=encoding)
 
 
-def process_mar(data_dir: str, output_file: str) -> None:
+def process_mar(data_dir: str, output_file: str, max_workers: int = 4) -> None:
     """
     Process MAR data and save the output to a NetCDF file.
 
@@ -563,11 +565,10 @@ if __name__ == "__main__":
     }
 
     # output_file = result_dir / Path("RACMO2.3p2_ERA5_FGRN055_1940_2023.nc")
-    # process_racmo(data_dir=result_dir, output_file=output_file)
+    # process_racmo(data_dir=result_dir, output_file=output_file, max_workers=max_workers)
 
     # output_file = result_dir / Path("MARv3.14-monthly-ERA5_1975_2023.nc")
-    # process_mar(data_dir=result_dir, output_file=output_file)
+    # process_mar(data_dir=result_dir, output_file=output_file, max_workers=max_workers)
 
     output_file = result_dir / Path("HIRHAM5-monthly-ERA5_1975_2021.nc")
-    print("Processing HIRHAM")
-    process_hirham(data_dir=result_dir, output_file=output_file, base_url=hirham_url)
+    process_hirham(data_dir=result_dir, output_file=output_file, base_url=hirham_url, max_workers=max_workers)

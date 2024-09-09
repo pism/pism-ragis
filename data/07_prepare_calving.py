@@ -1,24 +1,59 @@
-#!/usr/bin/env python
-# Copyright (C) 2020-23 Andy Aschwanden
+# Copyright (C) 2024 Andy Aschwanden
+#
+# This file is part of pism-ragis.
+#
+# PISM-RAGIS is free software; you can redistribute it and/or modify it under the
+# terms of the GNU General Public License as published by the Free Software
+# Foundation; either version 3 of the License, or (at your option) any later
+# version.
+#
+# PISM-RAGIS is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+# details.
+#
+# You should have received a copy of the GNU General Public License
+# along with PISM; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-# pylint: disable=no-name-in-module,chained-comparison
-# mypy: ignore-errors
+# pylint: disable=unused-import
 
 """
 Seasonal calving.
 """
 
 from argparse import ArgumentParser
-from calendar import isleap
-from datetime import datetime
+import xarray as xr
+import numpy as np
+import pandas as pd
+import cf_xarray
+from typing import Union
 from pathlib import Path
 
-import cftime
-import numpy as np
-import pylab as plt
-from dateutil import rrule
-from netCDF4 import Dataset as NC
-from typin import Union
+# Create a time coordinate that spans the years 2000 to 2020
+# Define the smoothed step function
+def smoothed_step_function(time, amplification_factor: float = 1.0):
+    # Convert time to day of year and year
+    day_of_year = time.dayofyear
+    years = time.year
+    # Initialize the function values to zero
+    values = np.zeros_like(day_of_year, dtype=float)
+    for year in np.unique(years):
+        # Define the transition periods for the current year
+        start_ramp_up = pd.Timestamp(f"{year}-04-01").dayofyear
+        end_ramp_up = pd.Timestamp(f"{year}-05-01").dayofyear
+        start_ramp_down = pd.Timestamp(f"{year}-09-01").dayofyear
+        end_ramp_down = pd.Timestamp(f"{year}-10-01").dayofyear
+        # Ramp up from 0 to 1
+        ramp_up_mask = (years == year) & (day_of_year >= start_ramp_up) & (day_of_year <= end_ramp_up)
+        values[ramp_up_mask] = (day_of_year[ramp_up_mask] - start_ramp_up) / (end_ramp_up - start_ramp_up)
+        # Stay at 1
+        stay_at_one_mask = (years == year) & (day_of_year > end_ramp_up) & (day_of_year < start_ramp_down)
+        values[stay_at_one_mask] = amplification_factor
+        # Ramp down from 1 to 0
+        ramp_down_mask = (years == year) & (day_of_year >= start_ramp_down) & (day_of_year <= end_ramp_down)
+        values[ramp_down_mask] = 1 - (day_of_year[ramp_down_mask] - start_ramp_down) / (end_ramp_down - start_ramp_down)
+    return values
 
 # set up the option parser
 parser = ArgumentParser()
@@ -43,158 +78,44 @@ parser.add_argument(
 )
 
 options = parser.parse_args()
-args = options.FILE
 amplification_factors = [-1.0, 1.0, 1.05, 1.10, 1.20, 1.50, 2.00]
 start_year = 1975
 end_year = 2025
 year_high = 2000
 
-if len(args) == 0:
-    nc_outfile = "seasonal_calving.nc"
-elif len(args) == 1:
-    nc_outfile = args[0]
-else:
-    print("wrong number arguments, 0 or 1 arguments accepted")
-    parser.print_help()
-    import sys
-
-    sys.exit(0)
-
-
-def create_file(
-    amplification_factor,
-    filename: Union[str, Path],
-    start_year: int = 1975,
-    end_year: int = 2025,
-    year_high: int = 2000,
-):
-    """
-    Create netCDF.
-    """
-
-    def annual_calving(year_length, frac_calving_rate_max):
-        """
-        Create calving.
-        """
-        frac_calving_rate = np.zeros(year_length)
-        for t in range(year_length):
-            if (t <= winter_e) and (t >= winter_a):
-                frac_calving_rate[
-                    t
-                ] = frac_calving_rate_max - frac_calving_rate_max / np.sqrt(
-                    winter_e
-                ) * np.sqrt(
-                    np.mod(t, year_length)
-                )
-            elif (t > winter_e) and (t < spring_e):
-                frac_calving_rate[t] = (
-                    frac_calving_rate_max / np.sqrt(spring_e - winter_e)
-                ) * np.sqrt(np.mod(t - winter_e, year_length))
-            else:
-                frac_calving_rate[t] = frac_calving_rate_max
-        return frac_calving_rate
-
-    start_date = datetime(start_year, 1, 1)
-    end_date = datetime(end_year, 1, 1)
-
-    calendar = "standard"
-    units = "days since 1980-1-1"
-
-    sampling_interval = "daily"
-    rd = {
-        "daily": rrule.DAILY,
-        "weekly": rrule.WEEKLY,
-        "monthly": rrule.MONTHLY,
-        "yearly": rrule.YEARLY,
-    }
-
-    bnds_datelist = list(
-        rrule.rrule(rd[sampling_interval], dtstart=start_date, until=end_date)
-    )
-    # calculate the days since refdate, including refdate, with time being the
-    bnds_interval_since_refdate = cftime.date2num(
-        bnds_datelist, units, calendar=calendar
-    )
-    time_interval_since_refdate = (
-        bnds_interval_since_refdate[0:-1] + np.diff(bnds_interval_since_refdate) / 2
-    )
-
-    # mid-point value:
-    # time[n] = (bnds[n] + bnds[n+1]) / 2
-    time_interval_since_refdate = (
-        bnds_interval_since_refdate[0:-1] + np.diff(bnds_interval_since_refdate) / 2
-    )
-
-    # Create netCDF file
-    nc = NC(filename, "w", format="NETCDF4", compression_level=2)
-
-    nc.createDimension("time")
-    nc.createDimension("nb", size=2)
-
-    var = "time"
-    var_out = nc.createVariable(var, "d", dimensions="time")
-    var_out.axis = "T"
-    var_out.units = "days since 1980-1-1"
-    var_out.long_name = "time"
-    var_out.bounds = "time_bounds"
-    var_out[:] = time_interval_since_refdate
-
-    var = "time_bounds"
-    var_out = nc.createVariable(var, "d", dimensions=("time", "nb"))
-    var_out.bounds = "time_bounds"
-    var_out[:, 0] = bnds_interval_since_refdate[0:-1]
-    var_out[:, 1] = bnds_interval_since_refdate[1::]
-
-    var = "frac_calving_rate"
-    var_out = nc.createVariable(var, "f", dimensions="time")
-    var_out.units = "1"
-
-    winter_a = 300
-    winter_e = 90
-    spring_e = 105
-
-    winter_a = 0
-    winter_e = 150
-    spring_e = 170
-
-    idx = 0
-    for year in range(start_year, end_year):
-        print(f"Preparing Year {year}")
-        if isleap(year):
-            year_length = 366
-        else:
-            year_length = 365
-
-        if year <= year_high:
-            frac_calving_rate = annual_calving(year_length, 1)
-        else:
-            frac_calving_rate = annual_calving(year_length, amplification_factor)
-
-        frac_calving_rate = np.roll(frac_calving_rate, -90)
-        if amplification_factor > 0:
-            var_out[idx::] = frac_calving_rate
-        else:
-            var_out[idx::] = 1.0
-        idx += year_length
-
-    calving = var_out[-year_length:-1]
-    nc.amplification_factor = amplification_factor
-    nc.close()
-    return calving
-
+time = xr.date_range(str(start_year), str(end_year), freq="D")
+time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
+zeros = np.zeros(len(time_centered))
+# Create an xarray.DataArray with the time coordinate and the array of zeros
+da = xr.DataArray(zeros, coords=[time_centered], dims=["time"], name="frac_calving_rate")
 
 result_dir = Path("calving")
 result_dir.mkdir(parents=True, exist_ok=True)
 c = []
 for k, amplification_factor in enumerate(amplification_factors):
     filename = result_dir / Path(f"seasonal_calving_id_{k}_{start_year}_{end_year}.nc")
-    calving = create_file(
-        amplification_factor, filename, start_year, end_year, year_high
-    )
-    c.append(calving)
+    print(f"Processing {filename}")
+    # Apply the smoothed step function to the time coordinate
+    ds = da.to_dataset().copy()
+    # if amplification_factor == -1.0:
+    #     ds["frac_calving_rate"] = np.ones_like(ds.time.values)
+    # else:
+    data = smoothed_step_function(time_centered)
+    if amplification_factor == -1.0:
+        data *= 0
+    ds["frac_calving_rate"].values = data
+    ds = ds.cf.add_bounds("time")
+    ds["time"].encoding = {
+        "units": f"hours since {start_year}-01-01",
+    }
 
-fig, ax = plt.subplots(1, 1, figsize=[3.2, 2.4])
-for calving in c:
-    calving = np.roll(calving, 0)
-    ax.plot(calving)
-fig.savefig("seasonal_calving.pdf")
+    ds["time"].attrs.update(
+        {
+            "axis": "T",
+            "long_name": "time",
+        }
+    )
+    ds["frac_calving_rate"].attrs.update({"units": "1"})
+    ds.attrs["Conventions"] = "CF-1.8"
+    ds.to_netcdf(filename)
+

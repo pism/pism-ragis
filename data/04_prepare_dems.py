@@ -17,7 +17,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 """
-Prepare CALFIN front retreat.
+Prepare GrIMP and BedMachine.
 """
 # pylint: disable=unused-import
 
@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Dict, Union
 
 import dask
+from dask.diagnostics import ProgressBar
 import numpy as np
 import rioxarray as rxr
 import xarray as xr
@@ -38,27 +39,6 @@ from pism_ragis.processing import download_earthaccess_dataset
 xr.set_options(keep_attrs=True)
 # Suppress specific warning from loky
 warnings.filterwarnings("ignore", category=UserWarning)
-
-x_min = -653000
-x_max = 879700
-y_min = -632750
-y_max = -3384350
-bbox = [x_min, y_min, x_max, y_max]
-geom = {
-    "type": "Polygon",
-    "crs": {"properties": {"name": "EPSG:3413"}},
-    "bbox": bbox,
-    "coordinates": [
-        [
-            (x_min, y_min),
-            (x_max, y_min),
-            (x_max, y_max),
-            (x_min, y_max),
-            (x_min, y_min),  # Close the loop by repeating the first point
-        ]
-    ],
-}
-
 
 if __name__ == "__main__":
     __spec__ = None
@@ -74,6 +54,7 @@ if __name__ == "__main__":
     grimp_dir = result_dir / Path("grimp")
     grimp_dir.mkdir(parents=True, exist_ok=True)
 
+    print("Preparing GrIMP")
     doi = "10.5067/NV34YUIXLP9W"
     result = download_earthaccess_dataset(
         doi=doi, filter_str=filter_str, result_dir=grimp_dir
@@ -108,8 +89,10 @@ if __name__ == "__main__":
 
     comp = {"zlib": True, "complevel": 2}
     encoding = {var: comp for var in grimp_ds.data_vars}
-    grimp_ds.to_netcdf(grimp_file, encoding=encoding)
+    with ProgressBar():
+        grimp_ds.to_netcdf(grimp_file, encoding=encoding)
 
+    print("Preparing BedMachine")
     result_dir = Path("dem")
     filter_str = "v5.nc"
     doi = "10.5067/GMEVBWFLWA7X"
