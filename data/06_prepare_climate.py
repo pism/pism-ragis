@@ -32,14 +32,103 @@ import cf_xarray
 import numpy as np
 import requests
 import xarray as xr
+from cdo import Cdo
 from dask.diagnostics import ProgressBar
 from tqdm import tqdm
 
 from pism_ragis.processing import preprocess_time
 
+cdo = Cdo()
+
+
+def process_year(year: int, output_dir: Path, start_date: str = "1975-01-01") -> Path:
+    """
+    Process NetCDF files for a given year and generate a monthly averaged dataset.
+
+    Parameters
+    ----------
+    year : int
+        The year to process.
+    output_dir : Path
+        The directory where the output file will be saved.
+    start_date : str, optional
+        The reference start date for the time encoding, by default "1975-01-01".
+
+    Returns
+    -------
+    Path
+        The path to the generated NetCDF file.
+
+    Notes
+    -----
+    This function reads daily NetCDF files for the specified year, processes the data,
+    and generates a monthly averaged dataset. The output file is saved in the specified
+    output directory with the name format 'monthly_{year}.nc'.
+    """
+    output_file = output_dir / Path(f"monthly_{year}.nc")
+    p = output_dir / Path(str(year))
+    responses = sorted(p.glob("*.nc"))
+    ds = xr.open_mfdataset(responses, parallel=True, chunks="auto", engine="netcdf4")
+    ds = ds[list(hirham_vars_dict.keys()) + ["lat", "lon"]]
+
+    for v in ["lat", "lon", "gld", "rogl"]:
+        ds[v] = ds[v].swap_dims({"x": "rlon", "y": "rlat"})
+        if "_CoordinateAxisType" in ds[v].attrs:
+            del ds[v].attrs["_CoordinateAxisType"]
+
+    for k, v in hirham_vars_dict.items():
+        if k in ds:
+            ds[k].attrs["units"] = v["units"]
+            if "missing_value" in ds[k].attrs:
+                del ds[k].attrs["missing_value"]
+    time = xr.date_range(str(year), freq="D", periods=ds.time.size + 1)
+    time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
+    ds = ds.assign_coords(time=time_centered)
+
+    ds = ds.resample({"time": "MS"}).mean()
+    time = xr.date_range(str(year), freq="MS", periods=ds.time.size + 1)
+    time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
+    ds = ds.assign_coords(time=time_centered)
+    ds = ds.cf.add_bounds("time")
+
+    for v in ds.data_vars:
+        if "cell_methods" in ds[v].attrs:
+            del ds[v].attrs["cell_methods"]
+        if "_FillValue" in ds[v].attrs:
+            del ds[v].attrs["_FillValue"]
+    ds["time"].encoding = {
+        "units": f"hours since {start_date}",
+    }
+    ds["time"].attrs.update(
+        {
+            "axis": "T",
+            "long_name": "time",
+        }
+    )
+    ds.attrs["Conventions"] = "CF-1.8"
+
+    encoding = {var: {"_FillValue": False} for var in ["rlat", "rlon", "lon", "lat"]}
+    comp = {"zlib": True, "complevel": 2}
+
+    encoding_compression = {
+        var: comp
+        for var in ds.data_vars
+        if var not in ("time", "time_bounds", "time_bnds")
+    }
+    encoding.update(encoding_compression)
+
+    with ProgressBar():
+        ds.to_netcdf(output_file, encoding=encoding)
+    return output_file
+
 
 def process_hirham(
-        data_dir: Union[str, Path], output_file: Union[str, Path], base_url: str, max_workers: int = 4
+    data_dir: Union[str, Path],
+    output_file: Union[str, Path],
+    base_url: str,
+    max_workers: int = 4,
+    start_year: int = 1980,
+    end_year: int = 2021,
 ) -> None:
     """
     Process HIRHAM data and save the output to a NetCDF file.
@@ -56,9 +145,7 @@ def process_hirham(
     None
     """
     print("Processing HIRHAM")
-    
-    start_year = 1980
-    end_year = 2021
+
     start_date = "1975"
 
     hirham_dir = data_dir / Path("hirham")
@@ -83,141 +170,82 @@ def process_hirham(
         max_workers=max_workers,
     )
 
-    for year in range(start_year, end_year):
-        print(f"Processing {year}")
-        output_file = hirham_nc_dir / Path(f"monthly_{year}.nc")
-        p = hirham_nc_dir / Path(str(year))
-        responses = sorted(p.glob("*.nc"))
-        ds = xr.open_mfdataset(responses, parallel=True, chunks="auto", engine="netcdf4")
-        ds = ds[list(hirham_vars_dict.keys()) + ["lat", "lon"]]
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = []
+        responses = []
+        for year in range(start_year, end_year):
+            futures.append(
+                executor.submit(process_year, year, output_dir=hirham_nc_dir)
+            )
+        for future in as_completed(futures):
+            try:
+                f = future.result()
+                responses.append(f)
+            except Exception as e:
+                print(f"An error occurred: {e}")
 
-        for v in ["lat", "lon", "gld", "rogl"]:
-            ds[v] = ds[v].swap_dims({"x": "rlon", "y": "rlat"})
-            if "_CoordinateAxisType" in ds[v].attrs:
-                del ds[v].attrs["_CoordinateAxisType"]
+    infiles = [
+        str((hirham_nc_dir / Path(f"monthly_{year}.nc")).absolute())
+        for year in range(start_year, end_year)
+    ]
+    infiles = " ".join(infiles)
+    print("Fill missing values")
+    ds = cdo.setmisstodis(input="-mergetime " + infiles, returnXDataset=True).squeeze()
+    ds = ds.rename_vars({"time_bnds": "time_bounds"})
 
-        for k, v in hirham_vars_dict.items():
-            if k in ds:
-                ds[k].attrs["units"] = v["units"]
-                if "missing_value" in ds[k].attrs:
-                    del ds[k].attrs["missing_value"]
-        time = xr.date_range(str(1980), freq="D", periods=ds.time.size + 1)
-        time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
-        ds = ds.assign_coords(time=time_centered)
+    for k, v in hirham_vars_dict.items():
+        if k in ds:
+            ds[k].attrs["units"] = v["units"]
+            if "missing_value" in ds[k].attrs:
+                del ds[k].attrs["missing_value"]
 
-        ds = ds.resample({"time":"MS"}).mean()
-        time = xr.date_range(str(year), freq="MS", periods=ds.time.size + 1)
-        time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
-        ds = ds.assign_coords(time=time_centered)
-        ds = ds.cf.add_bounds("time")
+    ds = ds.rename_vars({k: v["pism_name"] for k, v in hirham_vars_dict.items()})
+    time = xr.date_range(start_year, freq="MS", periods=ds.time.size + 1)
+    time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
 
-        for v in ds.data_vars:
-            if "cell_methods" in ds[v].attrs:
-                del ds[v].attrs["cell_methods"]
-            if "_FillValue" in ds[v].attrs:
-                del ds[v].attrs["_FillValue"]
-        ds["time"].encoding = {
-            "units": f"hours since {start_date}",
+    ds = ds.assign_coords(time=time_centered)
+    ds["time_bounds"].values = np.array([time[:-1], time[1:]]).T
+
+    # Use 1981 to 1985 to match the calendar / month lengths from 75 to 79
+    pre_ds = ds.sel(time=slice("1981", "1985"))
+    time = xr.date_range("1975", freq="MS", periods=pre_ds.time.size + 1)
+    time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
+
+    pre_ds = pre_ds.assign_coords(time=time_centered)
+    pre_ds["time_bounds"].values = np.array([time[:-1], time[1:]]).T
+    ds = xr.concat([pre_ds, ds], dim="time")
+
+    ds["time"].attrs.update(
+        {
+            "axis": "T",
+            "long_name": "time",
         }
-        ds["time"].attrs.update(
-            {
-                "axis": "T",
-                "long_name": "time",
-            }
-        )
-        ds.attrs["Conventions"] = "CF-1.8"
+    )
+    ds.attrs["Conventions"] = "CF-1.8"
 
-        encoding = {var: {"_FillValue": False} for var in ["rlat", "rlon", "lon", "lat"]}
-        comp = {"zlib": True, "complevel": 2}
+    time = xr.date_range("1975", freq="MS", periods=ds.time.size + 1)
+    time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
 
-        encoding_compression = {
-            var: comp
-            for var in ds.data_vars
-            if var not in ("time", "time_bounds", "time_bnds")
-        }
-        encoding.update(encoding_compression)
+    ds = ds.assign_coords(time=time_centered)
+    ds["time_bounds"].values = np.array([time[:-1], time[1:]]).T
+    ds["time"].encoding = {
+        "units": f"hours since {start_date}",
+    }
 
-        print(f"Writing to {output_file}")
-
-        with ProgressBar():
-            ds.to_netcdf(output_file, encoding=encoding)
-
-    # print("  ..loading files")
-    # ds = xr.open_mfdataset(
-    #     sorted(responses),
-    #     chunks="auto",
-    #     parallel=True,
-    #     engine="netcdf4",
-    #     decode_cf=False,
-    # ).squeeze()
-
-    # ds = ds[list(hirham_vars_dict.keys()) + ["lat", "lon"]]
-
-    # for v in ["lat", "lon", "gld", "rogl"]:
-    #     ds[v] = ds[v].swap_dims({"x": "rlon", "y": "rlat"})
-    #     if "_CoordinateAxisType" in ds[v].attrs:
-    #         del ds[v].attrs["_CoordinateAxisType"]
-
-    # for k, v in hirham_vars_dict.items():
-    #     if k in ds:
-    #         ds[k].attrs["units"] = v["units"]
-    #         if "missing_value" in ds[k].attrs:
-    #             del ds[k].attrs["missing_value"]
-
-    # time = xr.date_range(str(start_year), freq="D", periods=ds.time.size + 1)
-    # time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
-    # ds = ds.assign_coords(time=time_centered)
-    # ds = ds.cf.add_bounds("time")
-
-    # ds = ds.rename_vars({k: v["pism_name"] for k, v in hirham_vars_dict.items()})
-
-    # # Use 1981 to 1985 to match the calendar / month lengths from 75 to 79
-    # pre_ds = ds.sel(time=slice("1981", "1985"))
-    # time = xr.date_range("1975", freq="D", periods=pre_ds.time.size + 1)
-    # time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
-
-    # pre_ds = pre_ds.assign_coords(time=time_centered)
-    # pre_ds["time_bounds"].values = np.array([time[:-1], time[1:]]).T
-    # ds = xr.concat([pre_ds, ds], dim="time")
-
-    # ds["time"].attrs.update(
-    #     {
-    #         "axis": "T",
-    #         "long_name": "time",
-    #     }
-    # )
-    # ds.attrs["Conventions"] = "CF-1.8"
-
-    # mon_ds = ds.resample(time="MS").mean()
-    # time = xr.date_range(start_date, freq="MS", periods=mon_ds.time.size + 1)
-    # time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
-    # mon_ds = mon_ds.assign_coords(time=time_centered)
-    # mon_ds = mon_ds.cf.add_bounds("time")
-    # mon_ds["time_bounds"].values = np.array([time[:-1], time[1:]]).T
-    # mon_ds["time"].encoding = {
-    #     "units": f"hours since {start_date}",
-    # }
-
-    # mon_ds["time"].attrs.update(
-    #     {
-    #         "axis": "T",
-    #         "long_name": "time",
-    #     }
-    # )
-    # mon_ds.attrs["Conventions"] = "CF-1.8"
-
-    # encoding = {var: {"_FillValue": False} for var in ["rlat", "rlon", "lon", "lat"]}
-    # comp = {"zlib": True, "complevel": 2}
-    # encoding_compression = {
-    #     var: comp for var in ds.data_vars if var not in ("time", "time_bounds")
-    # }
-    # encoding.update(encoding_compression)
-
-    # with ProgressBar():
-    #     mon_ds.to_netcdf(output_file, encoding=encoding)
+    encoding = {var: {"_FillValue": False} for var in ["rlat", "rlon", "lon", "lat"]}
+    comp = {"zlib": True, "complevel": 2}
+    encoding_compression = {
+        var: comp for var in ds.data_vars if var not in ("time", "time_bounds")
+    }
+    encoding.update(encoding_compression)
+    print(f"Saving to {output_file}")
+    with ProgressBar():
+        ds.to_netcdf(output_file, encoding=encoding)
 
 
-def process_racmo(data_dir: Union[str, Path], output_file: Union[str, Path], max_workers: int = 4) -> None:
+def process_racmo(
+    data_dir: Union[str, Path], output_file: Union[str, Path], max_workers: int = 4
+) -> None:
     """
     Process RACMO data and save the output to a NetCDF file.
 
@@ -309,7 +337,13 @@ def process_racmo(data_dir: Union[str, Path], output_file: Union[str, Path], max
         ds.to_netcdf(output_file, encoding=encoding)
 
 
-def process_mar(data_dir: str, output_file: str, max_workers: int = 4) -> None:
+def process_mar(
+    data_dir: str,
+    output_file: str,
+    start_year: int = 1975,
+    end_year: int = 2023,
+    max_workers: int = 4,
+) -> None:
     """
     Process MAR data and save the output to a NetCDF file.
 
@@ -329,7 +363,7 @@ def process_mar(data_dir: str, output_file: str, max_workers: int = 4) -> None:
     mar_dir = data_dir / Path("mar")
     mar_dir.mkdir(parents=True, exist_ok=True)
     responses = download_mar(
-        mar_url, 1975, 2023, output_dir=mar_dir, max_workers=max_workers
+        mar_url, start_year, end_year, output_dir=mar_dir, max_workers=max_workers
     )
 
     ds = xr.open_mfdataset(
@@ -393,10 +427,18 @@ def process_mar(data_dir: str, output_file: str, max_workers: int = 4) -> None:
 
     encoding.update(encoding_compression)
 
-    print(f"Writing to {output_file}")
-
+    tmp_file = mar_dir / Path("tmp.nc")
     with ProgressBar():
-        ds.to_netcdf(output_file, encoding=encoding)
+        ds.to_netcdf(tmp_file, encoding=encoding)
+    print(f"Filling missing values and writing to {output_file}")
+    infile = str(tmp_file.absolute())
+    outfile = str(output_file.absolute())
+    cdo.setmisstodis(
+        input="-setgrid,grids/grid_mar_v3.14.txt " + infile,
+        output=outfile,
+        options="-f nc4 -z zip_2",
+    )
+    tmp_file.unlink()
 
 
 def download_file(url: str, output_path: Path) -> None:
@@ -625,11 +667,24 @@ if __name__ == "__main__":
         "gld": {"pism_name": "climatic_mass_balance", "units": "kg m-2 day-1"},
     }
 
-    # output_file = result_dir / Path("RACMO2.3p2_ERA5_FGRN055_1940_2023.nc")
-    # process_racmo(data_dir=result_dir, output_file=output_file, max_workers=max_workers)
+    output_file = result_dir / Path("RACMO2.3p2_ERA5_FGRN055_1940_2023.nc")
+    process_racmo(data_dir=result_dir, output_file=output_file, max_workers=max_workers)
 
-    # output_file = result_dir / Path("MARv3.14-monthly-ERA5_1975_2023.nc")
-    # process_mar(data_dir=result_dir, output_file=output_file, max_workers=max_workers)
+    output_file = result_dir / Path("MARv3.14-monthly-ERA5_1975_2023.nc")
+    process_mar(
+        data_dir=result_dir,
+        start_year=1975,
+        end_year=2023,
+        output_file=output_file,
+        max_workers=max_workers,
+    )
 
     output_file = result_dir / Path("HIRHAM5-monthly-ERA5_1975_2021.nc")
-    process_hirham(data_dir=result_dir, output_file=output_file, base_url=hirham_url, max_workers=max_workers)
+    process_hirham(
+        data_dir=result_dir,
+        start_year=1980,
+        end_year=2021,
+        output_file=output_file,
+        base_url=hirham_url,
+        max_workers=max_workers,
+    )
