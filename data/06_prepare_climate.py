@@ -68,7 +68,9 @@ def process_year(year: int, output_dir: Path, start_date: str = "1975-01-01") ->
     output_file = output_dir / Path(f"monthly_{year}.nc")
     p = output_dir / Path(str(year))
     responses = sorted(p.glob("*.nc"))
-    ds = xr.open_mfdataset(responses, parallel=True, chunks="auto", engine="netcdf4")
+    ds = xr.open_mfdataset(
+        responses, parallel=True, chunks={"time": -1}, engine="netcdf4"
+    )
     ds = ds[list(hirham_vars_dict.keys()) + ["lat", "lon"]]
 
     for v in ["lat", "lon", "gld", "rogl"]:
@@ -170,6 +172,7 @@ def process_hirham(
         max_workers=max_workers,
     )
 
+    print("Merging daily files and calculate monthly means.")
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = []
         responses = []
@@ -269,7 +272,7 @@ def process_racmo(
     ds = (
         xr.open_mfdataset(
             responses,
-            chunks="auto",
+            chunks={"time": -1},
             parallel=True,
             compat="override",
             engine="h5netcdf",
@@ -369,7 +372,7 @@ def process_mar(
     ds = xr.open_mfdataset(
         responses,
         preprocess=preprocess_time,
-        chunks="auto",
+        chunks={"time": -1},
         parallel=True,
         engine="h5netcdf",
         decode_cf=False,
@@ -477,6 +480,8 @@ def download_racmo(
     max_workers : int, optional
         The maximum number of threads to use for downloading, by default 4.
     """
+
+    print("Downloading RACMO")
     responses = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = []
@@ -516,6 +521,8 @@ def download_mar(
     max_workers : int, optional
         The maximum number of threads to use for downloading, by default 4.
     """
+
+    print(f"Downloading MAR from {base_url}")
     responses = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = []
@@ -552,6 +559,7 @@ def download_hirham(
     max_workers : int, optional
         The maximum number of threads to use for downloading, by default 4.
     """
+    print(f"Downloading HIRHAM5 from {base_url}")
     responses = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = []
@@ -594,7 +602,7 @@ def unzip_files(
             try:
                 future.result()
             except Exception as e:
-                print(f"An error occurred: {e}")
+                print(f"An error occurred: {e}", unzip_file)
 
     responses = list(output_dir.rglob("*.nc"))
     return responses
@@ -652,19 +660,19 @@ if __name__ == "__main__":
     mar_vars_dict: Dict[str, Dict[str, str]] = {
         "STcorr": {"pism_name": "ice_surface_temp", "units": "degC"},
         "T2Mcorr": {"pism_name": "air_temp", "units": "degC"},
-        "RUcorr": {"pism_name": "water_input_rate", "units": "kg m-2 month-1"},
-        "SMBcorr": {"pism_name": "climatic_mass_balance", "units": "kg m-2 month-1"},
+        "RUcorr": {"pism_name": "water_input_rate", "units": "kg m^-2 month^-1"},
+        "SMBcorr": {"pism_name": "climatic_mass_balance", "units": "kg m^-2 month^-1"},
     }
     racmo_vars_dict: Dict[str, Dict[str, str]] = {
-        "t2m": {"pism_name": "ice_surface_temp", "units": "K"},
-        "runoff": {"pism_name": "water_input_rate", "units": "kg m-2 month-1"},
-        "precip": {"pism_name": "precipitation", "units": "kg m-2 month-1"},
-        "smb": {"pism_name": "climatic_mass_balance", "units": "kg m-2 month-1"},
+        "t2m": {"pism_name": "ice_surface_temp", "units": "kelvin"},
+        "runoff": {"pism_name": "water_input_rate", "units": "kg m^-2 month^-1"},
+        "precip": {"pism_name": "precipitation", "units": "kg m^-2 month^-1"},
+        "smb": {"pism_name": "climatic_mass_balance", "units": "kg m^-2 month^-1"},
     }
     hirham_vars_dict: Dict[str, Dict[str, str]] = {
-        "tas": {"pism_name": "ice_surface_temp", "units": "K"},
-        "rogl": {"pism_name": "water_input_rate", "units": "kg m-2 day-1"},
-        "gld": {"pism_name": "climatic_mass_balance", "units": "kg m-2 day-1"},
+        "tas": {"pism_name": "ice_surface_temp", "units": "kelvin"},
+        "rogl": {"pism_name": "water_input_rate", "units": "kg m^-2 day^-1"},
+        "gld": {"pism_name": "climatic_mass_balance", "units": "kg m^-2 day^-1"},
     }
 
     output_file = result_dir / Path("RACMO2.3p2_ERA5_FGRN055_1940_2023.nc")
