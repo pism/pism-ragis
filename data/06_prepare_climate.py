@@ -83,77 +83,138 @@ def process_hirham(
         max_workers=max_workers,
     )
 
-    ds = xr.open_mfdataset(
-        responses,
-        chunks="auto",
-        parallel=True,
-        engine="netcdf4",
-        decode_cf=False,
-    ).squeeze()
+    for year in range(start_year, end_year):
+        print(f"Processing {year}")
+        output_file = hirham_nc_dir / Path(f"monthly_{year}.nc")
+        p = hirham_nc_dir / Path(str(year))
+        responses = sorted(p.glob("*.nc"))
+        ds = xr.open_mfdataset(responses, parallel=True, chunks="auto", engine="netcdf4")
+        ds = ds[list(hirham_vars_dict.keys()) + ["lat", "lon"]]
 
-    ds = ds[list(hirham_vars_dict.keys()) + ["lat", "lon"]]
+        for v in ["lat", "lon", "gld", "rogl"]:
+            ds[v] = ds[v].swap_dims({"x": "rlon", "y": "rlat"})
+            if "_CoordinateAxisType" in ds[v].attrs:
+                del ds[v].attrs["_CoordinateAxisType"]
 
-    for v in ["lat", "lon", "gld", "rogl"]:
-        ds[v] = ds[v].swap_dims({"x": "rlon", "y": "rlat"})
-        if "_CoordinateAxisType" in ds[v].attrs:
-            del ds[v].attrs["_CoordinateAxisType"]
+        for k, v in hirham_vars_dict.items():
+            if k in ds:
+                ds[k].attrs["units"] = v["units"]
+                if "missing_value" in ds[k].attrs:
+                    del ds[k].attrs["missing_value"]
+        time = xr.date_range(str(1980), freq="D", periods=ds.time.size + 1)
+        time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
+        ds = ds.assign_coords(time=time_centered)
 
-    for k, v in hirham_vars_dict.items():
-        if k in ds:
-            ds[k].attrs["units"] = v["units"]
-            if "missing_value" in ds[k].attrs:
-                del ds[k].attrs["missing_value"]
+        ds = ds.resample({"time":"MS"}).mean()
+        time = xr.date_range(str(year), freq="MS", periods=ds.time.size + 1)
+        time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
+        ds = ds.assign_coords(time=time_centered)
+        ds = ds.cf.add_bounds("time")
 
-    time = xr.date_range(str(start_year), freq="D", periods=ds.time.size + 1)
-    time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
-    ds = ds.assign_coords(time=time_centered)
-    ds = ds.cf.add_bounds("time")
-
-    ds = ds.rename_vars({k: v["pism_name"] for k, v in hirham_vars_dict.items()})
-
-    # Use 1981 to 1985 to match the calendar / month lengths from 75 to 79
-    pre_ds = ds.sel(time=slice("1981", "1985"))
-    time = xr.date_range("1975", freq="D", periods=pre_ds.time.size + 1)
-    time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
-    pre_ds = pre_ds.assign_coords(time=time_centered)
-    pre_ds["time_bounds"].values = np.array([time[:-1], time[1:]]).T
-    ds = xr.concat([pre_ds, ds], dim="time")
-
-    ds["time"].attrs.update(
-        {
-            "axis": "T",
-            "long_name": "time",
+        for v in ds.data_vars:
+            if "cell_methods" in ds[v].attrs:
+                del ds[v].attrs["cell_methods"]
+            if "_FillValue" in ds[v].attrs:
+                del ds[v].attrs["_FillValue"]
+        ds["time"].encoding = {
+            "units": f"hours since {start_date}",
         }
-    )
-    ds.attrs["Conventions"] = "CF-1.8"
+        ds["time"].attrs.update(
+            {
+                "axis": "T",
+                "long_name": "time",
+            }
+        )
+        ds.attrs["Conventions"] = "CF-1.8"
 
-    mon_ds = ds.resample(time="MS").mean()
-    time = xr.date_range(start_date, freq="MS", periods=mon_ds.time.size + 1)
-    time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
-    mon_ds = mon_ds.assign_coords(time=time_centered)
-    mon_ds = mon_ds.cf.add_bounds("time")
-    mon_ds["time_bounds"].values = np.array([time[:-1], time[1:]]).T
-    mon_ds["time"].encoding = {
-        "units": f"hours since {start_date}",
-    }
+        encoding = {var: {"_FillValue": False} for var in ["rlat", "rlon", "lon", "lat"]}
+        comp = {"zlib": True, "complevel": 2}
 
-    mon_ds["time"].attrs.update(
-        {
-            "axis": "T",
-            "long_name": "time",
+        encoding_compression = {
+            var: comp
+            for var in ds.data_vars
+            if var not in ("time", "time_bounds", "time_bnds")
         }
-    )
-    mon_ds.attrs["Conventions"] = "CF-1.8"
+        encoding.update(encoding_compression)
 
-    encoding = {var: {"_FillValue": False} for var in ["rlat", "rlon", "lon", "lat"]}
-    comp = {"zlib": True, "complevel": 2}
-    encoding_compression = {
-        var: comp for var in ds.data_vars if var not in ("time", "time_bounds")
-    }
-    encoding.update(encoding_compression)
+        print(f"Writing to {output_file}")
 
-    with ProgressBar():
-        mon_ds.to_netcdf(output_file, encoding=encoding)
+        with ProgressBar():
+            ds.to_netcdf(output_file, encoding=encoding)
+
+    # print("  ..loading files")
+    # ds = xr.open_mfdataset(
+    #     sorted(responses),
+    #     chunks="auto",
+    #     parallel=True,
+    #     engine="netcdf4",
+    #     decode_cf=False,
+    # ).squeeze()
+
+    # ds = ds[list(hirham_vars_dict.keys()) + ["lat", "lon"]]
+
+    # for v in ["lat", "lon", "gld", "rogl"]:
+    #     ds[v] = ds[v].swap_dims({"x": "rlon", "y": "rlat"})
+    #     if "_CoordinateAxisType" in ds[v].attrs:
+    #         del ds[v].attrs["_CoordinateAxisType"]
+
+    # for k, v in hirham_vars_dict.items():
+    #     if k in ds:
+    #         ds[k].attrs["units"] = v["units"]
+    #         if "missing_value" in ds[k].attrs:
+    #             del ds[k].attrs["missing_value"]
+
+    # time = xr.date_range(str(start_year), freq="D", periods=ds.time.size + 1)
+    # time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
+    # ds = ds.assign_coords(time=time_centered)
+    # ds = ds.cf.add_bounds("time")
+
+    # ds = ds.rename_vars({k: v["pism_name"] for k, v in hirham_vars_dict.items()})
+
+    # # Use 1981 to 1985 to match the calendar / month lengths from 75 to 79
+    # pre_ds = ds.sel(time=slice("1981", "1985"))
+    # time = xr.date_range("1975", freq="D", periods=pre_ds.time.size + 1)
+    # time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
+
+    # pre_ds = pre_ds.assign_coords(time=time_centered)
+    # pre_ds["time_bounds"].values = np.array([time[:-1], time[1:]]).T
+    # ds = xr.concat([pre_ds, ds], dim="time")
+
+    # ds["time"].attrs.update(
+    #     {
+    #         "axis": "T",
+    #         "long_name": "time",
+    #     }
+    # )
+    # ds.attrs["Conventions"] = "CF-1.8"
+
+    # mon_ds = ds.resample(time="MS").mean()
+    # time = xr.date_range(start_date, freq="MS", periods=mon_ds.time.size + 1)
+    # time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
+    # mon_ds = mon_ds.assign_coords(time=time_centered)
+    # mon_ds = mon_ds.cf.add_bounds("time")
+    # mon_ds["time_bounds"].values = np.array([time[:-1], time[1:]]).T
+    # mon_ds["time"].encoding = {
+    #     "units": f"hours since {start_date}",
+    # }
+
+    # mon_ds["time"].attrs.update(
+    #     {
+    #         "axis": "T",
+    #         "long_name": "time",
+    #     }
+    # )
+    # mon_ds.attrs["Conventions"] = "CF-1.8"
+
+    # encoding = {var: {"_FillValue": False} for var in ["rlat", "rlon", "lon", "lat"]}
+    # comp = {"zlib": True, "complevel": 2}
+    # encoding_compression = {
+    #     var: comp for var in ds.data_vars if var not in ("time", "time_bounds")
+    # }
+    # encoding.update(encoding_compression)
+
+    # with ProgressBar():
+    #     mon_ds.to_netcdf(output_file, encoding=encoding)
 
 
 def process_racmo(data_dir: Union[str, Path], output_file: Union[str, Path], max_workers: int = 4) -> None:

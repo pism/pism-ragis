@@ -146,7 +146,7 @@ def create_ds(
     ds = gp.GeoDataFrame(ds1, crs=crs)
     geom_valid = ds.geometry.make_valid()
     ds.geometry = geom_valid
-    ds_dissolved = ds.dissolve(crs=crs)
+    ds_dissolved = ds.dissolve()
     diff = ds2.difference(ds_dissolved.buffer(5))
     n = len(diff)
     diff_df = {"land_ice_area_fraction_retreat": np.ones(n)}
@@ -193,7 +193,7 @@ if __name__ == "__main__":
         default=450,
     )
     parser.add_argument(
-        "--n_jobs", help="""Number of parallel jobs.""", type=int, default=4
+        "--n_jobs", help="""Number of parallel jobs.""", type=int, default=8
     )
     options = parser.parse_args()
 
