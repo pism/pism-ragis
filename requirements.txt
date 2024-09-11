@@ -33,7 +33,6 @@ geocube
 geopandas
 cf-xarray
 cdo
-ncview
 gsl
 flox
 xdem
