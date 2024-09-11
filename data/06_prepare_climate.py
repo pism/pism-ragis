@@ -22,6 +22,7 @@ Prepare ITS_LIVE.
 # pylint: disable=unused-import,broad-exception-caught
 # mypy: ignore-errors
 
+import time
 import zipfile
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -39,9 +40,12 @@ from tqdm import tqdm
 from pism_ragis.processing import preprocess_time
 
 cdo = Cdo()
+cdo.debug = True
 
 
-def process_year(year: int, output_dir: Path, start_date: str = "1975-01-01") -> Path:
+def process_year(
+    year: int, output_dir: Path, vars_dict: Dict, start_date: str = "1975-01-01"
+) -> Path:
     """
     Process NetCDF files for a given year and generate a monthly averaged dataset.
 
@@ -71,14 +75,14 @@ def process_year(year: int, output_dir: Path, start_date: str = "1975-01-01") ->
     ds = xr.open_mfdataset(
         responses, parallel=True, chunks={"time": -1}, engine="netcdf4"
     )
-    ds = ds[list(hirham_vars_dict.keys()) + ["lat", "lon"]]
+    ds = ds[list(vars_dict.keys()) + ["lat", "lon"]]
 
     for v in ["lat", "lon", "gld", "rogl"]:
         ds[v] = ds[v].swap_dims({"x": "rlon", "y": "rlat"})
         if "_CoordinateAxisType" in ds[v].attrs:
             del ds[v].attrs["_CoordinateAxisType"]
 
-    for k, v in hirham_vars_dict.items():
+    for k, v in vars_dict.items():
         if k in ds:
             ds[k].attrs["units"] = v["units"]
             if "missing_value" in ds[k].attrs:
@@ -121,13 +125,122 @@ def process_year(year: int, output_dir: Path, start_date: str = "1975-01-01") ->
 
     with ProgressBar():
         ds.to_netcdf(output_file, encoding=encoding)
+    _ = [f.unlink() for f in p.glob("*.nc")]
+    p.rmdir()
     return output_file
+
+
+def process_hirham_cdo(
+    data_dir: Union[str, Path],
+    output_file: Union[str, Path],
+    base_url: str,
+    vars_dict: Dict,
+    overwrite: bool = False,
+    max_workers: int = 4,
+    start_year: int = 1980,
+    end_year: int = 2021,
+) -> None:
+    """
+    Process HIRHAM data and save the output to a NetCDF file.
+
+    Parameters
+    ----------
+    data_dir : str
+        Directory containing the input data.
+    output_file : str
+        Path to the output NetCDF file.
+
+    Returns
+    -------
+    None
+    """
+    print("Processing HIRHAM")
+
+    hirham_dir = data_dir / Path("hirham")
+    hirham_dir.mkdir(parents=True, exist_ok=True)
+    hirham_nc_dir = hirham_dir / Path("nc")
+    hirham_nc_dir.mkdir(parents=True, exist_ok=True)
+    hirham_zip_dir = hirham_dir / Path("zip")
+    hirham_zip_dir.mkdir(parents=True, exist_ok=True)
+
+    responses = download_hirham(
+        base_url,
+        start_year,
+        end_year,
+        output_dir=hirham_zip_dir,
+        max_workers=max_workers,
+    )
+
+    responses = unzip_files(
+        responses,
+        output_dir=hirham_nc_dir,
+        overwrite=overwrite,
+        max_workers=max_workers,
+    )
+
+    # Initialize an empty list to store the parts of the string
+    chname_parts = []
+
+    # Iterate over the dictionary items
+    for key, value in vars_dict.items():
+        chname_parts.append(key)
+        chname_parts.append(value["pism_name"])
+    chname = ",".join(chname_parts)
+
+    # Initialize an empty list to store the parts of the string
+    setattribute_parts = []
+
+    # Iterate over the dictionary items
+    for key, value in vars_dict.items():
+        setattribute_parts.append(f"""{key}@units='{value["units"]}'""")
+    setattribute = ",".join(setattribute_parts)
+
+    print("Merging daily files and calculate monthly means.")
+    for year in range(start_year, end_year):
+        p = hirham_nc_dir / Path(str(year))
+        responses = sorted(p.glob("*.nc"))
+        infiles = [str(p.absolute()) for p in responses]
+        infiles = " ".join(infiles)
+        ofile = hirham_nc_dir / Path(f"monthly_{year}.nc")
+        outfile = str(ofile.absolute())
+
+        start = time.time()
+        cdo.setmisstodis(
+            input=f"""-monmean -setreftime,1975-01-01 -settbounds,day -settaxis,"{year}-01-01" -chname,{chname} -setattribute,{setattribute} -setgrid,grids/grid_hirham.txt -selvar,{",".join(vars_dict.keys())} -mergetime """
+            + infiles,
+            output=outfile,
+            options=f"-f nc4 -z zip_2 -P {max_workers}",
+        )
+        end = time.time()
+        time_elapsed = end - start
+        print(f"Time elapsed {time_elapsed:.0f}s")
+
+    infiles = [
+        str((hirham_nc_dir / Path(f"monthly_{year}.nc")).absolute())
+        for year in range(start_year, end_year)
+    ]
+    infiles = " ".join(infiles)
+    ofile = cdo.mergetime(
+        input=infiles,
+        options=f"-f nc4 -z zip_2 -P {max_workers}",
+    )
+    outfile = str(output_file.absolute())
+    cdo.mergetime(
+        input="-settbounds,1mon -settaxis,1975-01-01,,1mon -selyear,1980/1984 "
+        + ofile
+        + " "
+        + ofile,
+        output=outfile,
+        options=f"-f nc4 -z zip_2 -P {max_workers}",
+    )
 
 
 def process_hirham(
     data_dir: Union[str, Path],
     output_file: Union[str, Path],
     base_url: str,
+    vars_dict: Dict,
+    overwrite: bool = False,
     max_workers: int = 4,
     start_year: int = 1980,
     end_year: int = 2021,
@@ -196,13 +309,13 @@ def process_hirham(
     ds = cdo.setmisstodis(input="-mergetime " + infiles, returnXDataset=True).squeeze()
     ds = ds.rename_vars({"time_bnds": "time_bounds"})
 
-    for k, v in hirham_vars_dict.items():
+    for k, v in vars_dict.items():
         if k in ds:
             ds[k].attrs["units"] = v["units"]
             if "missing_value" in ds[k].attrs:
                 del ds[k].attrs["missing_value"]
 
-    ds = ds.rename_vars({k: v["pism_name"] for k, v in hirham_vars_dict.items()})
+    ds = ds.rename_vars({k: v["pism_name"] for k, v in vars_dict.items()})
     time = xr.date_range(start_year, freq="MS", periods=ds.time.size + 1)
     time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
 
@@ -246,8 +359,71 @@ def process_hirham(
         ds.to_netcdf(output_file, encoding=encoding)
 
 
+def process_racmo_cdo(
+    data_dir: Union[str, Path],
+    output_file: Union[str, Path],
+    vars_dict: Dict,
+    max_workers: int = 4,
+) -> None:
+    """
+    Process RACMO data and save the output to a NetCDF file.
+
+    Parameters
+    ----------
+    data_dir : str
+        Directory containing the input data.
+    output_file : str
+        Path to the output NetCDF file.
+
+    Returns
+    -------
+    None
+    """
+    print("Processing RACMO")
+
+    racmo_dir = data_dir / Path("racmo")
+    racmo_dir.mkdir(parents=True, exist_ok=True)
+    responses = download_racmo(output_dir=racmo_dir, max_workers=max_workers)
+
+    infiles = [str(p.absolute()) for p in responses]
+    infiles = " ".join(infiles)
+    outfile = str(output_file)
+
+    # Initialize an empty list to store the parts of the string
+    chname_parts = []
+
+    # Iterate over the dictionary items
+    for key, value in vars_dict.items():
+        chname_parts.append(key)
+        chname_parts.append(value["pism_name"])
+    chname = ",".join(chname_parts)
+
+    # Initialize an empty list to store the parts of the string
+    setattribute_parts = []
+
+    # Iterate over the dictionary items
+    for key, value in vars_dict.items():
+        setattribute_parts.append(f"""{key}@units='{value["units"]}'""")
+    setattribute = ",".join(setattribute_parts)
+
+    start = time.time()
+    cdo.settbounds(
+        "1mon",
+        input=f"""-settaxis,1975-01-01,,1mon -chname,{chname} -setattribute,{setattribute} -setgrid,grids/grid_racmo.txt -selvar,{",".join(vars_dict.keys())} -merge """
+        + infiles,
+        output=outfile,
+        options=f"-f nc4 -z zip_2 -P {max_workers}",
+    )
+    end = time.time()
+    time_elapsed = end - start
+    print(f"Time elapsed {time_elapsed:.0f}s")
+
+
 def process_racmo(
-    data_dir: Union[str, Path], output_file: Union[str, Path], max_workers: int = 4
+    data_dir: Union[str, Path],
+    output_file: Union[str, Path],
+    vars_dict: Dict,
+    max_workers: int = 4,
 ) -> None:
     """
     Process RACMO data and save the output to a NetCDF file.
@@ -305,10 +481,10 @@ def process_racmo(
 
     del ds["smb"].attrs["standard_name"]
 
-    for k, v in racmo_vars_dict.items():
+    for k, v in vars_dict.items():
         ds[k].attrs["units"] = v["units"]
 
-    ds = ds.rename_vars({k: v["pism_name"] for k, v in racmo_vars_dict.items()})
+    ds = ds.rename_vars({k: v["pism_name"] for k, v in vars_dict.items()})
 
     for v in ds.data_vars:
         if "cell_methods" in ds[v].attrs:
@@ -340,9 +516,72 @@ def process_racmo(
         ds.to_netcdf(output_file, encoding=encoding)
 
 
+def process_mar_cdo(
+    data_dir: str,
+    output_file: str,
+    vars_dict: Dict,
+    start_year: int = 1975,
+    end_year: int = 2023,
+    max_workers: int = 4,
+) -> None:
+    """
+    Process MAR data and save the output to a NetCDF file.
+
+    Parameters
+    ----------
+    data_dir : str
+        Directory containing the input data.
+    output_file : str
+        Path to the output NetCDF file.
+
+    Returns
+    -------
+    None
+    """
+    print("Processing MAR")
+
+    mar_dir = data_dir / Path("mar")
+    mar_dir.mkdir(parents=True, exist_ok=True)
+    responses = download_mar(
+        mar_url, start_year, end_year, output_dir=mar_dir, max_workers=max_workers
+    )
+    infiles = [str(p.absolute()) for p in responses]
+    infiles = " ".join(infiles)
+    outfile = str(output_file)
+
+    # Initialize an empty list to store the parts of the string
+    chname_parts = []
+
+    # Iterate over the dictionary items
+    for key, value in vars_dict.items():
+        chname_parts.append(key)
+        chname_parts.append(value["pism_name"])
+    chname = ",".join(chname_parts)
+
+    # Initialize an empty list to store the parts of the string
+    setattribute_parts = []
+
+    # Iterate over the dictionary items
+    for key, value in vars_dict.items():
+        setattribute_parts.append(f"""{key}@units='{value["units"]}'""")
+    setattribute = ",".join(setattribute_parts)
+
+    start = time.time()
+    cdo.setmisstodis(
+        input=f"""-settbounds,1mon -settaxis,1975-01-01,,1mon -chname,{chname} -setattribute,{setattribute} -setgrid,grids/grid_mar_v3.14.txt -selvar,{",".join(vars_dict.keys())} -mergetime """
+        + infiles,
+        output=outfile,
+        options=f"-f nc4 -z zip_2 -P {max_workers}",
+    )
+    end = time.time()
+    time_elapsed = end - start
+    print(f"Time elapsed {time_elapsed:.0f}s")
+
+
 def process_mar(
     data_dir: str,
     output_file: str,
+    vars_dict: Dict,
     start_year: int = 1975,
     end_year: int = 2023,
     max_workers: int = 4,
@@ -384,13 +623,13 @@ def process_mar(
     start_date = "1975-01-01"
 
     # Fix global attribute encoding, xr.open_mfdataset seems to cause issues with some characters
-    ds = ds[list(mar_vars_dict.keys()) + ["time_bounds"]]
+    ds = ds[list(vars_dict.keys()) + ["time_bounds"]]
 
-    for k, v in mar_vars_dict.items():
+    for k, v in vars_dict.items():
         ds[k].attrs["units"] = v["units"]
         del ds[k].attrs["standard_name"]
 
-    ds = ds.rename_vars({k: v["pism_name"] for k, v in mar_vars_dict.items()})
+    ds = ds.rename_vars({k: v["pism_name"] for k, v in vars_dict.items()})
 
     ds["time"].encoding = {
         "units": f"hours since {start_date}",
@@ -676,11 +915,17 @@ if __name__ == "__main__":
     }
 
     output_file = result_dir / Path("RACMO2.3p2_ERA5_FGRN055_1940_2023.nc")
-    process_racmo(data_dir=result_dir, output_file=output_file, max_workers=max_workers)
+    process_racmo_cdo(
+        data_dir=result_dir,
+        output_file=output_file,
+        vars_dict=racmo_vars_dict,
+        max_workers=max_workers,
+    )
 
     output_file = result_dir / Path("MARv3.14-monthly-ERA5_1975_2023.nc")
-    process_mar(
+    process_mar_cdo(
         data_dir=result_dir,
+        vars_dict=mar_vars_dict,
         start_year=1975,
         end_year=2023,
         output_file=output_file,
@@ -688,8 +933,9 @@ if __name__ == "__main__":
     )
 
     output_file = result_dir / Path("HIRHAM5-monthly-ERA5_1975_2021.nc")
-    process_hirham(
+    process_hirham_cdo(
         data_dir=result_dir,
+        vars_dict=hirham_vars_dict,
         start_year=1980,
         end_year=2021,
         output_file=output_file,

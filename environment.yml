@@ -3,6 +3,9 @@ channels:
   - conda-forge
 dependencies:
   - python=3.11.6
+  - hdf5=*="*mpich*"
+  - cdo
+  - ncview
   - pre-commit
   - mypy
   - pylint

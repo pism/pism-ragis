@@ -1,5 +1,4 @@
-requests_mock
-numpy
+numpy<=2.0
 earthaccess
 bokeh
 dask[distributed]
@@ -33,8 +32,8 @@ rioxarray
 geocube
 geopandas
 cf-xarray
-nco
 cdo
+ncview
 gsl
-zarr
 flox
+xdem

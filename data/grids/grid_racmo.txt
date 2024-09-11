@@ -1,0 +1,11 @@
+gridtype = projection
+xsize = 438
+ysize = 566
+xfirst = -10.05
+xinc = 0.05
+yfirst = -14.4
+yinc = 0.05
+grid_mapping_name = rotated_latitude_longitude
+grid_north_pole_longitude = 142.5
+grid_north_pole_latitude = 18
+north_pole_grid_longitude = 0
