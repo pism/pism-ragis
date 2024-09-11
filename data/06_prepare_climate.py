@@ -17,7 +17,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 """
-Prepare ITS_LIVE.
+Prepare Climate.
 """
 # pylint: disable=unused-import,broad-exception-caught
 # mypy: ignore-errors
@@ -196,7 +196,7 @@ def process_hirham_cdo(
     setattribute = ",".join(setattribute_parts)
 
     print("Merging daily files and calculate monthly means.")
-    for year in range(start_year, end_year):
+    for year in range(start_year, end_year+1):
         p = hirham_nc_dir / Path(str(year))
         responses = sorted(p.glob("*.nc"))
         infiles = [str(p.absolute()) for p in responses]

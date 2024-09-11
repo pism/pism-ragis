@@ -1,10 +1,16 @@
 gridtype = projection
+xname = rlon
 xsize = 438
-ysize = 566
 xfirst = -10.05
 xinc = 0.05
+xunits = degree
+xstandardname = grid_longitue
+yname = rlat
+ysize = 566
 yfirst = -14.4
 yinc = 0.05
+yunits = degree
+ystandardname = grid_latitute
 grid_mapping_name = rotated_latitude_longitude
 grid_north_pole_longitude = 142.5
 grid_north_pole_latitude = 18
