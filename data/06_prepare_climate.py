@@ -196,7 +196,7 @@ def process_hirham_cdo(
     setattribute = ",".join(setattribute_parts)
 
     print("Merging daily files and calculate monthly means.")
-    for year in range(start_year, end_year+1):
+    for year in range(start_year, end_year + 1):
         p = hirham_nc_dir / Path(str(year))
         responses = sorted(p.glob("*.nc"))
         infiles = [str(p.absolute()) for p in responses]
@@ -215,24 +215,55 @@ def process_hirham_cdo(
         time_elapsed = end - start
         print(f"Time elapsed {time_elapsed:.0f}s")
 
+    start = time.time()
     infiles = [
         str((hirham_nc_dir / Path(f"monthly_{year}.nc")).absolute())
-        for year in range(start_year, end_year)
+        for year in range(start_year, end_year + 1)
     ]
     infiles = " ".join(infiles)
-    ofile = cdo.mergetime(
+    merged_ofile = cdo.mergetime(
         input=infiles,
         options=f"-f nc4 -z zip_2 -P {max_workers}",
     )
-    outfile = str(output_file.absolute())
-    cdo.mergetime(
-        input="-settbounds,1mon -settaxis,1975-01-01,,1mon -selyear,1980/1984 "
-        + ofile
-        + " "
-        + ofile,
-        output=outfile,
+    pre_1980 = cdo.settbounds(
+        "1mon", input=" -settaxis,1975-01-01,,1mon -selyear,1981/1985 " + merged_ofile
+    )
+    merged = cdo.mergetime(
+        input=pre_1980 + " " + merged_ofile,
         options=f"-f nc4 -z zip_2 -P {max_workers}",
     )
+    ds = cdo.settunits(
+        "days",
+        input="-settbounds,1mon -settaxis,1975-01-01,,1mon " + merged,
+        returnXDataset=True,
+    )
+
+    ds["rlat"].attrs.update({"standard_name": "grid_latitude"})
+    ds["rlon"].attrs.update({"standard_name": "grid_longitude"})
+    for v in ds.data_vars:
+        if "cell_methods" in ds[v].attrs:
+            del ds[v].attrs["cell_methods"]
+        if "_FillValue" in ds[v].attrs:
+            del ds[v].attrs["_FillValue"]
+
+    ds.attrs["Conventions"] = "CF-1.8"
+
+    encoding = {var: {"_FillValue": False} for var in ["rlat", "rlon"]}
+    comp = {"zlib": True, "complevel": 2}
+
+    encoding_compression = {
+        var: comp
+        for var in ds.data_vars
+        if var not in ("time", "time_bounds", "time_bnds")
+    }
+    encoding.update(encoding_compression)
+    print(f"Writing to {output_file}")
+    with ProgressBar():
+        ds.to_netcdf(output_file, encoding=encoding)
+
+    end = time.time()
+    time_elapsed = end - start
+    print(f"Time elapsed {time_elapsed:.0f}s")
 
 
 def process_hirham(
@@ -363,6 +394,8 @@ def process_racmo_cdo(
     data_dir: Union[str, Path],
     output_file: Union[str, Path],
     vars_dict: Dict,
+    start_year: int = 1975,
+    end_year: int = 2023,
     max_workers: int = 4,
 ) -> None:
     """
@@ -387,7 +420,6 @@ def process_racmo_cdo(
 
     infiles = [str(p.absolute()) for p in responses]
     infiles = " ".join(infiles)
-    outfile = str(output_file)
 
     # Initialize an empty list to store the parts of the string
     chname_parts = []
@@ -405,15 +437,37 @@ def process_racmo_cdo(
     for key, value in vars_dict.items():
         setattribute_parts.append(f"""{key}@units='{value["units"]}'""")
     setattribute = ",".join(setattribute_parts)
-
     start = time.time()
-    cdo.settbounds(
+    ds = cdo.settbounds(
         "1mon",
-        input=f"""-settaxis,1975-01-01,,1mon -chname,{chname} -setattribute,{setattribute} -setgrid,grids/grid_racmo.txt -selvar,{",".join(vars_dict.keys())} -merge """
+        input=f""" -chname,{chname} -setattribute,{setattribute} -setgrid,grids/grid_racmo.txt -sellevel,0 -selvar,{",".join(vars_dict.keys())} -selyear,{start_year}/{end_year} -merge """
         + infiles,
-        output=outfile,
-        options=f"-f nc4 -z zip_2 -P {max_workers}",
+        options=f"-f nc4 -z zip_2 -P {max_workers} --reduce_dim",
+        returnXDataset=True,
     )
+    ds["rlat"].attrs.update({"standard_name": "grid_latitude"})
+    ds["rlon"].attrs.update({"standard_name": "grid_longitude"})
+    for v in ds.data_vars:
+        if "cell_methods" in ds[v].attrs:
+            del ds[v].attrs["cell_methods"]
+        if "_FillValue" in ds[v].attrs:
+            del ds[v].attrs["_FillValue"]
+
+    ds.attrs["Conventions"] = "CF-1.8"
+
+    encoding = {var: {"_FillValue": False} for var in ["rlat", "rlon"]}
+    comp = {"zlib": True, "complevel": 2}
+
+    encoding_compression = {
+        var: comp
+        for var in ds.data_vars
+        if var not in ("time", "time_bounds", "time_bnds")
+    }
+    encoding.update(encoding_compression)
+    print(f"Writing to {output_file}")
+    with ProgressBar():
+        ds.to_netcdf(output_file, encoding=encoding)
+
     end = time.time()
     time_elapsed = end - start
     print(f"Time elapsed {time_elapsed:.0f}s")
@@ -914,9 +968,11 @@ if __name__ == "__main__":
         "gld": {"pism_name": "climatic_mass_balance", "units": "kg m^-2 day^-1"},
     }
 
-    output_file = result_dir / Path("RACMO2.3p2_ERA5_FGRN055_1940_2023.nc")
+    output_file = result_dir / Path("RACMO2.3p2_ERA5_FGRN055_1975_2023.nc")
     process_racmo_cdo(
         data_dir=result_dir,
+        start_year=1975,
+        end_year=2023,
         output_file=output_file,
         vars_dict=racmo_vars_dict,
         max_workers=max_workers,
