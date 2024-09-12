@@ -10,6 +10,6 @@ yfirst = -14
 yinc = 0.05
 yunits = degree
 grid_mapping_name = rotated_latitude_longitude
-grid_north_pole_longitude = -20
+grid_north_pole_longitude = 160
 grid_north_pole_latitude = 18
 north_pole_grid_longitude = 0
