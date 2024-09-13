@@ -28,11 +28,11 @@ from pathlib import Path
 from typing import Dict, Union
 
 import dask
-from dask.diagnostics import ProgressBar
 import numpy as np
 import rioxarray as rxr
 import xarray as xr
 import xdem
+from dask.diagnostics import ProgressBar
 
 from pism_ragis.processing import download_earthaccess_dataset
 

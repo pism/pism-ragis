@@ -17,6 +17,9 @@ classifiers = [
         ]
 dynamic = ["dependencies"]
 
+[project.scripts]
+compute_domain_bounds = "pism_ragis.tools:compute_domain_bounds"
+
 [tool.setuptools.packages.find]
 include = ["pism_ragis"]
 

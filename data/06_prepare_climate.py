@@ -197,6 +197,7 @@ def process_hirham_cdo(
 
     print("Merging daily files and calculate monthly means.")
     for year in range(start_year, end_year + 1):
+        print(f"..processing {year}")
         p = hirham_nc_dir / Path(str(year))
         responses = sorted(p.glob("*.nc"))
         infiles = [str(p.absolute()) for p in responses]

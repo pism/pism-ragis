@@ -23,12 +23,14 @@ Seasonal calving.
 """
 
 from argparse import ArgumentParser
-import xarray as xr
+from pathlib import Path
+from typing import Union
+
+import cf_xarray
 import numpy as np
 import pandas as pd
-import cf_xarray
-from typing import Union
-from pathlib import Path
+import xarray as xr
+
 
 # Create a time coordinate that spans the years 2000 to 2020
 # Define the smoothed step function
@@ -45,15 +47,32 @@ def smoothed_step_function(time, amplification_factor: float = 1.0):
         start_ramp_down = pd.Timestamp(f"{year}-09-01").dayofyear
         end_ramp_down = pd.Timestamp(f"{year}-10-01").dayofyear
         # Ramp up from 0 to 1
-        ramp_up_mask = (years == year) & (day_of_year >= start_ramp_up) & (day_of_year <= end_ramp_up)
-        values[ramp_up_mask] = (day_of_year[ramp_up_mask] - start_ramp_up) / (end_ramp_up - start_ramp_up)
+        ramp_up_mask = (
+            (years == year)
+            & (day_of_year >= start_ramp_up)
+            & (day_of_year <= end_ramp_up)
+        )
+        values[ramp_up_mask] = (day_of_year[ramp_up_mask] - start_ramp_up) / (
+            end_ramp_up - start_ramp_up
+        )
         # Stay at 1
-        stay_at_one_mask = (years == year) & (day_of_year > end_ramp_up) & (day_of_year < start_ramp_down)
+        stay_at_one_mask = (
+            (years == year)
+            & (day_of_year > end_ramp_up)
+            & (day_of_year < start_ramp_down)
+        )
         values[stay_at_one_mask] = amplification_factor
         # Ramp down from 1 to 0
-        ramp_down_mask = (years == year) & (day_of_year >= start_ramp_down) & (day_of_year <= end_ramp_down)
-        values[ramp_down_mask] = 1 - (day_of_year[ramp_down_mask] - start_ramp_down) / (end_ramp_down - start_ramp_down)
+        ramp_down_mask = (
+            (years == year)
+            & (day_of_year >= start_ramp_down)
+            & (day_of_year <= end_ramp_down)
+        )
+        values[ramp_down_mask] = 1 - (day_of_year[ramp_down_mask] - start_ramp_down) / (
+            end_ramp_down - start_ramp_down
+        )
     return values
+
 
 # set up the option parser
 parser = ArgumentParser()
@@ -87,19 +106,17 @@ time = xr.date_range(str(start_year), str(end_year), freq="D")
 time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
 zeros = np.zeros(len(time_centered))
 # Create an xarray.DataArray with the time coordinate and the array of zeros
-da = xr.DataArray(zeros, coords=[time_centered], dims=["time"], name="frac_calving_rate")
+da = xr.DataArray(
+    zeros, coords=[time_centered], dims=["time"], name="frac_calving_rate"
+)
 
 result_dir = Path("calving")
 result_dir.mkdir(parents=True, exist_ok=True)
-c = []
 for k, amplification_factor in enumerate(amplification_factors):
     filename = result_dir / Path(f"seasonal_calving_id_{k}_{start_year}_{end_year}.nc")
     print(f"Processing {filename}")
     # Apply the smoothed step function to the time coordinate
     ds = da.to_dataset().copy()
-    # if amplification_factor == -1.0:
-    #     ds["frac_calving_rate"] = np.ones_like(ds.time.values)
-    # else:
     data = smoothed_step_function(time_centered)
     if amplification_factor == -1.0:
         data *= 0
@@ -118,4 +135,3 @@ for k, amplification_factor in enumerate(amplification_factors):
     ds["frac_calving_rate"].attrs.update({"units": "1"})
     ds.attrs["Conventions"] = "CF-1.8"
     ds.to_netcdf(filename)
-

@@ -27,7 +27,7 @@ short2long: Dict[str, str] = {
 climate: Dict[int, str] = {
     0: "HIRHAM5-monthly-ERA5_1975_2021.nc",
     1: "MARv3.14-monthly-ERA5-1975_2023.nc",
-    2: "RACMO2.3p2_ERA5_FGRN055_1940_2023.nc"
+    2: "RACMO2.3p2_ERA5_FGRN055_1940_2023.nc",
 }
 gcms: Dict[int, str] = {
     0: "ACCESS1-3_rcp85",
