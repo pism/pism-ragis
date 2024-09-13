@@ -58,9 +58,26 @@ if __name__ == "__main__":
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Prepare climate forcing."
-    parser.add_argument("FILE", nargs=1, help="""netCDF file.""")
+    parser.add_argument(
+        "--base_resolution",
+        help="""Base resolution in meters. Default=150.""",
+        type=int,
+        default=150,
+    )
+    parser.add_argument(
+        "--resolution_multipliers",
+        help="""Resolution multipliers. Default="2 3 6 12 20 30".""",
+        type=int,
+        nargs="*",
+        default=[2, 3, 6, 8, 10, 12, 20, 30],
+    )
+    parser.add_argument("INFILE", nargs=1, help="""Input netCDF file.""")
+    parser.add_argument("OUTFILE", nargs=1, help="""Output netCDF file.""")
     options = parser.parse_args()
-    infile = options.FILE[-1]
+    base_resolution = options.base_resolution
+    multipliers = np.array(options.resolution_multipliers)
+    infile = options.INFILE[-1]
+    outfile = options.OUTFILE[-1]
     f = Path(infile).expanduser()
 
     ds = xr.open_dataset(f)
@@ -69,7 +86,8 @@ if __name__ == "__main__":
     y = ds.variables["y"][:]
 
     # set of grid resolutions, in meters
-    dx = 150 * np.array([3, 6, 12, 20, 60, 120])
+    dx = base_resolution * np.array(multipliers)
+    print(dx)
     print(f"resolutions: {dx} meters")
 
     # compute x_bnds for this set of resolutions
@@ -84,7 +102,7 @@ if __name__ == "__main__":
 
     # resulting set of -Mx values
     print(f"Mx values: {(2 * Lx) / dx}")
-    # resulting set of -Mx values
+    # resulting set of -My values
     print(f"My values: {(2 * Ly) / dx}")
 
     coords = {
@@ -144,4 +162,4 @@ if __name__ == "__main__":
     domain_ds.Polar_Stereographic.attrs["standard_parallel"] = 70.0
     domain_ds.Polar_Stereographic.attrs["straight_vertical_longitude_from_pole"] = -45
 
-    domain_ds.to_netcdf("domain.nc")
+    domain_ds.to_netcdf(outfile)
