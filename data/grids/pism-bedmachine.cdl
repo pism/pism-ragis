@@ -1,6 +1,5 @@
 netcdf domain {
 dimensions:
-  // length of the x dimension is not important
   x = 1 ;
   // length of the y dimension is not important
   y = 1 ;
