@@ -45,7 +45,7 @@ if __name__ == "__main__":
         help="""Resolution multipliers. Use "--" to seperate from positional arguments. Default="2 3 6 12 20 30".""",
         type=int,
         nargs="+",
-        default=[2, 3, 6, 8, 10, 12, 20, 30],
+        default=[1, 2, 3, 6, 8, 10, 12, 20, 30],
     )
 
     parser.add_argument(
