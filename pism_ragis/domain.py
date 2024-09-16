@@ -53,9 +53,9 @@ def new_range(x: np.array, dx: float):
     The function assumes that `x` is sorted in ascending order and that the spacing
     between consecutive elements in `x` is uniform.
     """
-    x_min = x[0]
-    x_max = x[-1]
-    dx_old = x[1] - x[0]
+    x_min = np.min(x)
+    x_max = np.max(x)
+    dx_old = np.abs(x[1] - x[0])
 
     # Note: add dx_old because the cell centered grid interpretation implies
     # that the domain extends by 0.5*dx_old past x_min and x_max
