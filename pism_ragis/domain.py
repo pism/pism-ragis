@@ -125,8 +125,6 @@ def create_domain(
         {
             "mapping": xr.DataArray(
                 data=0,
-                dims=["y", "x"],
-                coords=coords,
                 attrs={
                     "grid_mapping_name": "polar_stereographic",
                     "false_easting": 0.0,
@@ -139,9 +137,8 @@ def create_domain(
             ),
             "domain": xr.DataArray(
                 data=0,
-                dims=["y", "x"],
-                coords=coords,
                 attrs={
+                    "dimensions": "x y",
                     "grid_mapping": "mapping",
                 },
             ),
