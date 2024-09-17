@@ -53,8 +53,8 @@ def new_range(x: np.array, dx: float):
     The function assumes that `x` is sorted in ascending order and that the spacing
     between consecutive elements in `x` is uniform.
     """
-    x_min = x[0].min()
-    x_max = x[-1].max()
+    x_min = np.min(x)
+    x_max = np.max(x)
     dx_old = np.abs(x[1] - x[0])
 
     # Note: add dx_old because the cell centered grid interpretation implies
@@ -104,6 +104,7 @@ def create_domain(
             ["x"],
             [0],
             {
+                "bounds": "x_bnds",
                 "units": "m",
                 "axis": "X",
                 "bounds": "x_bnds",
@@ -115,6 +116,7 @@ def create_domain(
             ["y"],
             [0],
             {
+                "bounds": "y_bnds",
                 "units": "m",
                 "axis": "Y",
                 "bounds": "y_bnds",
