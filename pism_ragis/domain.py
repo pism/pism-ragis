@@ -104,6 +104,7 @@ def create_domain(
             ["x"],
             [1],
             {
+                "bounds": "x_bnds",
                 "units": "m",
                 "axis": "X",
                 "standard_name": "projection_x_coordinate",
@@ -114,6 +115,7 @@ def create_domain(
             ["y"],
             [1],
             {
+                "bounds": "y_bnds",
                 "units": "m",
                 "axis": "Y",
                 "standard_name": "projection_y_coordinate",
