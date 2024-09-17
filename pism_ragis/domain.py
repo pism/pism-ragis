@@ -53,9 +53,9 @@ def new_range(x: np.array, dx: float):
     The function assumes that `x` is sorted in ascending order and that the spacing
     between consecutive elements in `x` is uniform.
     """
-    x_min = x[0]
-    x_max = x[-1]
-    dx_old = x[1] - x[0]
+    x_min = x[0].min()
+    x_max = x[-1].max()
+    dx_old = np.abs(x[1] - x[0])
 
     # Note: add dx_old because the cell centered grid interpretation implies
     # that the domain extends by 0.5*dx_old past x_min and x_max
@@ -102,20 +102,22 @@ def create_domain(
     coords = {
         "x": (
             ["x"],
-            [1],
+            [0],
             {
                 "units": "m",
                 "axis": "X",
+                "bounds": "x_bnds",
                 "standard_name": "projection_x_coordinate",
                 "long_name": "x-coordinate in projected coordinate system",
             },
         ),
         "y": (
             ["y"],
-            [1],
+            [0],
             {
                 "units": "m",
                 "axis": "Y",
+                "bounds": "y_bnds",
                 "standard_name": "projection_y_coordinate",
                 "long_name": "y-coordinate in projected coordinate system",
             },
@@ -132,7 +134,7 @@ def create_domain(
                     "latitude_of_projection_origin": 90.0,
                     "scale_factor_at_projection_origin": 1.0,
                     "standard_parallel": 70.0,
-                    "straight_vertical_longitude_from_pole": -45,
+                    "straight_vertical_longitude_from_pole": -45.0,
                 },
             ),
             "domain": xr.DataArray(

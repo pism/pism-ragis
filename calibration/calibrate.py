@@ -122,7 +122,7 @@ if __name__ == "__main__":
         "--exstep",
         dest="exstep",
         help="Writing interval for spatial time series",
-        default="monthly",
+        default="yearly",
     )
     parser.add_argument(
         "--tsstep",
@@ -170,7 +170,7 @@ if __name__ == "__main__":
         "--data_dir",
         dest="data_dir",
         help="data directory",
-        default=abspath(join(script_directory, "../data_sets/")),
+        default=abspath(join(script_directory, "../data/")),
     )
     parser.add_argument(
         "--o_dir", dest="output_dir", help="output directory", default="test_dir"
@@ -201,25 +201,12 @@ if __name__ == "__main__":
         "--spatial_ts",
         dest="spatial_ts",
         choices=[
-            "basic",
+            "calibrate",
             "standard",
             "none",
-            "ismip6",
-            "strain",
-            "fractures",
-            "ragis",
-            "qaamerujup",
-            "dem",
         ],
         help="output size type",
-        default="ragis",
-    )
-    parser.add_argument(
-        "--hydrology",
-        dest="hydrology",
-        choices=["routing", "routing_steady", "diffuse"],
-        help="Basal hydrology model.",
-        default="diffuse",
+        default="none",
     )
     parser.add_argument(
         "--calving",
@@ -282,7 +269,6 @@ if __name__ == "__main__":
     tsstep = options.tsstep
     float_kill_calve_near_grounding_line = options.float_kill_calve_near_grounding_line
     horizontal_resolution = options.horizontal_resolution
-    hydrology = options.hydrology
 
     stress_balance = options.stress_balance
     ensemble_file = options.ensemble_file
@@ -459,14 +445,13 @@ done\n\n
                 "stress_balance.ice_free_thickness_standard": 5,
                 "input.forcing.time_extrapolation": "true",
                 "energy.ch_warming.enabled": "false",
-                "energy.bedrock_thermal.file": "$data_dir/bheatflux/Geothermal_heatflux_map_v2.1_g450m.nc",
+                "energy.bedrock_thermal.file": "$data_dir/bheatflux/geothermal_heat_flow_map_10km.nc",
             }
 
             outfile = f"g{horizontal_resolution}m_{experiment}.nc"
 
             general_params_dict["output.file"] = join(dirs["state"], outfile)
             general_params_dict["bootstrap"] = ""
-            #              general_params_dict["input.file"] = pism_dataname
             general_params_dict["i"] = boot_file
             if hasattr(combination, "input.regrid.file"):
                 regrid_file = (
@@ -591,6 +576,10 @@ done\n\n
                 )
                 climate_parameters["atmosphere.delta_T.file"] = climate_offset_file_p
                 climate_parameters["atmosphere.frac_P.file"] = climate_offset_file_p
+
+            if combination["climate"] in ("forcing_smb"):
+                climate_parameters["surface.force_to_thickness.file"] = boot_file
+                
             climate_params_dict = computing.generate_climate(
                 combination["climate"], **climate_parameters
             )

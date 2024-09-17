@@ -42,10 +42,10 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--resolution_multipliers",
-        help="""Resolution multipliers. Use "--" to seperate from positional arguments. Default="2 3 6 12 20 30".""",
+        help="""Resolution multipliers. Use "--" to seperate from positional arguments. Default="2 3 6 8 10 12 16 20 24 30".""",
         type=int,
         nargs="+",
-        default=[1, 2, 3, 6, 8, 10, 12, 20, 30],
+        default=[1, 2, 3, 6, 8, 10, 12, 16, 20, 24, 30],
     )
 
     parser.add_argument(
@@ -74,19 +74,19 @@ if __name__ == "__main__":
     print(f"resolutions: {dx} meters")
 
     # compute x_bnds for this set of resolutions
-    center, Lx, Mx = new_range(x.values, np.lcm.reduce(dx))
+    center, Lx, _ = new_range(x.values, np.lcm.reduce(dx))
     x_bnds = [center - Lx, center + Lx]
     print(f"new x bounds: {x_bnds}")
 
     # compute x_bnds for this set of resolutions
-    center, Ly, Mx = new_range(y.values, np.lcm.reduce(dx))
-    y_bnds = [center - Ly, center + Ly]
+    center, Ly, _ = new_range(y.values, np.lcm.reduce(dx))
+    y_bnds = np.minimum(center - Ly, center + Ly), np.maximum(center - Ly, center + Ly)
     print(f"new y bounds: {y_bnds}")
 
     # resulting set of -Mx values
-    print(f"Mx values: {(2 * Lx) / dx}")
+    print(f"Mx values: {(2 * abs(Lx)) / dx}")
     # resulting set of -My values
-    print(f"My values: {(2 * Ly) / dx}")
+    print(f"My values: {(2 * abs(Ly)) / dx}")
 
     domain_ds = create_domain(x_bnds, y_bnds)
     domain_ds.to_netcdf(outfile)

@@ -155,7 +155,7 @@ def create_ds(
         vector_data=diff_gp, geom=geom, resolution=(resolution, resolution)
     )
     ds = ds.fillna(0)
-    ds.land_ice_area_fraction_retreat["units"] = "1"
+    ds["land_ice_area_fraction_retreat"].attrs["units"] = "1"
 
     start = date.replace(day=1)
 
@@ -268,7 +268,7 @@ if __name__ == "__main__":
     fn = Path(f"pism_g{resolution}m_frontretreat_calfin_1972_2019.nc")
     p_fn = p / fn
 
-    print(f"Merging datasets and saving as {p_fn.name}")
+    print(f"Merging datasets and saving to {str(p_fn.absolute())}")
 
     result_filtered = [element for element in result if element is not None]
 

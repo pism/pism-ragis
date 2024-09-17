@@ -180,6 +180,11 @@ spatial_ts_vars["dem"] = [
     "flux_divergence",
 ]
 
+spatial_ts_vars["calibrate"] = [
+    "velsurf_mag",
+    "flux_divergence",
+]
+
 spatial_ts_vars["qaamerujup"] = [
     "climatic_mass_balance",
     "dHdt",
@@ -198,13 +203,6 @@ spatial_ts_vars["standard"] = [
     "bwat",
     "dHdt",
     "diffusivity",
-    "fracture_density",
-    "fracture_growth_rate",
-    "fracture_healing_rate",
-    "fracture_flow_enhancement",
-    "fracture_age",
-    "fracture_toughness",
-    "height_above_flotation",
     "grounding_line_flux",
     "frontal_melt_rate",
     "frontal_melt_retreat_rate",
@@ -212,7 +210,6 @@ spatial_ts_vars["standard"] = [
     "mask",
     "mass_fluxes",
     "sftgif",
-    "strain_rates",
     "subglacial_discharge",
     "taud_mag",
     "thk",
@@ -489,6 +486,7 @@ def generate_climate(climate, **kwargs):
             "surface.models": "pdd",
         },
         "given_smb": {"atmosphere.models": "given", "surface.models": "given"},
+        "forcing_smb": {"atmosphere.models": "given", "surface.models": "given,forcing"},
     }
 
     if climate in climate_dict:

@@ -48,6 +48,24 @@ sys.path.append(join(script_directory, "../pism_ragis"))
 import computing  # pylint: disable=C0413
 from systems import Systems  # pylint: disable=C0413
 
+grid_choices = [
+    18000,
+    9000,
+    6000,
+    4500,
+    3600,
+    3000,
+    2400,
+    1800,
+    1500,
+    1200,
+    900,
+    600,
+    450,
+    300,
+    150,
+]
+
 
 def create_offset_file(file_name: str, delta_T: float = 0.0, frac_P: float = 1.0):
     """
@@ -119,6 +137,14 @@ if __name__ == "__main__":
         help="""Here you can add command-line options""",
     )
     parser.add_argument(
+        "-d",
+        "--domain",
+        dest="domain",
+        choices=["gris", "gris_ext", "qaamerujup", "sermeq-kangaarsuup"],
+        help="sets the modeling domain",
+        default="gris",
+    )
+    parser.add_argument(
         "--exstep",
         dest="exstep",
         help="Writing interval for spatial time series",
@@ -146,19 +172,13 @@ if __name__ == "__main__":
         default=2,
     )
     parser.add_argument(
-        "-r",
-        "--horizontal_resolution",
-        dest="horizontal_resolution",
+        "-g",
+        "--grid",
+        dest="grid",
         type=int,
-        help="horizontal grid resolution in m",
+        choices=grid_choices,
+        help="horizontal grid resolution",
         default=1800,
-    )
-    parser.add_argument(
-        "-b",
-        "--boot_file",
-        dest="boot_file",
-        help="File to boot from",
-        default=None,
     )
     parser.add_argument(
         "--i_dir",
@@ -198,6 +218,14 @@ if __name__ == "__main__":
         default="debug",
     )
     parser.add_argument(
+        "-b",
+        "--bed_type",
+        dest="bed_type",
+        choices=computing.list_bed_types(),
+        help="output size type",
+        default="wc",
+    )
+    parser.add_argument(
         "--spatial_ts",
         dest="spatial_ts",
         choices=[
@@ -222,11 +250,6 @@ if __name__ == "__main__":
         default="vonmises_calving",
     )
     parser.add_argument(
-        "--grid_file",
-        help="PISM Grid file",
-        default=None,
-    )
-    parser.add_argument(
         "--stable_gl",
         dest="float_kill_calve_near_grounding_line",
         action="store_false",
@@ -239,6 +262,25 @@ if __name__ == "__main__":
         choices=["sia", "ssa+sia", "ssa", "blatter"],
         help="stress balance solver",
         default="ssa+sia",
+    )
+    parser.add_argument(
+        "--dataset_version",
+        dest="version",
+        choices=[
+            "2023_GIMP",
+            "2023_GRIMP",
+            "2023_RAGIS",
+            "2024_KRIG",
+            "2023-12_RAGIS",
+            "2024-02_RAGIS",
+            "1_GrIMP",
+            "2_GrIMP",
+            "3_GrIMP",
+            "4_GrIMP",
+            "5_GrIMP",
+        ],
+        help="input data set version",
+        default="2024-02_RAGIS",
     )
     parser.add_argument("--start", help="Simulation start year", default="1980-1-1")
     parser.add_argument("--end", help="Simulation end year", default="2020-1-1")
@@ -260,8 +302,7 @@ if __name__ == "__main__":
     input_dir = abspath(options.input_dir)
     data_dir = abspath(options.data_dir)
     output_dir = abspath(options.output_dir)
-    boot_file = options.boot_file
-    grid_file = options.grid_file
+
     compression_level = options.compression_level
     oformat = options.oformat
     osize = options.osize
@@ -271,20 +312,34 @@ if __name__ == "__main__":
 
     spatial_ts = options.spatial_ts
     test_climate_models = options.test_climate_models
+    bed_type = options.bed_type
     exstep = options.exstep
     tsstep = options.tsstep
     float_kill_calve_near_grounding_line = options.float_kill_calve_near_grounding_line
-    horizontal_resolution = options.horizontal_resolution
+    grid = options.grid
 
     stress_balance = options.stress_balance
+    version = options.version
     ensemble_file = options.ensemble_file
-    pism_exec = "pismr"
+    domain = options.domain
+    pism_exec = computing.generate_domain(domain)
 
     assert options.FILE is not None
     input_file = abspath(options.FILE[0])
 
+    if domain.lower() in ("greenland_ext", "gris_ext"):
+        pism_dataname = (
+            f"$data_dir/bed_dem/pism_Greenland_ext_{grid}m_v{version}_{bed_type}.nc"
+        )
+    else:
+        pism_dataname = (
+            f"$data_dir/bed_dem/pism_Greenland_{grid}m_v{version}_{bed_type}.nc"
+        )
+
     master_config_file = computing.get_path_to_config()
 
+    # Removed "thk" from regrid vars
+    # regridvars = "litho_temp,enthalpy,age,tillwat,bmelt,ice_area_specific_volume"
     regridvars = "litho_temp,enthalpy,age,tillwat,bmelt,ice_area_specific_volume,thk"
 
     dirs = {"output": "$output_dir"}
@@ -410,8 +465,10 @@ done\n\n
         name_options = {}
         name_options["id"] = combination["id"]
 
+        vversion = "v" + str(version)
         full_exp_name = "_".join(
             [
+                vversion,
                 "_".join(
                     ["_".join([k, str(v)]) for k, v in list(name_options.items())]
                 ),
@@ -420,6 +477,7 @@ done\n\n
 
         experiment = "_".join(
             [
+                vversion,
                 "_".join(
                     ["_".join([k, str(v)]) for k, v in list(name_options.items())]
                 ),
@@ -428,7 +486,7 @@ done\n\n
             ]
         )
 
-        script = join(scripts_dir, f"g{horizontal_resolution}m_{experiment}.sh")
+        script = join(scripts_dir, f"{domain}_g{grid}m_{experiment}.sh")
         scripts.append(script)
 
         for filename in script:
@@ -444,6 +502,9 @@ done\n\n
             pism = computing.generate_prefix_str(pism_exec)
 
             general_params_dict = {
+                "profile": join(
+                    dirs["performance"], f"""profile_${batch_system["job_id"]}.py"""
+                ),
                 "time.file": pism_timefile,
                 "output.format": oformat,
                 "output.compression_level": compression_level,
@@ -451,15 +512,15 @@ done\n\n
                 "stress_balance.ice_free_thickness_standard": 5,
                 "input.forcing.time_extrapolation": "true",
                 "energy.ch_warming.enabled": "false",
-                "energy.bedrock_thermal.file": "$data_dir/bheatflux/geothermal_heat_flow_map_10km.nc",
+                "energy.bedrock_thermal.file": "$data_dir/bheatflux/Geothermal_heatflux_map_v2.1_g450m.nc",
             }
 
-            outfile = f"g{horizontal_resolution}m_{experiment}.nc"
+            outfile = f"{domain}_g{grid}m_{experiment}.nc"
 
             general_params_dict["output.file"] = join(dirs["state"], outfile)
             general_params_dict["bootstrap"] = ""
             #              general_params_dict["input.file"] = pism_dataname
-            general_params_dict["i"] = boot_file
+            general_params_dict["i"] = pism_dataname
             if hasattr(combination, "input.regrid.file"):
                 regrid_file = (
                     f"""$data_dir/initial_states/{combination["input.regrid.file"]}"""
@@ -478,16 +539,7 @@ done\n\n
                     "output.sizes.medium"
                 ] = "sftgif,velsurf_mag,mask,usurf,bmelt"
 
-            grid = {}
-            grid["grid.file"] = grid_file
-            grid["grid.dx"] = f"{horizontal_resolution}m"
-            grid["grid.dy"] = f"{horizontal_resolution}m"
-            grid["grid.Lz"] = 4000
-            grid["grid.Lbz"] = 2000
-            grid["grid.Mz"] = 201
-            grid["grid.Mbz"] = 21
-
-            grid_params_dict = grid
+            grid_params_dict = computing.generate_grid_description(grid, domain)
 
             sb_params_dict: Dict[str, Union[str, int, float]] = {
                 "stress_balance.sia.enhancement_factor": combination[
