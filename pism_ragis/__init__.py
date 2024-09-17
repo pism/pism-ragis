@@ -8,6 +8,7 @@ __all__ = [
     "analysis",
     "domain",
     "observations",
+    "interpolation",
     "likelihood",
     "filtering",
     "processing",
