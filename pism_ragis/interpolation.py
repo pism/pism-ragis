@@ -27,7 +27,7 @@ import numpy as np
 import xarray as xr
 
 
-@xr.register_dataset_accessor("interp")
+@xr.register_dataarray_accessor("utils")
 class InterpolationMethods:
     """
     Interpolationes methods for xarray DataArray.
@@ -43,7 +43,7 @@ class InterpolationMethods:
 
     def __init__(self, xarray_obj: xr.DataArray):
         """
-        Initialize the InterpolationesMethods class.
+        Initialize the InterpolationMethods class.
 
         Parameters
         ----------
@@ -79,30 +79,32 @@ xarray_obj : xr.DataArray
     def fillna(
         self,
         dim: Optional[Union[str, Iterable[Hashable]]] = ["y", "x"],
+        eps: float = 1e-4,
         method: str = "laplace",
     ):
         """
         Fill missing values using Laplacian.
         """
         data = self._obj.to_numpy()
-        mask = np.array()
+        mask = self._obj.isnull()
         self._obj = xr.apply_ufunc(
             self._fillna,
             data.copy(),
             mask.copy(),
             input_core_dims=[dim, dim],
             output_core_dims=[dim],
-            kwargs={"method": method},
+            kwargs={"eps": eps, "method": method},
             vectorize=True,
+            dask="forbidden"
         )
         return self._obj
 
-    def _fillna(self, data, mask, method: str = "laplace"):
+    def _fillna(self, data, mask, eps: float = 1e-4, method: str = "laplace"):
         """
         Fill missing values.
         """
 
-        result = laplace(data, mask, -1, 1e-4)
+        result = laplace(data, mask, -1, eps)
 
         return result
 
@@ -186,6 +188,7 @@ def laplace(data, mask, eps1, eps2, initial_guess="mean", max_iter=10000):
     -------
     None
     """
+    data = data.copy()
     dimensions = data.shape
     rjac = rho_jacobi(dimensions)
     i, j = np.indices(dimensions)
@@ -251,6 +254,20 @@ def laplace(data, mask, eps1, eps2, initial_guess="mean", max_iter=10000):
             print(
                 f"Exiting with change={change}, anorm={anorm} after {n + 1} iteration(s)."
             )
-            return
+            return data
     print("Exceeded the maximum number of iterations.")
     return
+
+
+    # N = 201
+    # M = int(N * 1.5)
+    # R = 2
+    # x = np.linspace(-1, 1, N)
+    # y = np.linspace(-1, 1, M)
+    # xx, yy = np.meshgrid(x, y)
+    # zz = np.sin(2.5 * np.pi * yy) * np.cos(2.0 * np.pi * xx)
+    # tzz = zz.reshape(1, M, N).repeat(R, axis=0)
+    # mask = np.random.randint(0, 2, tzz.size, dtype=bool).reshape(tzz.shape)
+
+    # da = xr.DataArray(tzz, dims=["time", "y", "x"])
+    # da = da.where(mask, np.nan).chunk("auto")
