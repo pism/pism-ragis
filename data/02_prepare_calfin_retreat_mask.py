@@ -16,10 +16,11 @@
 # along with PISM; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
+# pylint: disable=unused-import,too-many-positional-arguments
+
 """
 Prepare CALFIN front retreat.
 """
-# pylint: disable=unused-import
 
 import time
 import warnings

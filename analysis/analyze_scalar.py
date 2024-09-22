@@ -16,7 +16,7 @@
 # along with PISM; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-# pylint: disable=unused-import
+# pylint: disable=unused-import,too-many-positional-arguments
 """
 Analyze RAGIS ensemble.
 """
@@ -243,6 +243,7 @@ def plot_obs_sims(
     filtering_var: str,
     filter_range: List[int] = [1990, 2019],
     fig_dir: Union[str, Path] = "figures",
+    reference_year: int = 1986,
     sim_alpha: float = 0.4,
     obs_alpha: float = 1.0,
     sigma: float = 2,
@@ -415,6 +416,7 @@ def plot_obs_sims_3(
     filtering_var: str,
     filter_range: List[int] = [1990, 2019],
     fig_dir: Union[str, Path] = "figures",
+    reference_year: int = 1986,
     sim_alpha: float = 0.4,
     obs_alpha: float = 1.0,
     sigma: float = 2,

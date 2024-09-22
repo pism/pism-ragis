@@ -111,6 +111,7 @@ exclude = '''
 [tool.pylint.messages_control]
 disable = """
     too-many-lines,
+    too-many-positional-arguments,
     no-else-return,
     bare-except
 """

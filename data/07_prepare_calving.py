@@ -32,9 +32,25 @@ import pandas as pd
 import xarray as xr
 
 
-# Create a time coordinate that spans the years 2000 to 2020
-# Define the smoothed step function
 def smoothed_step_function(time, amplification_factor: float = 1.0):
+    """
+    Generate a smoothed step function based on the day of the year.
+
+    This function creates a smoothed step function that ramps up from 0 to 1,
+    stays at 1, and then ramps down from 1 to 0 over specified periods of the year.
+
+    Parameters
+    ----------
+    time : pd.DatetimeIndex
+        A pandas DatetimeIndex representing the time series.
+    amplification_factor : float, optional
+        The factor by which the function value is amplified during the stay-at-one period, by default 1.0.
+
+    Returns
+    -------
+    np.ndarray
+        An array of the same length as `time` containing the smoothed step function values.
+    """
     # Convert time to day of year and year
     day_of_year = time.dayofyear
     years = time.year

@@ -21,10 +21,363 @@
 Module for data processing
 """
 
+import sys
 from typing import Hashable, Iterable, Optional, Union
 
 import numpy as np
+import petsc4py
 import xarray as xr
+from petsc4py import PETSc
+from scipy.sparse import coo_matrix, csc_matrix, diags
+from scipy.sparse.linalg import spsolve
+
+petsc4py.init(sys.argv)
+
+
+def assemble_matrix(mask):
+    """Assemble the matrix corresponding to the standard 5-point stencil
+    approximation of the Laplace operator on the domain defined by
+    mask == True, where mask is a 2D NumPy array.
+
+    Uses zero Neumann BC at grid edges.
+
+    The grid spacing is ignored, which is equivalent to assuming equal
+    spacing in x and y directions.
+    """
+    PETSc.Sys.Print("Assembling the matrix...")
+    # grid size
+    nrow, ncol = mask.shape
+    # create sparse matrix
+    A = PETSc.Mat()
+    A.create(PETSc.COMM_WORLD)
+    A.setSizes([nrow * ncol, nrow * ncol])
+    A.setType("aij")  # sparse
+    A.setPreallocationNNZ(5)
+
+    # precompute values for setting
+    # diagonal and non-diagonal entries
+    diagonal = 4.0
+    offdx = -1.0
+    offdy = -1.0
+
+    def R(i, j):
+        "Map from the (row,column) pair to the linear row number."
+        return i * ncol + j
+
+    # loop over owned block of rows on this
+    # processor and insert entry values
+    row_start, row_end = A.getOwnershipRange()
+    for row in range(row_start, row_end):
+        i = row // ncol  # map row number to
+        j = row - i * ncol  # grid coordinates
+
+        if mask[i, j] == False:
+            A[row, row] = diagonal
+            continue
+
+        D = diagonal
+
+        # i
+        if i == 0:  # top row
+            D += offdy
+
+        if i > 0:  # interior
+            col = R(i - 1, j)
+            A[row, col] = offdx
+
+        if i < nrow - 1:  # interior
+            col = R(i + 1, j)
+            A[row, col] = offdx
+
+        if i == nrow - 1:  # bottom row
+            D += offdy
+
+        # j
+        if j == 0:  # left-most column
+            D += offdx
+
+        if j > 0:  # interior
+            col = R(i, j - 1)
+            A[row, col] = offdy
+
+        if j < ncol - 1:  # interior
+            col = R(i, j + 1)
+            A[row, col] = offdy
+
+        if j == ncol - 1:  # right-most column
+            D += offdx
+
+        A[row, row] = D
+
+    # communicate off-processor values
+    # and setup internal data structures
+    # for performing parallel operations
+    A.assemblyBegin()
+    A.assemblyEnd()
+
+    PETSc.Sys.Print("done.")
+    return A
+
+
+def assemble_rhs(rhs, X):
+    """Assemble the right-hand side of the system approximating the
+    Laplace equation.
+
+    Modifies rhs in place; sets Dirichlet BC using X where X.mask ==
+    False.
+    """
+    nrow, ncol = X.shape
+    row_start, row_end = rhs.getOwnershipRange()
+
+    # The right-hand side is zero everywhere except for Dirichlet
+    # nodes.
+    rhs.set(0.0)
+
+    for row in range(row_start, row_end):
+        i = row // ncol  # map row number to
+        j = row - i * ncol  # grid coordinates
+
+        if X.mask[i, j] == False:
+            rhs[row] = 4.0 * X[i, j]
+
+    rhs.assemble()
+
+
+def create_solver():
+    "Create the KSP solver"
+    # create linear solver
+    ksp = PETSc.KSP()
+    ksp.create(PETSc.COMM_WORLD)
+
+    # Use algebraic multigrid:
+    pc = ksp.getPC()
+    pc.setType(PETSc.PC.Type.GAMG)
+    ksp.setFromOptions()
+
+    ksp.setInitialGuessNonzero(True)
+
+    return ksp
+
+
+def _fill_missing_petsc(field, matrix=None):
+    """
+    Fill missing values in a NumPy array 'field' using the matrix
+    'matrix' approximating the Laplace operator.
+    """
+
+    ksp = create_solver()
+
+    if matrix is None:
+        A = assemble_matrix(field.mask)
+    else:
+        # PETSc.Sys.Print("Reusing the matrix...")
+        A = matrix
+
+    # obtain solution & RHS vectors
+    x, b = A.getVecs()
+
+    assemble_rhs(b, field)
+
+    initial_guess = np.mean(field)
+
+    # set the initial guess
+    x.set(initial_guess)
+
+    ksp.setOperators(A)
+
+    # Solve Ax = b
+    # PETSc.Sys.Print("Solving...")
+    ksp.solve(b, x)
+    # PETSc.Sys.Print("done.")
+
+    # transfer solution to processor 0
+    vec0, scatter = create_scatter(x)
+    scatter_to_0(x, vec0, scatter)
+
+    return vec0, A
+
+
+def fill_missing_petsc(data):
+    """
+    Fill missing values in a NumPy array 'field' using the matrix
+    'matrix' approximating the Laplace operator.
+    """
+    arr, A = _fill_missing_petsc(data)
+    if PETSc.COMM_WORLD.getRank() == 0:
+        data_filled = arr[:].reshape(data.shape)
+    return data_filled
+
+
+def create_scatter(vector):
+    "Create the scatter to processor 0."
+    comm = vector.getComm()
+    rank = comm.getRank()
+    scatter, V0 = PETSc.Scatter.toZero(vector)
+    scatter.scatter(vector, V0, False, PETSc.Scatter.Mode.FORWARD)
+    comm.barrier()
+
+    return V0, scatter
+
+
+def scatter_to_0(vector, vector_0, scatter):
+    "Scatter a distributed 'vector' to 'vector_0' on processor 0 using 'scatter'."
+    comm = vector.getComm()
+    scatter.scatter(vector, vector_0, False, PETSc.Scatter.Mode.FORWARD)
+    comm.barrier()
+
+
+def scatter_from_0(vector_0, vector, scatter):
+    "Scatter 'vector_0' on processor 0 to a distributed 'vector' using 'scatter'."
+    comm = vector.getComm()
+    scatter.scatter(vector, vector_0, False, PETSc.Scatter.Mode.REVERSE)
+    comm.barrier()
+
+
+def create_laplacian_matrix(
+    interior_points: np.ndarray, mask: np.ndarray, n: int, m: int
+) -> csc_matrix:
+    """
+    Create the Laplacian matrix for the given interior points and mask.
+
+    Parameters
+    ----------
+    interior_points : np.ndarray
+        Array of interior points where the mask is False.
+    mask : np.ndarray
+        Boolean mask indicating the missing values.
+    n : int
+        Number of rows in the data array.
+    m : int
+        Number of columns in the data array.
+
+    Returns
+    -------
+    csc_matrix
+        The Laplacian matrix in CSC format.
+    """
+    row_indices = []
+    col_indices = []
+    data_values = []
+
+    for k, (i, j) in enumerate(interior_points):
+        row_indices.append(k)
+        col_indices.append(k)
+        data_values.append(-4)
+
+        if i > 0:
+            if mask[i - 1, j]:
+                neighbor_index = np.where((interior_points == [i - 1, j]).all(axis=1))[
+                    0
+                ][0]
+                row_indices.append(k)
+                col_indices.append(neighbor_index)
+                data_values.append(1)
+        if i < n - 1:
+            if mask[i + 1, j]:
+                neighbor_index = np.where((interior_points == [i + 1, j]).all(axis=1))[
+                    0
+                ][0]
+                row_indices.append(k)
+                col_indices.append(neighbor_index)
+                data_values.append(1)
+        if j > 0:
+            if mask[i, j - 1]:
+                neighbor_index = np.where((interior_points == [i, j - 1]).all(axis=1))[
+                    0
+                ][0]
+                row_indices.append(k)
+                col_indices.append(neighbor_index)
+                data_values.append(1)
+        if j < m - 1:
+            if mask[i, j + 1]:
+                neighbor_index = np.where((interior_points == [i, j + 1]).all(axis=1))[
+                    0
+                ][0]
+                row_indices.append(k)
+                col_indices.append(neighbor_index)
+                data_values.append(1)
+
+    # Create the sparse matrix using COO format
+    L = coo_matrix(
+        (data_values, (row_indices, col_indices)),
+        shape=(len(interior_points), len(interior_points)),
+    ).tocsc()
+    return L
+
+
+def create_rhs_vector(
+    data: np.ndarray, interior_points: np.ndarray, mask: np.ndarray, n: int, m: int
+) -> np.ndarray:
+    """
+    Create the right-hand side vector for the linear system.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        The data array with missing values.
+    interior_points : np.ndarray
+        Array of interior points where the mask is False.
+    mask : np.ndarray
+        Boolean mask indicating the missing values.
+    n : int
+        Number of rows in the data array.
+    m : int
+        Number of columns in the data array.
+
+    Returns
+    -------
+    np.ndarray
+        The right-hand side vector.
+    """
+    b = np.zeros(len(interior_points))
+
+    for k, (i, j) in enumerate(interior_points):
+        if i > 0 and ~mask[i - 1, j]:
+            b[k] -= data[i - 1, j]
+        if i < n - 1 and ~mask[i + 1, j]:
+            b[k] -= data[i + 1, j]
+        if j > 0 and ~mask[i, j - 1]:
+            b[k] -= data[i, j - 1]
+        if j < m - 1 and ~mask[i, j + 1]:
+            b[k] -= data[i, j + 1]
+
+    return b
+
+
+def laplace(data: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """
+    Fill missing values in the data array using the Laplacian method.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        The data array with missing values.
+    mask : np.ndarray
+        Boolean mask indicating the missing values.
+
+    Returns
+    -------
+    np.ndarray
+        The data array with missing values filled.
+    """
+
+    data = data.copy()
+    n, m = data.shape
+    interior_points = np.argwhere(mask)
+
+    # Create the Laplacian matrix
+    L = create_laplacian_matrix(interior_points, mask, n, m)
+
+    # Create the right-hand side vector
+    b = create_rhs_vector(data, interior_points, mask, n, m)
+
+    # Solve the linear system
+    u = spsolve(L, b)
+    # Fill in the missing values
+    for k, (i, j) in enumerate(interior_points):
+        data[i, j] = u[k]
+
+    return data
 
 
 @xr.register_dataarray_accessor("utils")
@@ -79,195 +432,30 @@ xarray_obj : xr.DataArray
     def fillna(
         self,
         dim: Optional[Union[str, Iterable[Hashable]]] = ["y", "x"],
-        eps: float = 1e-4,
         method: str = "laplace",
     ):
         """
         Fill missing values using Laplacian.
         """
-        data = self._obj.to_numpy()
-        mask = self._obj.isnull()
+        da = self._obj.load()
+        data = da.to_numpy()
+        mask = da.isnull()
         self._obj = xr.apply_ufunc(
             self._fillna,
-            data.copy(),
-            mask.copy(),
+            data,
+            mask,
             input_core_dims=[dim, dim],
             output_core_dims=[dim],
-            kwargs={"eps": eps, "method": method},
             vectorize=True,
-            dask="forbidden"
+            dask="forbidden",
         )
         return self._obj
 
-    def _fillna(self, data, mask, eps: float = 1e-4, method: str = "laplace"):
+    def _fillna(self, data, mask):
         """
         Fill missing values.
         """
 
-        result = laplace(data, mask, -1, eps)
+        result = laplace(data, mask)
 
         return result
-
-
-def rho_jacobi(dimensions):
-    """
-    Calculate the Jacobi relaxation factor for a given grid size.
-
-    Parameters
-    ----------
-    dimensions : tuple of int
-        A tuple containing the dimensions of the grid (J, L).
-
-    Returns
-    -------
-    float
-        The Jacobi relaxation factor.
-    """
-    J, L = dimensions
-    return (np.cos(np.pi / J) + np.cos(np.pi / L)) / 2
-
-
-def fix_indices(Is, Js, dimensions):
-    """
-    Adjust indices to wrap around the grid, allowing the use of a 4-point stencil
-    for all points, even those on the edge of the grid.
-
-    Parameters
-    ----------
-    Is : numpy.ndarray
-        Array of row indices.
-    Js : numpy.ndarray
-        Array of column indices.
-    dimensions : tuple of int
-        A tuple containing the grid dimensions (M, N).
-
-    Returns
-    -------
-    tuple of numpy.ndarray
-        Adjusted row and column indices.
-    """
-    M, N = dimensions
-    Is[Is == M] = 0
-    Is[Is == -1] = M - 1
-    Js[Js == N] = 0
-    Js[Js == -1] = N - 1
-    return Is, Js
-
-
-def laplace(data, mask, eps1, eps2, initial_guess="mean", max_iter=10000):
-    """
-    Solve the Laplace equation using the SOR method with Chebyshev acceleration.
-
-    This function solves the Laplace equation using the Successive Over-Relaxation (SOR)
-    method with Chebyshev acceleration as described in 'Numerical Recipes in Fortran:
-    the art of scientific computing' by William H. Press et al -- 2nd edition, section 19.5.
-
-    Parameters
-    ----------
-    data : numpy.ndarray
-        A 2D array representing the computation grid.
-    mask : numpy.ndarray
-        A boolean array where True indicates points to be modified. For example, setting
-        mask to 'data == 0' results in only modifying points where 'data' is zero.
-    eps1 : float
-        The first stopping criterion. Iterations stop if the norm of the residual becomes
-        less than eps1 * initial_norm, where 'initial_norm' is the initial norm of the residual.
-        Setting eps1 to zero or a negative number disables this stopping criterion.
-    eps2 : float
-        The second stopping criterion. Iterations stop if the absolute value of the maximal
-        change in value between successive iterations is less than eps2. Setting eps2 to zero
-        or a negative number disables this stopping criterion.
-    initial_guess : float or str, optional
-        The initial guess used for all the values in the domain. The default is 'mean', which
-        uses the mean of all the present values as the initial guess for missing values.
-        initial_guess must be 'mean' or a number.
-    max_iter : int, optional
-        The maximum number of iterations allowed. The default is 10000.
-
-    Returns
-    -------
-    None
-    """
-    data = data.copy()
-    dimensions = data.shape
-    rjac = rho_jacobi(dimensions)
-    i, j = np.indices(dimensions)
-    # This splits the grid into 'odd' and 'even' parts, according to the checkerboard pattern:
-    odd = (i % 2 == 1) ^ (j % 2 == 0)
-    even = (i % 2 == 0) ^ (j % 2 == 0)
-    # odd and even parts _in_ the domain:
-    odd_part = list(zip(i[mask & odd], j[mask & odd]))
-    even_part = list(zip(i[mask & even], j[mask & even]))
-    # relative indices of the stencil points:
-    k = np.array([0, 1, 0, -1])
-    l = np.array([-1, 0, 1, 0])
-    parts = [odd_part, even_part]
-
-    try:
-        initial_guess = float(initial_guess)
-    except:
-        if initial_guess == "mean":
-            present = mask == False
-            initial_guess = np.mean(data[present])
-        else:
-            print(
-                f"ERROR: initial_guess of '{initial_guess}' is not supported (it should be a number or 'mean').\nNote: your data was not modified."
-            )
-            return
-
-    data[mask] = initial_guess
-    print(f"Using the initial guess of {initial_guess:.10f}.")
-
-    # compute the initial norm of residual
-    initial_norm = 0.0
-    for m in [0, 1]:
-        for i, j in parts[m]:
-            Is, Js = fix_indices(i + k, j + l, dimensions)
-            xi = np.sum(data[Is, Js]) - 4 * data[i, j]
-            initial_norm += abs(xi)
-    print(f"Initial norm of residual = {initial_norm}")
-    print(f"Criterion is (change < {eps2}) OR (res norm < {eps1} (initial norm)).")
-
-    omega = 1.0
-    # The main loop:
-    for n in np.arange(max_iter):
-        anorm = 0.0
-        change = 0.0
-        for m in [0, 1]:
-            for i, j in parts[m]:
-                # stencil points:
-                Is, Js = fix_indices(i + k, j + l, dimensions)
-                residual = sum(data[Is, Js]) - 4 * data[i, j]
-                delta = omega * 0.25 * residual
-                data[i, j] += delta
-
-                # record the maximal change and the residual norm:
-                anorm += abs(residual)
-                change = max(change, abs(delta))
-                # Chebyshev acceleration (see formula 19.5.30):
-                if n == 1 and m == 1:
-                    omega = 1.0 / (1.0 - 0.5 * rjac**2)
-                else:
-                    omega = 1.0 / (1.0 - 0.25 * rjac**2 * omega)
-        print(f"max change = {change:.10f}, residual norm = {anorm:.10f}")
-        if (anorm < eps1 * initial_norm) or (change < eps2):
-            print(
-                f"Exiting with change={change}, anorm={anorm} after {n + 1} iteration(s)."
-            )
-            return data
-    print("Exceeded the maximum number of iterations.")
-    return
-
-
-    # N = 201
-    # M = int(N * 1.5)
-    # R = 2
-    # x = np.linspace(-1, 1, N)
-    # y = np.linspace(-1, 1, M)
-    # xx, yy = np.meshgrid(x, y)
-    # zz = np.sin(2.5 * np.pi * yy) * np.cos(2.0 * np.pi * xx)
-    # tzz = zz.reshape(1, M, N).repeat(R, axis=0)
-    # mask = np.random.randint(0, 2, tzz.size, dtype=bool).reshape(tzz.shape)
-
-    # da = xr.DataArray(tzz, dims=["time", "y", "x"])
-    # da = da.where(mask, np.nan).chunk("auto")

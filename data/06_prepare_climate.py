@@ -19,7 +19,7 @@
 """
 Prepare Climate.
 """
-# pylint: disable=unused-import,broad-exception-caught
+# pylint: disable=unused-import,broad-exception-caught,too-many-positional-arguments
 # mypy: ignore-errors
 
 import time

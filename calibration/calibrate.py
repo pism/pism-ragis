@@ -579,7 +579,7 @@ done\n\n
 
             if combination["climate"] in ("forcing_smb"):
                 climate_parameters["surface.force_to_thickness.file"] = boot_file
-                
+
             climate_params_dict = computing.generate_climate(
                 combination["climate"], **climate_parameters
             )

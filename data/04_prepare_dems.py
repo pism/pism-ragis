@@ -19,7 +19,7 @@
 """
 Prepare GrIMP and BedMachine.
 """
-# pylint: disable=unused-import
+# pylint: disable=unused-import,assignment-from-none,unexpected-keyword-arg
 
 import time
 import warnings

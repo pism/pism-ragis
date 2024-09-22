@@ -486,7 +486,10 @@ def generate_climate(climate, **kwargs):
             "surface.models": "pdd",
         },
         "given_smb": {"atmosphere.models": "given", "surface.models": "given"},
-        "forcing_smb": {"atmosphere.models": "given", "surface.models": "given,forcing"},
+        "forcing_smb": {
+            "atmosphere.models": "given",
+            "surface.models": "given,forcing",
+        },
     }
 
     if climate in climate_dict:

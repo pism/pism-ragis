@@ -16,11 +16,13 @@
 # along with PISM; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
+# pylint: disable=unused-import,too-many-positional-arguments
+# mpypy --untyped-calls-exclude toml
+
 """
 Module provides System class
 """
 
-# mpypy --untyped-calls-exclude toml
 import math
 from pathlib import Path
 from typing import Any, Iterator, Union
