@@ -4,7 +4,7 @@ version = "0.2.2"
 maintainers = [{name = "Andy Aschwanden", email = "andy.aschwanden@gmail.com"}]
 description = """Home of NASA ROSES project "A Reanalysis of the Greenland Ice Sheet"""
 readme = "README.md"
-requires-python = ">3.8"
+requires-python = ">=3.10"
 license = {text = "GPL 3.0"}
 classifiers = [
         "License :: OSI Approved :: Apache Software License",

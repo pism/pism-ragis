@@ -18,7 +18,7 @@
 
 # mypy: disable-error-code="no-redef"
 """
-Tests for filtering module
+Tests for likelihood module.
 """
 
 import numpy as np
