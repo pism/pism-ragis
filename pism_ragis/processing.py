@@ -188,7 +188,32 @@ def preprocess_time(
     drop_dims: List[str] = ["nv4"],
 ):
     """
-    Add correct time and time_bounds.
+    Add correct time and time_bounds to the dataset.
+
+    This function processes the time coordinates of the dataset by extracting the year
+    from the filename using a regular expression, creating a time range, centering the time,
+    and adding time bounds. It also drops specified variables and dimensions from the dataset.
+
+    Parameters
+    ----------
+    ds : xarray.Dataset
+        The input dataset to be processed.
+    regexp : str, optional
+        The regular expression pattern to extract the year from the filename, by default "ERA5-(.+?).nc".
+    drop_vars : Union[List[str], None], optional
+        A list of variable names to be dropped from the dataset, by default None.
+    drop_dims : List[str], optional
+        A list of dimension names to be dropped from the dataset, by default ["nv4"].
+
+    Returns
+    -------
+    xarray.Dataset
+        The processed dataset with updated time coordinates and bounds, and specified variables and dimensions dropped.
+
+    Raises
+    ------
+    AssertionError
+        If the regular expression does not match any part of the filename.
     """
     m_year_re = re.search(regexp, ds.encoding["source"])
     assert m_year_re is not None
@@ -212,7 +237,34 @@ def preprocess_nc(
     drop_dims: List[str] = ["nv4"],
 ):
     """
-    Add experiment 'exp_id'
+    Add experiment identifier to the dataset.
+
+    This function processes the dataset by extracting an experiment identifier from the filename
+    using a regular expression, adding it as a new dimension, and optionally dropping specified
+    variables and dimensions from the dataset.
+
+    Parameters
+    ----------
+    ds : xarray.Dataset
+        The input dataset to be processed.
+    regexp : str, optional
+        The regular expression pattern to extract the experiment identifier from the filename, by default "id_(.+?)_".
+    dim : str, optional
+        The name of the new dimension to be added to the dataset, by default "exp_id".
+    drop_vars : Union[List[str], None], optional
+        A list of variable names to be dropped from the dataset, by default None.
+    drop_dims : List[str], optional
+        A list of dimension names to be dropped from the dataset, by default ["nv4"].
+
+    Returns
+    -------
+    xarray.Dataset
+        The processed dataset with the experiment identifier added as a new dimension, and specified variables and dimensions dropped.
+
+    Raises
+    ------
+    AssertionError
+        If the regular expression does not match any part of the filename.
     """
     m_id_re = re.search(regexp, ds.encoding["source"])
     ds = ds.expand_dims(dim)
@@ -241,7 +293,44 @@ def preprocess_scalar_nc(
     drop_dims: List[str] = ["nv4"],
 ):
     """
-    Add experiment 'exp_id'
+    Add experiment identifier and additional dimensions to the dataset.
+
+    This function processes the dataset by extracting an experiment identifier from the filename
+    using a regular expression, adding it along with ensemble and basin identifiers as new dimensions.
+    It also processes specific variables, merges configuration and statistics data, and optionally
+    drops specified variables and dimensions from the dataset.
+
+    Parameters
+    ----------
+    ds : xarray.Dataset
+        The input dataset to be processed.
+    regexp : str, optional
+        The regular expression pattern to extract the experiment identifier from the filename, by default "id_(.+?)_".
+    dim : str, optional
+        The name of the new experiment identifier dimension to be added to the dataset, by default "exp_id".
+    ensemble_dim : str, optional
+        The name of the new ensemble identifier dimension to be added to the dataset, by default "ensemble_id".
+    basin_dim : str, optional
+        The name of the new basin identifier dimension to be added to the dataset, by default "basin".
+    ensemble_id : str, optional
+        The value of the ensemble identifier to be added, by default "RAGIS".
+    basin : str, optional
+        The value of the basin identifier to be added, by default "GIS".
+    drop_vars : Union[List[str], None], optional
+        A list of variable names to be dropped from the dataset, by default None.
+    drop_dims : List[str], optional
+        A list of dimension names to be dropped from the dataset, by default ["nv4"].
+
+    Returns
+    -------
+    xarray.Dataset
+        The processed dataset with the experiment, ensemble, and basin identifiers added as new dimensions,
+        and specified variables and dimensions dropped.
+
+    Raises
+    ------
+    AssertionError
+        If the regular expression does not match any part of the filename.
     """
     config = ds["pism_config"]
     stats = ds["run_stats"]
