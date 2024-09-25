@@ -17,7 +17,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 """
-Tests for interpolation module
+Tests for interpolation module.
 """
 
 import time
@@ -86,7 +86,9 @@ def test_fill_missing_petsc():
     data = da.isel(time=0)
     mask = da.isel(time=0).isnull()
     data_masked = np.ma.array(data=data, mask=mask)
-    data_filled = fill_missing_petsc(data_masked)
+    data_filled = fill_missing_petsc(data_masked, method="direct")
+    np.testing.assert_array_almost_equal(data_true[0], data_filled, decimal=2)
+    data_filled = fill_missing_petsc(data_masked, method="iterative")
     np.testing.assert_array_almost_equal(data_true[0], data_filled, decimal=2)
 
 
@@ -125,10 +127,15 @@ def test_fill_missing_xr():
     AssertionError
         If the filled data does not match the true data within the specified decimal precision.
     """
-    da, data_true = create_dataarray()
+    da, data_true = create_dataarray(4, 4)
 
     data_filled = da.utils.fillna()
     # Fix test, decimal=0 is not good enough
+    np.testing.assert_array_almost_equal(data_true, data_filled, decimal=0)
+
+    data_filled = da.utils.fillna()
+    data_filled = data_filled.expand_dims("exp_id")
+    data_true = data_true.reshape(1, *data_true.shape)
     np.testing.assert_array_almost_equal(data_true, data_filled, decimal=0)
 
 
@@ -143,10 +150,11 @@ if __name__ == "__main__":
 
         data = da.isel(time=0).to_numpy()
         mask = da.isel(time=0).isnull().to_numpy()
+        data_masked = np.ma.array(data=data, mask=mask)
         data_filled = laplace(data, mask)
-        return data_filled, data_true
+        return data_filled, data_masked, data_true
 
-    def profile_petsc(D):
+    def profile_petsc(D, method: str = "iterative"):
         """
         Profile PETSc.
         """
@@ -155,24 +163,32 @@ if __name__ == "__main__":
         data = da.isel(time=0)
         mask = da.isel(time=0).isnull()
         data_masked = np.ma.array(data=data, mask=mask)
-        data_filled = fill_missing_petsc(data_masked)
-        return data_filled, data_true
+        data_filled = fill_missing_petsc(data_masked, method=method)
+        return data_filled, data_masked, data_true
 
     for D in [100, 200, 500, 1000, 2000, 5000]:
         start = time.time()
-        data_filled, data_true = profile_scipy(D)
+        data_filled, data_masked, data_true = profile_scipy(D)
         end = time.time()
         time_elapsed = end - start
         print(f"Scipy: filling a {D}x{D} matrix took {time_elapsed:.2f}s")
-        fig, axs = plt.subplots(1, 2)
+        fig, axs = plt.subplots(1, 3)
         axs[0].imshow(data_true[0])
-        axs[1].imshow(data_filled)
+        axs[1].imshow(data_true[0])
+        axs[2].imshow(data_filled)
         fig.savefig(f"laplace_scipy_true_vs_inter_{D}x{D}.png", dpi=300)
         start = time.time()
-        data_filled, data_true = profile_petsc(D)
+        data_filled, data_masked, data_true = profile_petsc(D, method="iterative")
         end = time.time()
         time_elapsed = end - start
-        print(f"PETSc: filling a {D}x{D} matrix took {time_elapsed:.2f}s")
+        print(
+            f"PETSc iterative solver: filling a {D}x{D} matrix took {time_elapsed:.2f}s"
+        )
+        start = time.time()
+        data_filled, data_masked, data_true = profile_petsc(D, method="direct")
+        end = time.time()
+        time_elapsed = end - start
+        print(f"PETSc direct solver: filling a {D}x{D} matrix took {time_elapsed:.2f}s")
         fig, axs = plt.subplots(1, 2)
         axs[0].imshow(data_true[0])
         axs[1].imshow(data_filled)

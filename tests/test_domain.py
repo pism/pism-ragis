@@ -17,7 +17,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 """
-Tests for domain module
+Tests for domain module.
 """
 
 import numpy as np
@@ -28,7 +28,7 @@ from pism_ragis.domain import create_domain, new_range
 
 def test_new_range():
     """
-    Test new_range function
+    Test new_range function.
     """
     x = np.array([0, 1, 2, 3, 4])
     dx = 1.0

@@ -20,7 +20,7 @@
 # mpypy --untyped-calls-exclude toml
 
 """
-Module provides System class
+Module provides System class.
 """
 
 import math
@@ -32,10 +32,28 @@ import toml
 
 class System:
     """
-    Class for a system
+    Class for a system.
+
+    This class represents a system configuration, which can be initialized
+    from a dictionary, a pathlib.Path, or a string path to a TOML file.
+
+    Parameters
+    ----------
+    d : Union[dict, Path, str]
+        The system configuration, which can be a dictionary, a pathlib.Path,
+        or a string path to a TOML file.
     """
 
     def __init__(self, d: Union[dict, Path, str]):
+        """
+        Initialize the System instance.
+
+        Parameters
+        ----------
+        d : Union[dict, Path, str]
+            The system configuration, which can be a dictionary, a pathlib.Path,
+            or a string path to a TOML file.
+        """
         self._values = {}
         if isinstance(d, dict):
             for key, value in d.items():
@@ -47,29 +65,75 @@ class System:
             print(f"{d} not recognized")
 
     def __getitem__(self, name) -> Any:
+        """
+        Get an item by key.
+
+        Parameters
+        ----------
+        name : str
+            The key of the item to retrieve.
+
+        Returns
+        -------
+        Any
+            The value associated with the key.
+        """
         return self._values[name]
 
     def __setitem__(self, key, value):
+        """
+        Set an item by key.
+
+        Parameters
+        ----------
+        key : str
+            The key of the item to set.
+        value : Any
+            The value to associate with the key.
+        """
         setattr(self, key, value)
 
     def __iter__(self) -> Iterator:
+        """
+        Return an iterator over the keys of the system.
+
+        Returns
+        -------
+        Iterator
+            An iterator over the keys of the system.
+        """
         return iter(self._values)
 
     def keys(self):
         """
-        Return keys
+        Return keys.
+
+        Returns
+        -------
+        KeysView
+            A view object that displays a list of all the keys.
         """
         return self._values.keys()
 
     def items(self):
         """
-        Return items
+        Return items.
+
+        Returns
+        -------
+        ItemsView
+            A view object that displays a list of all the key-value pairs.
         """
         return self._values.items()
 
     def values(self):
         """
-        Return values
+        Return values.
+
+        Returns
+        -------
+        ValuesView
+            A view object that displays a list of all the values.
         """
         return self._values.values()
 
@@ -82,7 +146,32 @@ class System:
         gid: Union[None, str] = None,
     ) -> str:
         """
-        Create a batch header from system and kwargs
+        Create a batch header from system and kwargs.
+
+        Parameters
+        ----------
+        partition : str, optional
+            The partition name (default is "chinook_new").
+        queue : str, optional
+            The queue name (default is "t2standard").
+        walltime : str, optional
+            The walltime for the job (default is "8:00:00").
+        n_cores : int, optional
+            The number of cores (default is 40).
+        gid : Union[None, str], optional
+            The group ID (default is None).
+
+        Returns
+        -------
+        str
+            The batch header as a string.
+
+        Raises
+        ------
+        AssertionError
+            If `n_cores` is not greater than 0.
+            If `partition` is not in the list of partitions.
+            If `queue` is not in the list of queues for the partition.
         """
         assert n_cores > 0
 
@@ -115,7 +204,12 @@ class System:
 
     def list_partitions(self) -> list:
         """
-        List all partitions
+        List all partitions.
+
+        Returns
+        -------
+        list
+            A list of partition names.
         """
         return [
             values["name"]
@@ -125,10 +219,21 @@ class System:
 
     def list_queues(self, partition: Union[None, str] = None) -> list:
         """
-        List available queues for partition. If no partition
-        is given return default partition
-        """
+        List available queues.
 
+        List available queues for partition. If no partition
+        is given return default partition.
+
+        Parameters
+        ----------
+        partition : Union[None, str], optional
+            The partition name (default is None).
+
+        Returns
+        -------
+        list
+            A list of queue names.
+        """
         if not partition:
             p = self["partitions"]["default"]
         else:
@@ -138,11 +243,24 @@ class System:
 
     def to_dict(self) -> dict:
         """
-        Returns self as dictionary
+        Return self as dictionary.
+
+        Returns
+        -------
+        dict
+            The system configuration as a dictionary.
         """
         return self._values
 
     def __repr__(self) -> str:
+        """
+        Return a string representation of the system.
+
+        Returns
+        -------
+        str
+            A string representation of the system.
+        """
         repr_str = ""
 
         repr_str += toml.dumps(self.to_dict())
@@ -158,67 +276,162 @@ System
 
 class Systems:
     """
-    Class to hold Systems of base class System
+    Class to hold Systems of base class System.
     """
 
     def __init__(self):
+        """
+        Initialize the Systems instance.
+
+        This initializes the Systems instance and adds systems from the default path.
+        """
         self._default_path: Path = Path("hpc-systems")
         self.add_from_path(self._default_path)
 
     @property
-    def default_path(self):
+    def default_path(self) -> Path:
         """
-        Return default path to glob for toml files
+        Return the default path to glob for TOML files.
+
+        Returns
+        -------
+        Path
+            The default path.
         """
         return self._default_path
 
     @default_path.setter
-    def default_path(self, value):
-        self._default_path = value
+    def default_path(self, value: Union[Path, str]):
+        """
+        Set the default path and add systems from the new path.
+
+        Parameters
+        ----------
+        value : Union[Path, str]
+            The new default path.
+        """
+        self._default_path = Path(value)
         self.add_from_path(self._default_path)
 
     def __getitem__(self, name) -> Any:
+        """
+        Get a system by name.
+
+        Parameters
+        ----------
+        name : str
+            The name of the system.
+
+        Returns
+        -------
+        Any
+            The system associated with the name.
+        """
         return self._values[name]
 
     def __setitem__(self, key, value):
+        """
+        Set a system by name.
+
+        Parameters
+        ----------
+        key : str
+            The name of the system.
+        value : Any
+            The system to associate with the name.
+        """
         setattr(self, key, value)
 
     def __iter__(self) -> Iterator:
+        """
+        Return an iterator over the systems.
+
+        Returns
+        -------
+        Iterator
+            An iterator over the systems.
+        """
         return iter(self._values)
 
     def keys(self):
         """
-        Return keys
+        Return the keys of the systems.
+
+        Returns
+        -------
+        KeysView
+            A view object that displays a list of all the keys.
         """
         return self._values.keys()
 
     def items(self):
         """
-        Return items
+        Return the items of the systems.
+
+        Returns
+        -------
+        ItemsView
+            A view object that displays a list of all the key-value pairs.
         """
         return self._values.items()
 
     def values(self):
         """
-        Return values
+        Return the values of the systems.
+
+        Returns
+        -------
+        ValuesView
+            A view object that displays a list of all the values.
         """
         return self._values.values()
 
     def __repr__(self) -> str:
+        """
+        Return a string representation of the systems.
+
+        Returns
+        -------
+        str
+            A string representation of the systems.
+        """
         return self.dump()
 
     def __len__(self) -> int:
+        """
+        Return the number of systems.
+
+        Returns
+        -------
+        int
+            The number of systems.
+        """
         return len(self.values())
 
     def list_systems(self) -> list:
         """
-        Return name of machines as list
+        Return the names of the systems as a list.
+
+        Returns
+        -------
+        list
+            A list of system names.
         """
         return list(self.keys())
 
     def add_system(self, system: System):
         """
-        Add a system
+        Add a system.
+
+        Parameters
+        ----------
+        system : System
+            The system to add.
+
+        Returns
+        -------
+        None or str
+            None if the system was added successfully, otherwise an error message.
         """
         machine = system["machine"]
         if machine not in self.keys():
@@ -234,6 +447,11 @@ class Systems:
         Add systems from a pathlib.Path or str.
 
         Use glob to add all files with suffix `toml`.
+
+        Parameters
+        ----------
+        path : Union[Path, str]
+            The path to add systems from.
         """
         p = Path(path).glob("*.toml")
         sys = {}
@@ -247,6 +465,10 @@ class Systems:
         """
         Add a system from a pathlib.Path or str.
 
+        Parameters
+        ----------
+        path : Union[Path, str]
+            The path to the TOML file to add the system from.
         """
         s = toml.load(path)
         machine = s["machine"]
@@ -254,7 +476,12 @@ class Systems:
 
     def dump(self) -> str:
         """
-        Dump class to string
+        Dump the systems to a string.
+
+        Returns
+        -------
+        str
+            A string representation of the systems.
         """
         repr_str = ""
         for s in self.values():

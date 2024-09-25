@@ -17,7 +17,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 """
-Tests for procesing module
+Tests for procesing module.
 """
 
 import numpy as np
@@ -97,14 +97,6 @@ def test_calculate_area():
 
     The test uses predefined latitude and longitude arrays and compares the function output with
     the expected output calculated manually.
-
-    Parameters
-    ----------
-    None
-
-    Returns
-    -------
-    None
     """
     # Define test inputs
     lat = np.array([0, 1, 2])

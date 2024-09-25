@@ -17,7 +17,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 """
-Compute domain bounds
+Compute domain bounds.
 """
 
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser

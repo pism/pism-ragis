@@ -17,10 +17,10 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 """
-Module for ensemble performance statistics
+Module for ensemble performance statistics.
 """
 
-from typing import Union
+from typing import List, Union
 
 import numpy as np
 import pandas as pd
@@ -28,8 +28,8 @@ import xarray as xr
 
 
 def run_stats(
-    infiles: list,
-    stats_vars: list = [
+    infiles: List[str],
+    stats_vars: List[str] = [
         "processor_hours",
         "wall_clock_hours",
         "model_years_per_processor_hour",
@@ -37,9 +37,27 @@ def run_stats(
     experiment: Union[str, None] = None,
 ) -> pd.DataFrame:
     """
-    Collect PISM run_stats for a list of files and returns a DataFrame
-    """
+    Collect PISM run_stats for a list of files and return a DataFrame.
 
+    Parameters
+    ----------
+    infiles : list of str
+        List of file paths to the input files.
+    stats_vars : list of str, optional
+        List of statistics variables to collect from the files. Default is
+        ["processor_hours", "wall_clock_hours", "model_years_per_processor_hour"].
+    experiment : str or None, optional
+        Name of the experiment to add as a column in the DataFrame. Default is None.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing the collected statistics.
+
+    Examples
+    --------
+    >>> run_stats(["file1.nc", "file2.nc"])
+    """
     dfs = []
     for m_file in infiles:
         with xr.open_dataset(m_file) as ds:

@@ -17,7 +17,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 """
-Test stats module
+Test stats module.
 """
 
 from glob import glob
@@ -30,7 +30,7 @@ from pism_ragis.stats import run_stats
 
 def test_run_stats():
     """
-    Test retrieving run_stats from PISM output file and return pd.DataFrame
+    Test retrieving run_stats from PISM output file and return pd.DataFrame.
     """
     infiles = sorted(
         glob("tests/data/ts_gris_g1200m_v2023_RAGIS_id_*_1980-1-1_2020-1-1.nc")

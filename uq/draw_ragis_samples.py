@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Uncertainty quantification using Latin Hypercube Sampling or Sobol Sequences
+Uncertainty quantification using Latin Hypercube Sampling or Sobol Sequences.
 """
 
 from argparse import ArgumentParser

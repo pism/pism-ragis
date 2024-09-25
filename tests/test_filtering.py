@@ -17,7 +17,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 """
-Tests for filtering module
+Tests for filtering module.
 """
 
 # from typing import Tuple
@@ -27,26 +27,6 @@ import pytest
 import xarray as xr
 
 from pism_ragis.filtering import sample_with_replacement, sample_with_replacement_xr
-
-# @pytest.fixture(name="sampling_data")
-# def fixture_create_sampling_data() -> Tuple[xr.Dataset, xr.Dataset]:
-#     n = 25
-#     m = 3
-#     r = 1
-#     x = np.linspace(-10, 10, n)
-#     X = np.tile(x, (r, m, 1)).T
-#     a = 2
-#     b = 4
-#     sigma_true = 2
-#     p = 2 / n
-
-
-# def Y_true(x, a, b):
-#     return a * x + b
-
-
-# def noise(sigma, size):
-#     return np.random.normal(0, sigma, size=size)
 
 
 @pytest.fixture(name="weights_da")
@@ -101,10 +81,6 @@ def test_sample_with_replacement_xr(weights_da: xr.DataArray) -> None:
     ----------
     weights_da : xr.DataArray
         The DataArray containing the weights for sampling.
-
-    Returns
-    -------
-    None
     """
     n_samples = 1_000
     seed = 42
@@ -114,10 +90,6 @@ def test_sample_with_replacement_xr(weights_da: xr.DataArray) -> None:
 def test_sample_with_replacement():
     """
     Test the sample_with_replacement function.
-
-    Returns
-    -------
-    None
     """
     weights = np.array([0.1, 0.2, 0.3, 0.4])
     exp_id = np.array([0, 1, 2, 3])

@@ -44,7 +44,6 @@ def assemble_matrix(mask):
     The grid spacing is ignored, which is equivalent to assuming equal
     spacing in x and y directions.
     """
-    PETSc.Sys.Print("Assembling the matrix...")
     # grid size
     nrow, ncol = mask.shape
     # create sparse matrix
@@ -115,7 +114,6 @@ def assemble_matrix(mask):
     A.assemblyBegin()
     A.assemblyEnd()
 
-    PETSc.Sys.Print("done.")
     return A
 
 
@@ -126,24 +124,32 @@ def assemble_rhs(rhs, X):
     Modifies rhs in place; sets Dirichlet BC using X where X.mask ==
     False.
     """
+    import numpy as np
+
     nrow, ncol = X.shape
     row_start, row_end = rhs.getOwnershipRange()
 
-    # The right-hand side is zero everywhere except for Dirichlet
-    # nodes.
+    # The right-hand side is zero everywhere except for Dirichlet nodes.
     rhs.set(0.0)
 
-    for row in range(row_start, row_end):
-        i = row // ncol  # map row number to
-        j = row - i * ncol  # grid coordinates
+    # Create a flat index array for the range of rows owned by this process
+    rows = np.arange(row_start, row_end, dtype=np.int32)
 
-        if X.mask[i, j] == False:
-            rhs[row] = 4.0 * X[i, j]
+    # Map row numbers to grid coordinates
+    i = rows // ncol
+    j = rows % ncol
+
+    # Find the indices where the mask is False
+    mask_indices = np.where(X.mask[i, j] == False)[0]
+
+    # Set the rhs values for the Dirichlet nodes
+    rhs_values = 4.0 * X[i[mask_indices], j[mask_indices]]
+    rhs.setValues(rows[mask_indices].astype(np.int32), rhs_values)
 
     rhs.assemble()
 
 
-def create_solver():
+def create_iterative_solver():
     "Create the KSP solver"
     # create linear solver
     ksp = PETSc.KSP()
@@ -159,13 +165,32 @@ def create_solver():
     return ksp
 
 
-def _fill_missing_petsc(field, matrix=None):
+def create_direct_solver():
+    "Create the KSP solver"
+    # create linear solver
+    ksp = PETSc.KSP()
+    ksp.create(PETSc.COMM_WORLD)
+
+    pc = ksp.getPC()
+    pc = ksp.setType("preonly")
+    ksp.getPC().setType("lu")
+    ksp.setFromOptions()
+
+    ksp.setInitialGuessNonzero(False)
+
+    return ksp
+
+
+def _fill_missing_petsc(field, matrix=None, method: str = "iterative"):
     """
     Fill missing values in a NumPy array 'field' using the matrix
     'matrix' approximating the Laplace operator.
     """
 
-    ksp = create_solver()
+    if method == "iterative":
+        ksp = create_iterative_solver()
+    else:
+        ksp = create_direct_solver()
 
     if matrix is None:
         A = assemble_matrix(field.mask)
@@ -197,15 +222,15 @@ def _fill_missing_petsc(field, matrix=None):
     return vec0, A
 
 
-def fill_missing_petsc(data):
+def fill_missing_petsc(data, method: str = "iterative"):
     """
     Fill missing values in a NumPy array 'field' using the matrix
     'matrix' approximating the Laplace operator.
     """
-    arr, A = _fill_missing_petsc(data)
+    arr, A = _fill_missing_petsc(data, method=method)
     if PETSc.COMM_WORLD.getRank() == 0:
         data_filled = arr[:].reshape(data.shape)
-    return data_filled
+        return data_filled
 
 
 def create_scatter(vector):

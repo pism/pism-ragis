@@ -17,8 +17,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 """
-Tests for Systems class
-
+Tests for Systems class.
 """
 
 from pathlib import Path
@@ -31,61 +30,74 @@ from pism_ragis.systems import System, Systems
 @pytest.fixture(name="machine_file")
 def fixture_machine_file() -> Path:
     """
-    Return Path to toml file
+    Fixture providing the path to a TOML file.
+
+    This fixture returns the path to a TOML file located at
+    "tests/data/chinook.toml".
+
+    Returns
+    -------
+    Path
+        The path to the TOML file.
     """
     return Path("tests/data/chinook.toml")
-
-
-# @pytest.fixture(name="machine_dict")
-# def fixture_machine_dict() -> dict:
-#     """
-#     Return system dict
-#     """
-#     return {
-#         "machine": "chinook",
-#         "MPI": {"mpido": "mpirun -np {cores} -machinefile ./nodes_$SLURM_JOBID"},
-#         "scheduler": {"name": "SLRUM", "submit": "sbatch", "job_id": "SLURM_JOBID"},
-#         "filesystem": {"work_dir": "SLURM_SUBMIT_DIR"},
-#         "queues": {
-#             "t1standard": 40,  # pylint disable-msg=R0801
-#             "t1small": 40,  # pylint disable-msg=R0801
-#             "t2standard": 40,  # pylint disable-msg=R0801
-#             "t2small": 40,  # pylint disable-msg=R0801
-#             "debug": 40,  # pylint disable-msg=R0801
-#             "analysis": 40,  # pylint disable-msg=R0801
-#         },
-#     }
 
 
 @pytest.fixture(name="system")
 def fixture_system(machine_file):
     """
-    Return a basic systems
-    """
+    Fixture providing a basic system instance.
 
+    This fixture returns an instance of the `System` class, initialized
+    with the provided `machine_file`.
+
+    Parameters
+    ----------
+    machine_file : Path
+        The path to the machine configuration file, provided by the
+        `machine_file` fixture.
+
+    Returns
+    -------
+    System
+        An instance of the `System` class initialized with the `machine_file`.
+    """
     return System(machine_file)
 
 
 @pytest.fixture(name="systems")
 def fixture_systems():
     """
-    Return a basic systems
+    Fixture providing a basic `Systems` instance.
+
+    This fixture returns an instance of the `Systems` class.
+
+    Returns
+    -------
+    Systems
+        An instance of the `Systems` class.
     """
-
     return Systems()
-
-
-# def test_system_from_dict(machine_dict):
-#     """
-#     Test creating a System from a dictionary
-#     """
-#     s = System(machine_dict)
-#     assert s["machine"] == "chinook"
 
 
 def test_system_from_file(machine_file):
     """
-    Test creating a System from a toml file
+    Test creating a `System` from a TOML file.
+
+    This function asserts that a `System` instance created from the provided
+    TOML file has the key "machine" with the value "chinook".
+
+    Parameters
+    ----------
+    machine_file : Path
+        The path to the machine configuration file, provided by the
+        `machine_file` fixture.
+
+    Raises
+    ------
+    AssertionError
+        If the `System` instance does not have the key "machine" with the
+        value "chinook".
     """
     s = System(machine_file)
     assert s["machine"] == "chinook"
@@ -93,7 +105,20 @@ def test_system_from_file(machine_file):
 
 def test_system_list_queues(system):
     """
-    Test listing queues
+    Test the `list_queues` method of the `System` class.
+
+    This function asserts that the `list_queues` method of the `System` class
+    returns the expected list of queue names.
+
+    Parameters
+    ----------
+    system : System
+        An instance of the `System` class, provided by the `system` fixture.
+
+    Raises
+    ------
+    AssertionError
+        If the `list_queues` method does not return the expected list of queue names.
     """
     assert system.list_queues() == ["t1standard", "t1small", "t2standard", "t2small"]
     assert system.list_queues("old") == [
@@ -106,36 +131,96 @@ def test_system_list_queues(system):
 
 def test_systems_to_dict(system):
     """
-    Test class returning a dictionary
+    Test the `to_dict` method of the `system` class.
 
+    This function asserts that the `to_dict` method of the `system` class
+    returns a dictionary with the key "machine" having the value "chinook".
+
+    Parameters
+    ----------
+    system : object
+        An instance of the class that has a `to_dict` method.
+
+    Raises
+    ------
+    AssertionError
+        If the `to_dict` method does not return a dictionary with the key
+        "machine" having the value "chinook".
     """
     assert system.to_dict()["machine"] == "chinook"
 
 
 def test_system_list_partitions(system):
     """
-    Test listing partitions
+    Test the `list_partitions` method of the `System` class.
+
+    This function asserts that the `list_partitions` method of the `System` class
+    returns the expected list of partition names.
+
+    Parameters
+    ----------
+    system : System
+        An instance of the `System` class, provided by the `system` fixture.
+
+    Raises
+    ------
+    AssertionError
+        If the `list_partitions` method does not return the expected list of partition names.
     """
     assert system.list_partitions() == ["old-chinook", "new-chinook"]
 
 
 def test_systems_len(systems):
     """
-    Test len of Systems
+    Test the length of the `Systems` instance.
+
+    This function asserts that the length of the `Systems` instance is 3.
+
+    Parameters
+    ----------
+    systems : Systems
+        An instance of the `Systems` class, provided by the `systems` fixture.
+
+    Raises
+    ------
+    AssertionError
+        If the length of the `Systems` instance is not 3.
     """
     assert len(systems) == 3
 
 
 def test_systems_default_path(systems):
     """
-    Test default path
+    Test the default path of the `Systems` instance.
+
+    This function asserts that the `default_path` attribute of the `Systems` instance
+    is equal to "hpc-systems".
+
+    Parameters
+    ----------
+    systems : Systems
+        An instance of the `Systems` class, provided by the `systems` fixture.
+
+    Raises
+    ------
+    AssertionError
+        If the `default_path` attribute of the `Systems` instance is not equal to "hpc-systems".
     """
     assert systems.default_path == Path("hpc-systems")
 
 
 def test_systems_from_pathlib_path():
     """
-    Test adding systems from a pathlib path
+    Test adding systems from a `pathlib.Path`.
+
+    This function creates an instance of the `Systems` class and adds systems
+    from the specified `pathlib.Path`. It asserts that the number of systems
+    added is 2.
+
+    Raises
+    ------
+    AssertionError
+        If the number of systems added is not 2.
     """
     systems = Systems()
     systems.add_from_path(Path("tests/data"))
@@ -144,7 +229,16 @@ def test_systems_from_pathlib_path():
 
 def test_systems_from_str_path():
     """
-    Test adding systems from a str path
+    Test adding systems from a string path.
+
+    This function creates an instance of the `Systems` class and adds systems
+    from the specified string path. It asserts that the number of systems
+    added is 2.
+
+    Raises
+    ------
+    AssertionError
+        If the number of systems added is not 2.
     """
     systems = Systems()
     systems.add_from_path("tests/data")
@@ -153,8 +247,22 @@ def test_systems_from_str_path():
 
 def test_systems_add_system(systems):
     """
-    Test adding a system
-    Test checking if system exists
+    Test adding a system to the `Systems` instance.
+
+    This function adds a system to the `Systems` instance and asserts that
+    the number of systems increases to 4. It also checks if adding the same
+    system again returns the expected message.
+
+    Parameters
+    ----------
+    systems : Systems
+        An instance of the `Systems` class, provided by the `systems` fixture.
+
+    Raises
+    ------
+    AssertionError
+        If the number of systems is not 4 after adding a new system.
+        If adding the same system again does not return the expected message.
     """
     system = System("tests/data/debug.txt")
     systems.add_system(system)

@@ -722,9 +722,23 @@ def select_experiments(df: pd.DataFrame, ids_to_select: List[int]) -> pd.DataFra
     return df.loc[repeated_indices]
 
 
-def select_experiment(ds, exp_id, n):
+def select_experiment(ds: xr.Dataset, exp_id: str, n: int) -> xr.Dataset:
     """
     Reset the experiment id.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        The dataset containing the experiment data.
+    exp_id : str
+        The experiment id to select.
+    n : int
+        The new experiment id to set.
+
+    Returns
+    -------
+    xr.Dataset
+        The dataset with the updated experiment id.
     """
     exp = ds.sel(exp_id=exp_id)
     exp["exp_id"] = n
@@ -733,14 +747,34 @@ def select_experiment(ds, exp_id, n):
 
 def simplify(my_str: str) -> str:
     """
-    Simplify string
+    Simplify string by extracting the file name.
+
+    Parameters
+    ----------
+    my_str : str
+        The input string representing a file path.
+
+    Returns
+    -------
+    str
+        The simplified string (file name).
     """
     return Path(my_str).name
 
 
-def convert_column_to_numeric(column):
+def convert_column_to_numeric(column: pd.Series) -> pd.Series:
     """
     Convert column to numeric if possible.
+
+    Parameters
+    ----------
+    column : pd.Series
+        The column to convert.
+
+    Returns
+    -------
+    pd.Series
+        The converted column, or the original column if conversion fails.
     """
     try:
         return pd.to_numeric(column, errors="raise")
@@ -748,33 +782,77 @@ def convert_column_to_numeric(column):
         return column
 
 
-def simplify_climate(my_str: str):
+def simplify_climate(my_str: str) -> str:
     """
-    Simplify climate
+    Simplify climate string.
+
+    Parameters
+    ----------
+    my_str : str
+        The input climate string.
+
+    Returns
+    -------
+    str
+        "MAR" if "MAR" is in the input string, otherwise "HIRHAM".
     """
     if "MAR" in my_str:
         return "MAR"
+    elif "RACMO" in my_str:
+        return "RACMO"
     else:
         return "HIRHAM"
 
 
-def simplify_ocean(my_str: str):
+def simplify_ocean(my_str: str) -> str:
     """
-    Simplify ocean
+    Simplify ocean string.
+
+    Parameters
+    ----------
+    my_str : str
+        The input ocean string.
+
+    Returns
+    -------
+    str
+        The simplified ocean string.
     """
     return "-".join(my_str.split("_")[1:2])
 
 
-def simplify_calving(my_str: str):
+def simplify_calving(my_str: str) -> int:
     """
-    Simplify ocean
+    Simplify calving string.
+
+    Parameters
+    ----------
+    my_str : str
+        The input calving string.
+
+    Returns
+    -------
+    int
+        The simplified calving value.
     """
     return int(my_str.split("_")[3])
 
 
-def transpose_dataframe(df, exp_id):
+def transpose_dataframe(df: pd.DataFrame, exp_id: str) -> pd.DataFrame:
     """
     Transpose dataframe.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The input dataframe.
+    exp_id : str
+        The experiment id to add to the transposed dataframe.
+
+    Returns
+    -------
+    pd.DataFrame
+        The transposed dataframe with the experiment id.
     """
     param_names = df["pism_config_axis"]
     df = df[["pism_config"]].T
