@@ -170,7 +170,7 @@ if __name__ == "__main__":
         "--data_dir",
         dest="data_dir",
         help="data directory",
-        default=abspath(join(script_directory, "../data_sets/")),
+        default=abspath(join(script_directory, "../data/")),
     )
     parser.add_argument(
         "--o_dir", dest="output_dir", help="output directory", default="test_dir"
@@ -474,9 +474,9 @@ done\n\n
             if osize != "custom":
                 general_params_dict["output.size"] = osize
             else:
-                general_params_dict[
-                    "output.sizes.medium"
-                ] = "sftgif,velsurf_mag,mask,usurf,bmelt"
+                general_params_dict["output.sizes.medium"] = (
+                    "sftgif,velsurf_mag,mask,usurf,bmelt"
+                )
 
             grid = {}
             grid["grid.file"] = grid_file
@@ -513,18 +513,18 @@ done\n\n
             z_min = combination["basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min"]
             z_max = combination["basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max"]
 
-            sb_params_dict[
-                "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max"
-            ] = phi_max
-            sb_params_dict[
-                "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min"
-            ] = phi_min
-            sb_params_dict[
-                "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max"
-            ] = z_max
-            sb_params_dict[
-                "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min"
-            ] = z_min
+            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max"] = (
+                phi_max
+            )
+            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min"] = (
+                phi_min
+            )
+            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max"] = (
+                z_max
+            )
+            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min"] = (
+                z_min
+            )
 
             if (hasattr(combination, "fractures")) and (
                 combination["fractures"] is True
@@ -652,9 +652,9 @@ done\n\n
             if hasattr(combination, "prescribed_retreat_file") & (
                 combination["prescribed_retreat_file"] is not False
             ):
-                calving_parameters[
-                    "geometry.front_retreat.prescribed.file"
-                ] = f"""$data_dir/front_retreat/{combination["prescribed_retreat_file"]}"""
+                calving_parameters["geometry.front_retreat.prescribed.file"] = (
+                    f"""$data_dir/front_retreat/{combination["prescribed_retreat_file"]}"""
+                )
 
             calving_parameters["calving.vonmises_calving.sigma_max"] = combination[
                 "calving.vonmises_calving.sigma_max"
