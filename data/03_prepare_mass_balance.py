@@ -23,12 +23,14 @@
 Prepare mass balance from Mankoff et at (2021).
 https://doi.org/10.5194/essd-13-5001-2021
 """
+import datetime
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from importlib.resources import files
 from pathlib import Path
 
 import cf_xarray.units  # pylint: disable=unused-import
 import numpy as np
+import pandas as pd
 import pint_xarray  # pylint: disable=unused-import
 import toml
 import xarray as xr
@@ -36,6 +38,36 @@ import xarray as xr
 from pism_ragis.processing import download_dataset
 
 xr.set_options(keep_attrs=True)
+
+
+def decimal_year_to_datetime(decimal_year):
+    """
+    Convert a decimal year to a datetime object.
+
+    Parameters
+    ----------
+    decimal_year : float
+        The decimal year to be converted.
+
+    Returns
+    -------
+    datetime.datetime
+        The corresponding datetime object.
+
+    Notes
+    -----
+    The function calculates the date by determining the start of the year and adding
+    the fractional part of the year as days. If the resulting date has an hour value
+    of 12 or more, it rounds up to the next day and sets the time to midnight.
+    """
+    year = int(decimal_year)
+    remainder = decimal_year - year
+    start_of_year = datetime.datetime(year, 1, 1)
+    days_in_year = (datetime.datetime(year + 1, 1, 1) - start_of_year).days
+    date = start_of_year + datetime.timedelta(days=remainder * days_in_year)
+    if date.hour >= 12:
+        date = date + datetime.timedelta(days=1)
+    return date.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 if __name__ == "__main__":
@@ -115,3 +147,28 @@ if __name__ == "__main__":
     fn = "mankoff_mass_balance.nc"
     p_fn = p / fn
     ds.pint.dequantify().to_netcdf(p_fn, encoding=encoding)
+
+    # Read the data into a pandas DataFrame
+    df = pd.read_csv(
+        p,
+        header=32,  # Skip the header lines
+        sep="\s+",
+        names=[
+            "year",
+            "cumulative_mass_balance",
+            "cumulative_mass_balance_uncertainty",
+        ],
+    )
+
+    # Vectorize the function to apply it to the entire array
+    vectorized_conversion = np.vectorize(decimal_year_to_datetime)
+
+    # Print the result
+    date = vectorized_conversion(df["year"])
+    df["time"] = date
+
+    ds = xr.Dataset.from_dataframe(df.set_index(df["time"]))
+    ds = ds.expand_dims({"basin": ["domain"]}, axis=-1)
+    ds["cumulative_mass_balance"].attrs.update({"units": "Gt"})
+    ds["cumulative_mass_balance_uncertainty"].attrs.update({"units": "Gt"})
+    ds.to_netcdf("grace/grace_mass_balance.nc")

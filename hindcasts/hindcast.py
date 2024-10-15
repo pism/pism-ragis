@@ -161,12 +161,6 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
-        "--i_dir",
-        dest="input_dir",
-        help="input directory",
-        default=abspath(join(script_directory, "..")),
-    )
-    parser.add_argument(
         "--data_dir",
         dest="data_dir",
         help="data directory",

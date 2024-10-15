@@ -91,7 +91,6 @@ if __name__ == "__main__":
     options = parser.parse_args()
     cf = options.cf
     crs = options.crs
-    n_jobs = options.n_jobs
     engine = options.engine
     ensemble = options.ensemble
     result_dir = Path(options.result_dir)
@@ -192,9 +191,9 @@ if __name__ == "__main__":
     start = time.time()
 
     basins_ds_scattered = client.scatter(
-        [ds.rio.clip([basin.geometry]) for _, basin in basins.iterrows()]
+        [ds] + [ds.rio.clip([basin.geometry]) for _, basin in basins.iterrows()]
     )
-    basin_names = [basin["SUBREGION1"] for _, basin in basins.iterrows()]
+    basin_names = ["domain"] + [basin["SUBREGION1"] for _, basin in basins.iterrows()]
     n_basins = len(basin_names)
     futures = client.map(compute_basin, basins_ds_scattered, basin_names)
     progress(futures)

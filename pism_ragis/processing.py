@@ -27,6 +27,7 @@ import os
 import pathlib
 import re
 import shutil
+import zipfile
 from calendar import isleap
 from datetime import datetime
 from pathlib import Path
@@ -100,7 +101,7 @@ def download_dataset(
 
     Examples
     --------
-    >>> dataset = download_mass_balance()
+    >>> dataset = download_dataset()
     >>> print(dataset)
     """
     # Get the file size from the headers
@@ -122,6 +123,34 @@ def download_dataset(
 
     # Open the downloaded file with xarray
     return xr.open_dataset("temp.nc")
+
+
+def unzip_file(zip_path: str, extract_to: str, overwrite: bool = False) -> None:
+    """
+    Unzip a file to a specified directory with a progress bar and optional overwrite.
+
+    Parameters
+    ----------
+    zip_path : str
+        The path to the ZIP file.
+    extract_to : str
+        The directory where the contents will be extracted.
+    overwrite : bool, optional
+        Whether to overwrite existing files, by default False.
+    """
+    # Ensure the extract_to directory exists
+    Path(extract_to).mkdir(parents=True, exist_ok=True)
+
+    # Open the ZIP file
+    with zipfile.ZipFile(zip_path, "r") as zip_ref:
+        # Get the list of file names in the zip file
+        file_list = zip_ref.namelist()
+
+        # Iterate over the file names with a progress bar
+        for file in tqdm(file_list, desc="Extracting files", unit="file"):
+            file_path = Path(extract_to) / file
+            if not file_path.exists() or overwrite:
+                zip_ref.extract(member=file, path=extract_to)
 
 
 def days_in_year(year: int) -> int:
@@ -184,6 +213,7 @@ def calculate_area(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
 def preprocess_time(
     ds,
     regexp: str = "ERA5-(.+?).nc",
+    freq: str = "MS",
     drop_vars: Union[List[str], None] = None,
     drop_dims: List[str] = ["nv4"],
 ):
@@ -200,6 +230,8 @@ def preprocess_time(
         The input dataset to be processed.
     regexp : str, optional
         The regular expression pattern to extract the year from the filename, by default "ERA5-(.+?).nc".
+    freq : str, optional
+        The frequency string to create the time range, by default "MS".
     drop_vars : Union[List[str], None], optional
         A list of variable names to be dropped from the dataset, by default None.
     drop_dims : List[str], optional
@@ -219,10 +251,21 @@ def preprocess_time(
     assert m_year_re is not None
     m_year = m_year_re.group(1)
 
-    time = xr.date_range(m_year, freq="MS", periods=ds.time.size + 1)
+    if "time" not in ds.coords:
+        nt = 1
+        ds = ds.expand_dims(dim="time", axis=0)
+    else:
+        nt = ds.time.size
+
+    time = xr.cftime_range(m_year, freq=freq, periods=nt + 1)
     time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
     ds = ds.assign_coords(time=time_centered)
-    ds = ds.cf.add_bounds("time")
+
+    time_bounds = xr.DataArray(
+        np.vstack([time[:-1], time[1:]]).T, dims=["time", "bounds"]
+    )
+    # Add bounds to the dataset
+    ds = ds.assign_coords(time_bounds=time_bounds)
 
     return ds.drop_vars(drop_vars, errors="ignore").drop_dims(
         drop_dims, errors="ignore"

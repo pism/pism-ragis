@@ -27,14 +27,60 @@ from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from pathlib import Path
 from typing import Dict, Union
 
+import dask.array as da
 import numpy as np
 import xarray as xr
+from dask.diagnostics import ProgressBar
 
-from pism_ragis.processing import download_earthaccess_dataset
+from pism_ragis.processing import download_earthaccess_dataset, preprocess_time
 
 xr.set_options(keep_attrs=True)
 # Suppress specific warning from loky
 warnings.filterwarnings("ignore", category=UserWarning)
+
+
+def save(
+    ds: xr.Dataset,
+    output_filename: Union[str, Path] = "GRE_G0240_1985_2018_IDW_EXP_1.nc",
+    comp={"zlib": True, "complevel": 2},
+):
+    """
+    Save the xarray dataset to a NetCDF file with specified compression.
+
+    Parameters
+    ----------
+    ds : xarray.Dataset
+        The dataset to be saved.
+    output_filename : Union[str, Path], optional
+        The output filename for the NetCDF file, by default "GRE_G0240_1985_2018_IDW_EXP_1.nc".
+    comp : dict, optional
+        Compression settings for the NetCDF file, by default {"zlib": True, "complevel": 2}.
+
+    Returns
+    -------
+    None
+    """
+    encoding = {var: comp for var in ds.data_vars}
+    ds.to_netcdf(output_filename, encoding=encoding)
+
+
+def idw_weights(distance: xr.DataArray, power: float = 1.0):
+    """
+    Calculate inverse distance weighting (IDW) weights.
+
+    Parameters
+    ----------
+    distance : xarray.DataArray
+        The array of distances.
+    power : float, optional
+        The power parameter for IDW, by default 1.0.
+
+    Returns
+    -------
+    xarray.DataArray
+        The calculated IDW weights.
+    """
+    return 1.0 / (distance + 1e-12) ** power
 
 
 if __name__ == "__main__":
@@ -45,10 +91,52 @@ if __name__ == "__main__":
     parser.description = "Prepare ITS_LIVE."
     options = parser.parse_args()
 
-    print("Prepare ITS_LIVE")
+    print("Preparing ITS_LIVE")
     filter_str = "GRE_G0240"
     result_dir = Path("itslive")
     doi = "10.5067/6II6VW8LLWJ7"
     result = download_earthaccess_dataset(
         doi=doi, filter_str=filter_str, result_dir=result_dir
     )
+
+    comp = {"zlib": True, "complevel": 2}
+    regexp = "GRE_G0240_(.+?).nc"
+    vars_to_process = ["v", "vx", "vy", "v_err", "vx_err", "vy_err", "ice"]
+
+    output_files = []
+    for r in result:
+        p = Path(r)
+        ds = xr.open_dataset(p, chunks="auto")[vars_to_process]
+        ds = preprocess_time(ds, regexp=regexp, freq="YS")
+        encoding = {
+            var: comp for var in ds.data_vars if var not in ("time", "time_bounds")
+        }
+        if p.name != "GRE_G0240_0000.nc":
+            ofile = "ITS_LIVE_" + p.name
+            output_file = p.with_name(ofile)
+            print(f"Saving to {output_file}")
+            # with ProgressBar():
+            #     ds.to_netcdf(output_file, encoding=encoding)
+            output_files.append(output_file)
+        del ds
+
+    power = 1
+    ds = xr.open_mfdataset(
+        output_files,
+        parallel=False,
+        chunks={"time": -1},
+    )
+    ds = ds.where(ds["ice"])
+    nt = ds.time.size
+    dt = xr.DataArray(
+        da.arange(nt, chunks=-1),
+        dims=("time"),
+    )
+    speed = ds["v"]
+    distance = np.isfinite(speed) * dt.broadcast_like(speed)
+    weights = idw_weights(distance, power=power)
+    idw_ofile = result_dir / Path(f"GRE_G0240_1985_2018_IDW_EXP_{power}.nc")
+    print(f"Inverse-Distance Weighting with power = {power} and saving to {idw_ofile}")
+    with ProgressBar():
+        weighted_mean = ds.weighted(weights).mean(dim="time")
+        save(weighted_mean, idw_ofile)
