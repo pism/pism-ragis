@@ -143,7 +143,7 @@ if __name__ == "__main__":
     ds.pint.dequantify().to_netcdf(p_fn, encoding=encoding)
 
     grace_file = "greenland_mass.txt"
-    
+
     # Read the data into a pandas DataFrame
     df = pd.read_csv(
         grace_file,

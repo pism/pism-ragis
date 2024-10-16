@@ -85,7 +85,7 @@ def filter_outliers(
     ds: xr.Dataset,
     outlier_range: List[float],
     outlier_variable: str,
-    subset: Dict = {"basin": "GIS", "ensemble_id": "RAGIS"},
+    subset: Dict[str, Union[str, int]] = {"basin": "GIS", "ensemble_id": "RAGIS"},
 ) -> Dict[str, xr.Dataset]:
     """
     Filter outliers from a dataset based on a specified variable and range.
@@ -102,34 +102,48 @@ def filter_outliers(
         A list containing the lower and upper bounds for the outlier range.
     outlier_variable : str
         The variable in the dataset to be used for outlier detection.
-    subset : Dict, optional
+    subset : Dict[str, Union[str, int]], optional
         A dictionary specifying the subset of the dataset to apply the filter on, by default {"basin": "GIS", "ensemble_id": "RAGIS"}.
 
     Returns
     -------
     Dict[str, xr.Dataset]
         A dictionary with two keys:
-        - "filtered": The dataset with outliers removed.
+        - "filtered": The dataset with outliers.
         - "outliers": The dataset containing only the outliers.
     """
     lower_bound, upper_bound = outlier_range
     print(f"Filtering outliers [{lower_bound}, {upper_bound}] for {outlier_variable}")
-    days_in_month = ds.time.dt.days_in_month
+
+    # Select the subset and drop non-numeric variables once
+    subset_ds = ds.sel(subset).drop_vars(
+        [var for var in ds.data_vars if not ds[var].dtype.kind in "iufc"]
+    )
+
+    # Calculate weights for each month
+    days_in_month = subset_ds.time.dt.days_in_month
     wgts = days_in_month.groupby("time.year") / days_in_month.groupby("time.year").sum()
 
-    outlier_filter = ds.sel(subset).utils.drop_nonnumeric_vars()[outlier_variable]
-    outlier_filter = (outlier_filter * wgts).resample(time="YS").sum(dim="time")
+    # Calculate the weighted sum for the outlier variable
+    outlier_filter = (
+        (subset_ds[outlier_variable] * wgts).resample(time="YS").sum(dim="time")
+    )
+
+    # Create a mask for filtering outliers
     mask = (outlier_filter >= lower_bound) & (outlier_filter <= upper_bound)
-    mask = ~(~mask).any(dim="time")
-    filtered_ds = outlier_filter.sel(exp_id=mask)
-    filtered_exp_ids = filtered_ds.exp_id.values
-    outlier_ds = outlier_filter.sel(exp_id=~mask)
-    outlier_exp_ids = outlier_ds.exp_id.values
+    mask = mask.any(dim="time").compute()  # Compute the mask
+
+    # Filter the dataset based on the mask
+    filtered_exp_ids = ds.exp_id.where(mask, drop=True)
+    outlier_exp_ids = ds.exp_id.where(~mask, drop=True)
+
     n_members = len(ds.exp_id)
     n_members_filtered = len(filtered_exp_ids)
     print(f"Ensemble size: {n_members}, outlier-filtered size: {n_members_filtered}")
+
     filtered_ds = ds.sel(exp_id=filtered_exp_ids)
     outliers_ds = ds.sel(exp_id=outlier_exp_ids)
+
     return {"filtered": filtered_ds, "outliers": outliers_ds}
 
 
@@ -624,7 +638,7 @@ if __name__ == "__main__":
         "--obs_url",
         help="""Path to "observed" mass balance.""",
         type=str,
-        default="data/mankoff/mankoff_mass_balance.nc",
+        default="mass_balance/mankoff_greenland_mass_balance.nc",
     )
     parser.add_argument(
         "--engine",
@@ -687,6 +701,12 @@ if __name__ == "__main__":
         help="""Reference year.""",
         type=int,
         default=1986,
+    )
+    parser.add_argument(
+        "--n_jobs",
+        help="""Number of parallel jobs. Default=8.""",
+        type=int,
+        default=8,
     )
     parser.add_argument(
         "--temporal_range",
@@ -758,16 +778,17 @@ if __name__ == "__main__":
     ds = prp.load_ensemble(basin_files, parallel=parallel, engine=engine).sortby(
         "basin"
     )
-    for v in ds.data_vars:
-        if ds[v].dtype.kind == "S":
-            ds[v] = ds[v].astype(str)
-    for c in ds.coords:
-        if ds[c].dtype.kind == "S":
-            ds.coords[c] = ds.coords[c].astype(str)
+    ds = ds.sel(basin=["CE", "CW", "GIS", "NE", "NO", "NW", "SE", "SW"])
+    # for v in ds.data_vars:
+    #     if ds[v].dtype.kind == "S":
+    #         ds[v] = ds[v].astype(str)
+    # for c in ds.coords:
+    #     if ds[c].dtype.kind == "S":
+    #         ds.coords[c] = ds.coords[c].astype(str)
 
     start = time.time()
-    ds = xr.apply_ufunc(np.vectorize(convert_bstrings_to_str), ds, dask="parallelized")
-    ds = ds.dropna(dim="exp_id")
+    # ds = xr.apply_ufunc(np.vectorize(convert_bstrings_to_str), ds, dask="parallelized")
+    # ds = ds.dropna(dim="exp_id")
     end = time.time()
     time_elapsed = end - start
     print(f"Preps  ...took {time_elapsed:.0f}s")
@@ -917,7 +938,7 @@ if __name__ == "__main__":
     fig.savefig(fn)
     plt.close()
 
-    observed = xr.open_dataset(options.obs_url, engine=engine, chunks="auto").sel(
+    observed = xr.open_dataset(options.obs_url, engine=engine, chunks=-1).sel(
         time=slice("1980", "2022")
     )
     observed = observed.sortby("basin")
@@ -938,7 +959,7 @@ if __name__ == "__main__":
         .mean()
     )
 
-    simulated = filtered_ds
+    simulated = filtered_ds.sel(basin=["CE", "CW", "GIS", "NE", "NO", "NW", "SE", "SW"])
     simulated_resampled = (
         simulated.drop_vars(["pism_config", "run_stats"], errors="ignore")
         .resample(time=resampling_frequency)
@@ -975,7 +996,7 @@ if __name__ == "__main__":
         with ProgressBar():
             result = f.compute()
         filtered_ids = result["exp_id_sampled"]
-        filtered_ids["basin"] = filtered_ids["basin"].astype("<U3")
+        filtered_ids["basin"] = filtered_ids["basin"].astype(str)
 
         posterior_config = (
             ds.sel(pism_config_axis=params).sel(exp_id=filtered_ids).pism_config

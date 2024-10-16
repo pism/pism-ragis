@@ -44,6 +44,12 @@ if __name__ == "__main__":
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Compute ensemble statistics."
     parser.add_argument(
+        "--no_config",
+        help="""Do not add pism_config and run_stats. Default=False.""",
+        action="store_false",
+        default=True,
+    )
+    parser.add_argument(
         "--cf",
         help="""Make output file CF Convetions compliant. Default="False".""",
         action="store_true",
@@ -89,6 +95,7 @@ if __name__ == "__main__":
     parser.add_argument("FILE", nargs=1, help="netCDF file to process", default=None)
 
     options = parser.parse_args()
+    add_config = options.no_config
     cf = options.cf
     crs = options.crs
     engine = options.engine
@@ -142,7 +149,6 @@ if __name__ == "__main__":
             ds = ds.sel(
                 time=slice(options.temporal_range[0], options.temporal_range[1])
             )
-
     bmb_var = "tendency_of_ice_mass_due_to_basal_mass_flux"
     if bmb_var in ds:
         bmb_grounded_da = ds[bmb_var].where(ds["mask"] == 2)
@@ -151,35 +157,38 @@ if __name__ == "__main__":
         bmb_floating_da.name = "tendency_of_ice_mass_due_to_basal_mass_flux_floating"
         ds = xr.merge([ds, bmb_grounded_da, bmb_floating_da])
 
-    config = ds["pism_config"]
-    stats = ds["run_stats"]
     ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
     ds.rio.write_crs(crs, inplace=True)
 
-    if cf:
-        pc_keys = np.array(list(config.attrs.keys()), dtype="S1024")
-        pc_vals = np.array(list(config.attrs.values()), dtype="S128")
-        rs_keys = np.array(list(stats.attrs.keys()), dtype="S1024")
-        rs_vals = np.array(list(stats.attrs.values()), dtype="S128")
-    else:
-        pc_keys = list(config.attrs.keys())
-        pc_vals = list(config.attrs.values())
-        rs_keys = list(stats.attrs.keys())
-        rs_vals = list(stats.attrs.values())
+    if add_config:
+        config = ds["pism_config"]
+        stats = ds["run_stats"]
+        if cf:
+            pc_keys = np.array(list(config.attrs.keys()), dtype="S1024")
+            pc_vals = np.array(list(config.attrs.values()), dtype="S128")
+            rs_keys = np.array(list(stats.attrs.keys()), dtype="S1024")
+            rs_vals = np.array(list(stats.attrs.values()), dtype="S128")
+        else:
+            pc_keys = list(config.attrs.keys())
+            pc_vals = list(config.attrs.values())
+            rs_keys = list(stats.attrs.keys())
+            rs_vals = list(stats.attrs.values())
 
-    pism_config = xr.DataArray(
-        pc_vals,
-        dims=["pism_config_axis"],
-        coords={"pism_config_axis": pc_keys},
-        name="pism_config",
-    )
-    run_stats = xr.DataArray(
-        rs_vals,
-        dims=["run_stats_axis"],
-        coords={"run_stats_axis": rs_keys},
-        name="run_stats",
-    )
-    ds = xr.merge([ds[mb_vars], pism_config, run_stats])
+        pism_config = xr.DataArray(
+            pc_vals,
+            dims=["pism_config_axis"],
+            coords={"pism_config_axis": pc_keys},
+            name="pism_config",
+        )
+        run_stats = xr.DataArray(
+            rs_vals,
+            dims=["run_stats_axis"],
+            coords={"run_stats_axis": rs_keys},
+            name="run_stats",
+        )
+        ds = xr.merge([ds[mb_vars], pism_config, run_stats])
+    else:
+        ds = ds[mb_vars]
 
     print(f"Size in memory: {(ds.nbytes / 1024**3):.1f} GB")
 

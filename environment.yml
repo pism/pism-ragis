@@ -2,7 +2,7 @@ name: pism-ragis
 channels:
   - conda-forge
 dependencies:
-  - python=3.11.6
+  - python=3.11.7
   - hdf5=*="*mpich*"
   - petsc
   - petsc4py

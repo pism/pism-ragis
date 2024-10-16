@@ -27,6 +27,7 @@ import os
 import pathlib
 import re
 import shutil
+import time
 import zipfile
 from calendar import isleap
 from datetime import datetime
@@ -645,18 +646,21 @@ def load_ensemble(
     This function uses Dask to load the dataset in parallel and handle large chunks efficiently.
     It sets the Dask configuration to split large chunks during array slicing.
     """
+    start = time.time()
     with dask.config.set(**{"array.slicing.split_large_chunks": True}):
         print("Loading ensemble files... ", end="", flush=True)
         ds = xr.open_mfdataset(
             filenames,
             parallel=parallel,
-            chunks={"exp_id": -1},
+            chunks=-1,
             engine=engine,
-            decode_cf=False,
         ).drop_vars(["spatial_ref", "mapping"], errors="ignore")
     if "time" in ds["pism_config"].coords:
         ds["pism_config"] = ds["pism_config"].isel(time=0).drop_vars("time")
     print("Done.")
+    end = time.time()
+    time_elapsed = end - start
+    print(f"Loading  ...took {time_elapsed:.0f}s")
     return ds
 
 
