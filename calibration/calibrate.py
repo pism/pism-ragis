@@ -235,7 +235,7 @@ if __name__ == "__main__":
         default="ssa+sia",
     )
     parser.add_argument("--start", help="Simulation start year", default="1980-1-1")
-    parser.add_argument("--end", help="Simulation end year", default="2020-1-1")
+    parser.add_argument("--end", help="Simulation end year", default="1990-1-1")
     parser.add_argument(
         "-e",
         "--ensemble_file",

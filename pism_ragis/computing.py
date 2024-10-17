@@ -870,8 +870,8 @@ systems["anvil"][
     "header"
 ] = """#!/bin/sh
 #SBATCH -A ees240003
-#SBATCH -ntasks {cores}
-#SBATCH --ndoes {nodes}
+#SBATCH --ntasks={cores}
+#SBATCH --nodes={nodes}
 #SBATCH --time={walltime}
 #SBATCH -p {queue}
 #SBATCH --mail-type=BEGIN
