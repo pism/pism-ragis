@@ -334,9 +334,6 @@ for each in {m_dirs};
       mkdir -p $each
 done\n\n
 """
-    if options.system != "debug":
-        cmd = f"""lfs setstripe -c -1 {dirs["output"]}"""
-        sub.call(shlex.split(cmd))
 
     ensemble_infile = os.path.split(ensemble_file)[-1]
     ensemble_outfile = join(uq_dir, ensemble_infile)
