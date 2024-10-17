@@ -778,7 +778,6 @@ if __name__ == "__main__":
     ds = prp.load_ensemble(basin_files, parallel=parallel, engine=engine).sortby(
         "basin"
     )
-    ds = ds.sel(basin=["CE", "CW", "GIS", "NE", "NO", "NW", "SE", "SW"])
     # for v in ds.data_vars:
     #     if ds[v].dtype.kind == "S":
     #         ds[v] = ds[v].astype(str)
@@ -999,7 +998,7 @@ if __name__ == "__main__":
         filtered_ids["basin"] = filtered_ids["basin"].astype(str)
 
         posterior_config = (
-            ds.sel(pism_config_axis=params).sel(exp_id=filtered_ids).pism_config
+            simulated.sel(pism_config_axis=params).sel(exp_id=filtered_ids).pism_config
         )
         dims = [dim for dim in prior_config.dims if not dim in ["pism_config_axis"]]
         posterior_df = posterior_config.to_dataframe().reset_index()
