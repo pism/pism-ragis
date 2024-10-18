@@ -23,9 +23,11 @@ Analyze RAGIS ensemble.
 
 """
 
+import logging
 import time
 import warnings
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from functools import wraps
 from importlib.resources import files
 from pathlib import Path
 from typing import Any, Dict, Hashable, List, Mapping, Union
@@ -41,8 +43,6 @@ from dask.diagnostics import ProgressBar
 from dask.distributed import Client, LocalCluster, progress
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
-import logging
-from functools import wraps
 
 import pism_ragis.processing as prp
 from pism_ragis.analysis import delta_analysis
@@ -53,8 +53,10 @@ xr.set_options(keep_attrs=True)
 plt.style.use("tableau-colorblind10")
 
 logger = logging.getLogger(__name__)
-#logger.addHandler(logging.NullHandler())
-logger.setLevel("DEBUG")
+logging.getLogger("matplotlib").disabled = True
+
+logging.basicConfig(filename="example.log", encoding="utf-8", level=logging.INFO)
+
 
 sim_alpha = 0.5
 sim_cmap = sns.color_palette("crest", n_colors=4).as_hex()[0:3:2]
@@ -65,6 +67,7 @@ obs_cmap = ["0.8", "0.7"]
 # obs_cmap = ["#88CCEE", "#44AA99"]
 hist_cmap = ["#a6cee3", "#1f78b4"]
 
+
 # def timeit(func):
 #     def wrapper(*args, **kwargs):
 #         start_time = time.time()
@@ -73,22 +76,63 @@ hist_cmap = ["#a6cee3", "#1f78b4"]
 #         time_elapsed = end_time - start_time
 #         print(f"{func.__name__} took {time_elapsed:.0f}s.")
 #         return result
+
 #     return wrapper
+
+
+# def timeit(func):
+#     @wraps(func)
+#     def timeit_wrapper(*args, **kwargs):
+#         start_time = time.perf_counter()
+#         result = func(*args, **kwargs)
+#         end_time = time.perf_counter()
+#         time_elapsed = end_time - start_time
+#         print(f"{func.__name__} took {time_elapsed:.1f}s.")
+#         return result
+
+#     return timeit_wrapper
+
 
 def timeit(func):
     """
     Decorator that logs the time a function takes to execute.
+
+    This decorator logs the start time, end time, and the elapsed time
+    for the execution of the decorated function.
+
+    Parameters
+    ----------
+    func : callable
+        The function to be decorated.
+
+    Returns
+    -------
+    callable
+        The wrapped function with added timing functionality.
+
+    Examples
+    --------
+    >>> @timeit
+    ... def example_function():
+    ...     time.sleep(1)
+    ...
+    >>> example_function()
+    INFO:__main__:Starting example_function
+    INFO:__main__:Finished example_function in 1.0001 seconds
     """
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         start_time = time.time()
-        logger.info(f"Starting {func.__name__}")
+        logger.info("Starting %s", func.__name__)
         result = func(*args, **kwargs)
         end_time = time.time()
         elapsed_time = end_time - start_time
-        logger.info(f"Finished {func.__name__} in {elapsed_time:.4f} seconds")
+        logger.info("Finished %s in %2.2f seconds", func.__name__, elapsed_time)
         return result
+
     return wrapper
+
 
 @timeit
 def config_to_dataframe(config: xr.DataArray):
@@ -139,7 +183,7 @@ def filter_outliers(
     ds: xr.Dataset,
     outlier_range: List[float],
     outlier_variable: str,
-    freq: str="YS",
+    freq: str = "YS",
     subset: Dict[str, Union[str, int]] = {"basin": "GIS", "ensemble_id": "RAGIS"},
 ) -> Dict[str, xr.Dataset]:
     """
@@ -171,8 +215,10 @@ def filter_outliers(
     if hasattr(ds[outlier_variable], "units"):
         outlier_variable_units = ds[outlier_variable].attrs["units"]
     else:
-        outlier_variable_units = ""        
-    print(f"Filtering outliers [{lower_bound}, {upper_bound}] {outlier_variable_units} for {outlier_variable}")
+        outlier_variable_units = ""
+    print(
+        f"Filtering outliers [{lower_bound}, {upper_bound}] {outlier_variable_units} for {outlier_variable}"
+    )
 
     # Select the subset and drop non-numeric variables once
     subset_ds = ds.sel(subset).drop_vars(
@@ -182,12 +228,11 @@ def filter_outliers(
     # Calculate weights for each month
     days_in_month = subset_ds.time.dt.days_in_month
     wgts = days_in_month.groupby("time.year") / days_in_month.groupby("time.year").sum()
- 
-     # Calculate the weighted sum for the outlier variable
-    outlier_filter = (
-        (subset_ds[outlier_variable] * wgts).resample(time="YS").sum(dim="time"))
 
-    # outlier_filter = subset_ds[outlier_variable].resample(time=freq).mean(dim="time")
+    # Calculate the weighted sum for the outlier variable
+    outlier_filter = (
+        (subset_ds[outlier_variable] * wgts).resample(time=freq).sum(dim="time")
+    )
 
     # Create a mask for filtering outliers
     mask = (outlier_filter >= lower_bound) & (outlier_filter <= upper_bound)
@@ -250,7 +295,6 @@ def run_delta_analysis(
     print("Calculating Sensitivity Indices")
     print("===============================")
 
-    start_dask = time.time()
     ds = ds.load()
     client = Client()
     print(f"Open client in browser: {client.dashboard_link}")
@@ -302,6 +346,8 @@ def run_delta_analysis(
 
     return all_delta_indices
 
+
+@timeit
 def plot_obs_sims(
     obs: xr.Dataset,
     sim_prior: xr.Dataset,
@@ -677,7 +723,6 @@ def plot_obs_sims_3(
 if __name__ == "__main__":
     __spec__ = None
 
-    
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Compute ensemble statistics."
@@ -838,7 +883,7 @@ if __name__ == "__main__":
     #     if ds[c].dtype.kind == "S":
     #         ds.coords[c] = ds.coords[c].astype(str)
 
-    ds = xr.apply_ufunc(np.vectorize(convert_bstrings_to_str), ds, dask="parallelized")
+    # ds = xr.apply_ufunc(np.vectorize(convert_bstrings_to_str), ds, dask="parallelized")
     ds = ds.dropna(dim="exp_id")
 
     ds = prp.standardize_variable_names(ds, ragis_config["PISM Spatial"])
@@ -865,13 +910,12 @@ if __name__ == "__main__":
     )
     filtered_ds = result["filtered"]
     outliers_ds = result["outliers"]
-    
+
     fig, ax = plt.subplots(1, 1)
     ds.sel(time=slice(str(filter_start_year), str(filter_end_year))).sel(
         basin="GIS", ensemble_id=ensemble
     ).grounding_line_flux.plot(hue="exp_id", add_legend=False, ax=ax, lw=0.5)
     fig.savefig("grounding_line_flux_filtered.pdf")
-
 
     prior_config = ds.sel(pism_config_axis=params).pism_config
     prior = config_to_dataframe(prior_config)
@@ -1052,135 +1096,134 @@ if __name__ == "__main__":
                 )
                 for basin in observed_resampled.basin
             )
-    
-    # prior_posterior = pd.concat(prior_posterior_list).reset_index()
-    # prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)
-    # for col in ["surface.given.file", "ocean.th.file", "calving.rate_scaling.file"]:
-    #     prior_posterior[col] = prior_posterior[col].apply(prp.simplify)
-    # prior_posterior["surface.given.file"] = prior_posterior["surface.given.file"].apply(
-    #     prp.simplify_climate
-    # )
-    # prior_posterior["ocean.th.file"] = prior_posterior["ocean.th.file"].apply(
-    #     prp.simplify_ocean
-    # )
-    # prior_posterior["calving.rate_scaling.file"] = prior_posterior[
-    #     "calving.rate_scaling.file"
-    # ].apply(prp.simplify_calving)
 
-    # for (basin, filtering_var), df in prior_posterior.rename(
-    #     columns=params_short_dict
-    # ).groupby(by=["basin", "filtered_by"]):
-    #     n_params = len(params_short_dict)
-    #     plt.rcParams["font.size"] = 4
-    #     fig, axs = plt.subplots(
-    #         5,
-    #         3,
-    #         sharey=True,
-    #         figsize=[6.2, 6.2],
-    #     )
-    #     fig.subplots_adjust(hspace=1.0, wspace=0.1)
-    #     for k, v in enumerate(params_short_dict.values()):
-    #         legend = bool(k == 0)
-    #         try:
-    #             sns.histplot(
-    #                 data=df,
-    #                 x=v,
-    #                 hue="Ensemble",
-    #                 hue_order=["Prior", "Posterior"],
-    #                 palette=sim_cmap,
-    #                 common_norm=False,
-    #                 stat="probability",
-    #                 multiple="dodge",
-    #                 alpha=0.8,
-    #                 linewidth=0.2,
-    #                 ax=axs.ravel()[k],
-    #                 legend=legend,
-    #             )
-    #         except:
-    #             pass
-    #     for ax in axs.flatten():
-    #         ax.set_ylabel("")
-    #         ticklabels = ax.get_xticklabels()
-    #         for tick in ticklabels:
-    #             tick.set_rotation(45)
-    #     fn = (
-    #         result_dir
-    #         / Path("figures")
-    #         / Path(f"{basin}_prior_posterior_filtered_by_{filtering_var}.pdf")
-    #     )
-    #     fig.savefig(fn)
-    #     plt.close()
+    prior_posterior = pd.concat(prior_posterior_list).reset_index()
+    prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)
+    for col in ["surface.given.file", "ocean.th.file", "calving.rate_scaling.file"]:
+        prior_posterior[col] = prior_posterior[col].apply(prp.simplify)
+    prior_posterior["surface.given.file"] = prior_posterior["surface.given.file"].apply(
+        prp.simplify_climate
+    )
+    prior_posterior["ocean.th.file"] = prior_posterior["ocean.th.file"].apply(
+        prp.simplify_ocean
+    )
+    prior_posterior["calving.rate_scaling.file"] = prior_posterior[
+        "calving.rate_scaling.file"
+    ].apply(prp.simplify_calving)
 
-    # ensemble_df = prior.apply(prp.convert_column_to_numeric).drop(
-    #     columns=["Ensemble", "exp_id"], errors="ignore"
-    # )
-    # climate_dict = {
-    #     v: k for k, v in enumerate(ensemble_df["surface.given.file"].unique())
-    # }
-    # ensemble_df["surface.given.file"] = ensemble_df["surface.given.file"].map(
-    #     climate_dict
-    # )
-    # ocean_dict = {v: k for k, v in enumerate(ensemble_df["ocean.th.file"].unique())}
-    # ensemble_df["ocean.th.file"] = ensemble_df["ocean.th.file"].map(ocean_dict)
-    # calving_dict = {
-    #     v: k for k, v in enumerate(ensemble_df["calving.rate_scaling.file"].unique())
-    # }
-    # ensemble_df["calving.rate_scaling.file"] = ensemble_df[
-    #     "calving.rate_scaling.file"
-    # ].map(calving_dict)
+    for (basin, filtering_var), df in prior_posterior.rename(
+        columns=params_short_dict
+    ).groupby(by=["basin", "filtered_by"]):
+        n_params = len(params_short_dict)
+        plt.rcParams["font.size"] = 4
+        fig, axs = plt.subplots(
+            5,
+            3,
+            sharey=True,
+            figsize=[6.2, 6.2],
+        )
+        fig.subplots_adjust(hspace=1.0, wspace=0.1)
+        for k, v in enumerate(params_short_dict.values()):
+            legend = bool(k == 0)
+            try:
+                sns.histplot(
+                    data=df,
+                    x=v,
+                    hue="Ensemble",
+                    hue_order=["Prior", "Posterior"],
+                    palette=sim_cmap,
+                    common_norm=False,
+                    stat="probability",
+                    multiple="dodge",
+                    alpha=0.8,
+                    linewidth=0.2,
+                    ax=axs.ravel()[k],
+                    legend=legend,
+                )
+            except:
+                pass
+        for ax in axs.flatten():
+            ax.set_ylabel("")
+            ticklabels = ax.get_xticklabels()
+            for tick in ticklabels:
+                tick.set_rotation(45)
+        fn = (
+            result_dir
+            / Path("figures")
+            / Path(f"{basin}_prior_posterior_filtered_by_{filtering_var}.pdf")
+        )
+        fig.savefig(fn)
+        plt.close()
 
-    # to_analyze = ds.sel(time=slice("1980-01-01", "2020-01-01"))
-    # all_delta_indices = run_delta_analysis(
-    #     to_analyze, ensemble_df, list(flux_vars.values())[:2], notebook=notebook
-    # )
+    ensemble_df = prior.apply(prp.convert_column_to_numeric).drop(
+        columns=["Ensemble", "exp_id"], errors="ignore"
+    )
+    climate_dict = {
+        v: k for k, v in enumerate(ensemble_df["surface.given.file"].unique())
+    }
+    ensemble_df["surface.given.file"] = ensemble_df["surface.given.file"].map(
+        climate_dict
+    )
+    ocean_dict = {v: k for k, v in enumerate(ensemble_df["ocean.th.file"].unique())}
+    ensemble_df["ocean.th.file"] = ensemble_df["ocean.th.file"].map(ocean_dict)
+    calving_dict = {
+        v: k for k, v in enumerate(ensemble_df["calving.rate_scaling.file"].unique())
+    }
+    ensemble_df["calving.rate_scaling.file"] = ensemble_df[
+        "calving.rate_scaling.file"
+    ].map(calving_dict)
 
-    # # Extract the prefix from each coordinate value
-    # prefixes = [
-    #     name.split(".")[0] for name in all_delta_indices.pism_config_axis.values
-    # ]
+    to_analyze = ds.sel(time=slice("1980-01-01", "2020-01-01"))
+    all_delta_indices = run_delta_analysis(
+        to_analyze, ensemble_df, list(flux_vars.values())[:2], notebook=notebook
+    )
 
-    # # Add the prefixes as a new coordinate
-    # all_delta_indices = all_delta_indices.assign_coords(
-    #     prefix=("pism_config_axis", prefixes)
-    # )
+    # Extract the prefix from each coordinate value
+    prefixes = [
+        name.split(".")[0] for name in all_delta_indices.pism_config_axis.values
+    ]
 
-    # sensitivity_indices_groups = {
-    #     "surface": "Climate",
-    #     "atmosphere": "Climate",
-    #     "ocean": "Ocean",
-    #     "calving": "Calving",
-    #     "frontal_melt": "Frontal Melt",
-    #     "basal_resistance": "Flow",
-    #     "basal_yield_stress": "Flow",
-    #     "stress_balance": "Flow",
-    # }
-    # parameter_groups = ragis_config["Parameter Groups"]
+    # Add the prefixes as a new coordinate
+    all_delta_indices = all_delta_indices.assign_coords(
+        prefix=("pism_config_axis", prefixes)
+    )
 
-    # si_prefixes = [parameter_groups[name] for name in all_delta_indices.prefix.values]
-    # all_delta_indices = all_delta_indices.assign_coords(
-    #     sensitivity_indices_group=("pism_config_axis", si_prefixes)
-    # )
-    # # Group by the new coordinate and compute the sum for each group
-    # aggregated_data = (
-    #     all_delta_indices.groupby("sensitivity_indices_group")
-    #     .sum()
-    #     .rolling(time=13)
-    #     .mean()
-    # )
+    sensitivity_indices_groups = {
+        "surface": "Climate",
+        "atmosphere": "Climate",
+        "ocean": "Ocean",
+        "calving": "Calving",
+        "frontal_melt": "Frontal Melt",
+        "basal_resistance": "Flow",
+        "basal_yield_stress": "Flow",
+        "stress_balance": "Flow",
+    }
+    parameter_groups = ragis_config["Parameter Groups"]
 
-    # for index in ["S1", "delta"]:
-    #     for basin in aggregated_data.basin.values:
-    #         for filter_var in aggregated_data.filtered_by.values:
-    #             fig, ax = plt.subplots(1, 1)
-    #             aggregated_data.sel(filtered_by=filter_var, basin=basin)[index].plot(
-    #                 hue="sensitivity_indices_group", ax=ax
-    #             )
-    #             ax.set_title(f"S1 for {basin} filtered by {filter_var}")
-    #             fn = (
-    #                 result_dir
-    #                 / Path("figures")
-    #                 / Path(f"{basin}_{index}_filtered_by_{filter_var}.pdf")
-    #             )
-    #             fig.savefig(fn)
-    #             plt.close()
-                    
+    si_prefixes = [parameter_groups[name] for name in all_delta_indices.prefix.values]
+    all_delta_indices = all_delta_indices.assign_coords(
+        sensitivity_indices_group=("pism_config_axis", si_prefixes)
+    )
+    # Group by the new coordinate and compute the sum for each group
+    aggregated_data = (
+        all_delta_indices.groupby("sensitivity_indices_group")
+        .sum()
+        .rolling(time=13)
+        .mean()
+    )
+
+    for index in ["S1", "delta"]:
+        for basin in aggregated_data.basin.values:
+            for filter_var in aggregated_data.filtered_by.values:
+                fig, ax = plt.subplots(1, 1)
+                aggregated_data.sel(filtered_by=filter_var, basin=basin)[index].plot(
+                    hue="sensitivity_indices_group", ax=ax
+                )
+                ax.set_title(f"S1 for {basin} filtered by {filter_var}")
+                fn = (
+                    result_dir
+                    / Path("figures")
+                    / Path(f"{basin}_{index}_filtered_by_{filter_var}.pdf")
+                )
+                fig.savefig(fn)
+                plt.close()
