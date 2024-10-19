@@ -30,7 +30,6 @@ import shutil
 import time
 import zipfile
 from calendar import isleap
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Hashable, List, Mapping, Union
 
@@ -38,7 +37,6 @@ import dask
 import joblib
 import numpy as np
 import pandas as pd
-import requests
 import xarray as xr
 from tqdm.auto import tqdm
 
@@ -71,7 +69,7 @@ def unzip_file(zip_path: str, extract_to: str, overwrite: bool = False) -> None:
                 zip_ref.extract(member=file, path=extract_to)
 
 
-def decimal_year_to_datetime(decimal_year: float) -> datetime:
+def decimal_year_to_datetime(decimal_year: float) -> datetime.datetime:
     """
     Convert a decimal year to a datetime object.
 
@@ -423,8 +421,8 @@ def tqdm_joblib(tqdm_object):
 def to_decimal_year(date):
     """Convert datetime date to decimal year"""
     year = date.year
-    start_of_this_year = datetime(year=year, month=1, day=1)
-    start_of_next_year = datetime(year=year + 1, month=1, day=1)
+    start_of_this_year = datetime.datetime(year=year, month=1, day=1)
+    start_of_next_year = datetime.datetime(year=year + 1, month=1, day=1)
     year_elapsed = (date - start_of_this_year).total_seconds()
     year_duration = (start_of_next_year - start_of_this_year).total_seconds()
     fraction = year_elapsed / year_duration

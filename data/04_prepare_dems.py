@@ -34,8 +34,7 @@ import xarray as xr
 import xdem
 from dask.diagnostics import ProgressBar
 
-from pism_ragis.download import download_earthaccess
-from pism_ragis.processing import save_netcdf
+from pism_ragis.download import download_earthaccess, save_netcdf
 
 xr.set_options(keep_attrs=True)
 # Suppress specific warning from loky
@@ -91,6 +90,6 @@ if __name__ == "__main__":
     result_dir = Path("dem")
     filter_str = "v5.nc"
     doi = "10.5067/GMEVBWFLWA7X"
-    results = download_earthaccess_data(
+    results = download_earthaccess(
         doi=doi, filter_str=filter_str, result_dir=result_dir
     )

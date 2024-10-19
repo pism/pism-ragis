@@ -1,4 +1,19 @@
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+# Copyright (C) 2023 Andy Aschwanden
+#
+# This file is part of pism-ragis.
+#
+# PISM-RAGIS is free software; you can redistribute it and/or modify it under the
+# terms of the GNU General Public License as published by the Free Software
+# Foundation; either version 3 of the License, or (at your option) any later
+# version.
+#
+# PISM-RAGIS is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+# details.
+#
+# You should have received a copy of the GNU General Public License
+# along with PISM; if not, write to the Free Software
 
 # pylint: disable=too-many-positional-arguments
 
@@ -6,24 +21,15 @@
 Module for data processing
 """
 
-import contextlib
-import os
-import pathlib
-import re
-import shutil
 import tarfile
-import time
 import zipfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Hashable, List, Mapping, Union
+from typing import List, Union
 from urllib.request import urlopen
 
-import dask
 import earthaccess
-import joblib
-import numpy as np
-import pandas as pd
 import requests
 import xarray as xr
 from dask.diagnostics import ProgressBar
@@ -48,15 +54,15 @@ def unzip_files(
         futures = []
         for f in files:
             futures.append(
-                executor.submit(unzip_file, f, output_dir, overwrite=overwrite)
+                executor.submit(unzip_file, f, str(output_dir), overwrite=overwrite)
             )
         for future in as_completed(futures):
             try:
                 future.result()
-            except Exception as e:
+            except (IOError, ValueError) as e:
                 print(f"An error occurred: {e}", unzip_file)
 
-    responses = list(output_dir.rglob("*.nc"))
+    responses = list(Path(output_dir).rglob("*.nc"))
     return responses
 
 
@@ -140,11 +146,11 @@ def download_archive(url: str) -> Union[tarfile.TarFile, zipfile.ZipFile]:
         buffer.seek(0)
 
         if url.endswith("tar.gz"):
-            archive = tarfile.open(fileobj=buffer, mode="r|gz")
+            with tarfile.open(fileobj=buffer, mode="r|gz") as archive:
+                return archive
         else:
-            archive = zipfile.ZipFile(buffer)
-
-        return archive
+            with zipfile.ZipFile(buffer) as archive:
+                return archive
 
 
 def download_earthaccess(

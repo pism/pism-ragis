@@ -23,7 +23,6 @@
 Prepare mass balance from Mankoff et at (2021).
 https://doi.org/10.5194/essd-13-5001-2021
 """
-import datetime
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from importlib.resources import files
 from pathlib import Path

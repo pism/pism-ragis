@@ -24,7 +24,7 @@ Prepare Greenland basins.
 
 
 from pathlib import Path
-from typing import Dict, Union
+from typing import Dict
 
 import geopandas as gp
 import pandas as pd
