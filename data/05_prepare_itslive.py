@@ -32,36 +32,12 @@ import numpy as np
 import xarray as xr
 from dask.diagnostics import ProgressBar
 
-from pism_ragis.processing import download_earthaccess_dataset, preprocess_time
+from pism_ragis.download import download_earthaccess, save_netcdf
+from pism_ragis.processing import preprocess_time
 
 xr.set_options(keep_attrs=True)
 # Suppress specific warning from loky
 warnings.filterwarnings("ignore", category=UserWarning)
-
-
-def save(
-    ds: xr.Dataset,
-    output_filename: Union[str, Path] = "GRE_G0240_1985_2018_IDW_EXP_1.nc",
-    comp={"zlib": True, "complevel": 2},
-):
-    """
-    Save the xarray dataset to a NetCDF file with specified compression.
-
-    Parameters
-    ----------
-    ds : xarray.Dataset
-        The dataset to be saved.
-    output_filename : Union[str, Path], optional
-        The output filename for the NetCDF file, by default "GRE_G0240_1985_2018_IDW_EXP_1.nc".
-    comp : dict, optional
-        Compression settings for the NetCDF file, by default {"zlib": True, "complevel": 2}.
-
-    Returns
-    -------
-    None
-    """
-    encoding = {var: comp for var in ds.data_vars}
-    ds.to_netcdf(output_filename, encoding=encoding)
 
 
 def idw_weights(distance: xr.DataArray, power: float = 1.0):
@@ -95,7 +71,7 @@ if __name__ == "__main__":
     filter_str = "GRE_G0240"
     result_dir = Path("itslive")
     doi = "10.5067/6II6VW8LLWJ7"
-    result = download_earthaccess_dataset(
+    results = download_earthaccess(
         doi=doi, filter_str=filter_str, result_dir=result_dir
     )
 
@@ -103,26 +79,35 @@ if __name__ == "__main__":
     regexp = "GRE_G0240_(.+?).nc"
     vars_to_process = ["v", "vx", "vy", "v_err", "vx_err", "vy_err", "ice"]
 
+    years = np.array(
+        [int(Path(r).name.split(".")[0][-4::]) for r in results if "0000" not in r]
+    )
+    start_year, end_year = years.min(), years.max()
     output_files = []
-    for r in result:
+    for r in results:
         p = Path(r)
         ds = xr.open_dataset(p, chunks="auto")[vars_to_process]
-        ds = preprocess_time(ds, regexp=regexp, freq="YS")
-        encoding = {
-            var: comp for var in ds.data_vars if var not in ("time", "time_bounds")
-        }
-        if p.name != "GRE_G0240_0000.nc":
-            ofile = "ITS_LIVE_" + p.name
-            output_file = p.with_name(ofile)
-            print(f"Saving to {output_file}")
-            # with ProgressBar():
-            #     ds.to_netcdf(output_file, encoding=encoding)
-            output_files.append(output_file)
+        if p.name == "GRE_G0240_0000.nc":
+            ds = preprocess_time(
+                ds,
+                start_date=f"{start_year}-01-01",
+                end_date=f"{end_year}-12-31",
+                periods=2,
+            )
+        else:
+            ds = preprocess_time(ds, regexp=regexp, freq="YS")
+
+        ofile = result_dir / Path("ITS_LIVE_" + p.name)
+        print(f"Processing {ofile}")
+        save_netcdf(ds, ofile)
+        output_files.append(ofile)
         del ds
+
+    yearly_output_files = [p for p in output_files if p.name != "GRE_G0240_0000.nc"]
 
     power = 1
     ds = xr.open_mfdataset(
-        output_files,
+        yearly_output_files,
         parallel=False,
         chunks={"time": -1},
     )
@@ -135,8 +120,9 @@ if __name__ == "__main__":
     speed = ds["v"]
     distance = np.isfinite(speed) * dt.broadcast_like(speed)
     weights = idw_weights(distance, power=power)
-    idw_ofile = result_dir / Path(f"GRE_G0240_1985_2018_IDW_EXP_{power}.nc")
+    idw_ofile = result_dir / Path(
+        f"ITS_LIVE_GRE_G0240_{start_year}_{end_year}_IDW_EXP_{power}.nc"
+    )
     print(f"Inverse-Distance Weighting with power = {power} and saving to {idw_ofile}")
-    with ProgressBar():
-        weighted_mean = ds.weighted(weights).mean(dim="time")
-        save(weighted_mean, idw_ofile)
+    weighted_mean = ds.weighted(weights).mean(dim="time")
+    save_netcdf(weighted_mean, idw_ofile)

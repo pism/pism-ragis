@@ -34,7 +34,8 @@ import xarray as xr
 import xdem
 from dask.diagnostics import ProgressBar
 
-from pism_ragis.processing import download_earthaccess_dataset
+from pism_ragis.download import download_earthaccess
+from pism_ragis.processing import save_netcdf
 
 xr.set_options(keep_attrs=True)
 # Suppress specific warning from loky
@@ -56,24 +57,21 @@ if __name__ == "__main__":
 
     print("Preparing GrIMP")
     doi = "10.5067/NV34YUIXLP9W"
-    result = download_earthaccess_dataset(
-        doi=doi, filter_str=filter_str, result_dir=grimp_dir
-    )
-    r = Path(result[0])
+    results = download_earthaccess(doi=doi, filter_str=filter_str, result_dir=grimp_dir)
     dem_file = result_dir / Path("egm96_gimpdem_90m_v01.1.tif")
     print(
         f"Converting Ellipsoid to EGM96 and saving as {dem_file}...", end="", flush=True
     )
-    dem = xdem.DEM(r)
-    dem_egm96 = dem.to_vcrs("EGM96", force_source_vcrs="Ellipsoid")
-    dem_egm96.save(dem_file)
+    # dem = xdem.DEM(r)
+    # dem_egm96 = dem.to_vcrs("EGM96", force_source_vcrs="Ellipsoid")
+    # dem_egm96.save(dem_file)
     print("Done")
 
     doi = "10.5067/B8X58MQBFUPA"
-    result = download_earthaccess_dataset(
+    results = download_earthaccess(
         doi=doi, filter_str=filter_str, result_dir=result_dir
     )
-    mask_file = result[0]
+    mask_file = results[0]
 
     dem_da = rxr.open_rasterio(dem_file).squeeze()
     dem_da.name = "usurf"
@@ -87,15 +85,12 @@ if __name__ == "__main__":
     grimp_ds = xr.merge([dem_da, dem_uncertainty_da, mask_da])
     grimp_file = result_dir / Path("grimp_90m.nc")
 
-    comp = {"zlib": True, "complevel": 2}
-    encoding = {var: comp for var in grimp_ds.data_vars}
-    with ProgressBar():
-        grimp_ds.to_netcdf(grimp_file, encoding=encoding)
+    save_netcdf(grimp_file)
 
     print("Preparing BedMachine")
     result_dir = Path("dem")
     filter_str = "v5.nc"
     doi = "10.5067/GMEVBWFLWA7X"
-    result = download_earthaccess_dataset(
+    results = download_earthaccess_data(
         doi=doi, filter_str=filter_str, result_dir=result_dir
     )

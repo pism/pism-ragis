@@ -27,11 +27,11 @@ from typing import Hashable, Iterable, Optional, Union
 import numpy as np
 import petsc4py
 import xarray as xr
-from petsc4py import PETSc
 from scipy.sparse import coo_matrix, csc_matrix, diags
 from scipy.sparse.linalg import spsolve
 
 petsc4py.init(sys.argv)
+from petsc4py import PETSc
 
 
 def assemble_matrix(mask):
@@ -227,6 +227,20 @@ def fill_missing_petsc(data, method: str = "iterative"):
     Fill missing values in a NumPy array 'field' using the matrix
     'matrix' approximating the Laplace operator.
     """
+
+    try:
+        # Look if petsc4py has already been initialized
+        PETSc = petsc4py.__getattribute__('PETSc')
+    except AttributeError:
+        # If not, initialize petsc4py with the PETSc that PISM was compiled against.
+        import sys
+        try:
+            petsc4py.init(sys.argv, arch=PISM.version_info.PETSC_ARCH)
+        except TypeError:
+            # petsc4py on Debian 9 does not recognize the PETSC_ARCH of PETSc in the .deb package
+            petsc4py.init(sys.argv)
+        from petsc4py import PETSc
+
     arr, A = _fill_missing_petsc(data, method=method)
     if PETSc.COMM_WORLD.getRank() == 0:
         data_filled = arr[:].reshape(data.shape)

@@ -35,39 +35,10 @@ import pint_xarray  # pylint: disable=unused-import
 import toml
 import xarray as xr
 
-from pism_ragis.processing import download_dataset
+from pism_ragis.download import download_earthaccess, download_netcdf
+from pism_ragis.processing import decimal_year_to_datetime
 
 xr.set_options(keep_attrs=True)
-
-
-def decimal_year_to_datetime(decimal_year):
-    """
-    Convert a decimal year to a datetime object.
-
-    Parameters
-    ----------
-    decimal_year : float
-        The decimal year to be converted.
-
-    Returns
-    -------
-    datetime.datetime
-        The corresponding datetime object.
-
-    Notes
-    -----
-    The function calculates the date by determining the start of the year and adding
-    the fractional part of the year as days. If the resulting date has an hour value
-    of 12 or more, it rounds up to the next day and sets the time to midnight.
-    """
-    year = int(decimal_year)
-    remainder = decimal_year - year
-    start_of_year = datetime.datetime(year, 1, 1)
-    days_in_year = (datetime.datetime(year + 1, 1, 1) - start_of_year).days
-    date = start_of_year + datetime.timedelta(days=remainder * days_in_year)
-    if date.hour >= 12:
-        date = date + datetime.timedelta(days=1)
-    return date.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 if __name__ == "__main__":
@@ -94,7 +65,7 @@ if __name__ == "__main__":
     gis_vars = [v for v in gis_vars_dict.values() if not "uncertainty" in v]
     gis_uncertainty_vars = [v for v in gis_vars_dict.values() if "uncertainty" in v]
 
-    ds = download_dataset(url)
+    ds = download_netcdf(url)
     for v in ["MB_err", "BMB_err", "MB_ROI", "MB_ROI_err", "BMB_ROI_err"]:
         ds[v].attrs["units"] = "Gt day-1"
     ds = ds.pint.quantify()
@@ -142,11 +113,12 @@ if __name__ == "__main__":
     p_fn = p / fn
     ds.pint.dequantify().to_netcdf(p_fn, encoding=encoding)
 
-    grace_file = "greenland_mass.txt"
+    short_name = "GREENLAND_MASS_TELLUS_MASCON_CRI_TIME_SERIES_RL06.1_V3"
+    results = download_earthaccess(result_dir=p, short_name=short_name)
 
     # Read the data into a pandas DataFrame
     df = pd.read_csv(
-        grace_file,
+        results[0],
         header=32,  # Skip the header lines
         sep="\s+",
         names=[

@@ -23,15 +23,13 @@ Prepare Greenland basins.
 """
 
 
-import tarfile
-from io import BytesIO
 from pathlib import Path
 from typing import Dict, Union
-from urllib.request import urlopen
-from zipfile import ZipFile
 
 import geopandas as gp
 import pandas as pd
+
+from pism_ragis.download import download_archive
 
 imbie = {
     "name": "GRE_Basins_IMBIE2_v1.3",
@@ -51,16 +49,20 @@ crs = "EPSG:3413"
 def prepare_basin(basin_dict: Dict, col: str = "SUBREGION1"):
     """
     Prepare basin.
+
+    Parameters
+    ----------
+    basin_dict : Dict
+        Dictionary containing basin information such as name, url, suffix, and path.
+    col : str, optional
+        Column name to use, default is "SUBREGION1".
     """
     name = basin_dict["name"]
     print(f"Preparing {name}")
     url = basin_dict["url"] + basin_dict["name"] + "." + basin_dict["suffix"]
-    archive: Union[tarfile.TarFile, ZipFile]
-    with urlopen(url) as req:
-        if url.endswith("tar.gz"):
-            archive = tarfile.open(fileobj=BytesIO(req.read()), mode="r|gz")
-        else:
-            archive = ZipFile(BytesIO(req.read()))
+
+    archive = download_archive(url)
+
     path = Path(basin_dict["path"])
     path.mkdir(parents=True, exist_ok=True)
     archive.extractall(path=path)

@@ -39,7 +39,8 @@ from geocube.api.core import make_geocube
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 
-from pism_ragis.processing import download_earthaccess_dataset, tqdm_joblib
+from pism_ragis.download import download_earthaccess
+from pism_ragis.processing import tqdm_joblib
 
 gp.options.io_engine = "pyogrio"
 xr.set_options(keep_attrs=True)
@@ -201,7 +202,7 @@ if __name__ == "__main__":
     doi = "10.5067/7FILV218JZA2"
     filter_str = "Greenland_polygons"
     result_dir = "calfin"
-    download_earthaccess_dataset(doi=doi, filter_str=filter_str, result_dir=result_dir)
+    download_earthaccess_data(doi=doi, filter_str=filter_str, result_dir=result_dir)
 
     crs = options.crs
     encoding = {

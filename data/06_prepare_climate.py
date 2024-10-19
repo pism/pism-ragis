@@ -37,6 +37,7 @@ from cdo import Cdo
 from dask.diagnostics import ProgressBar
 from tqdm import tqdm
 
+from pism_ragis.download import unzip_files
 from pism_ragis.processing import preprocess_time
 
 cdo = Cdo()
@@ -870,64 +871,6 @@ def download_hirham(
                 print(f"An error occurred: {e}")
 
     return responses
-
-
-def unzip_files(
-    files=List[Union[str, Path]],
-    output_dir: Union[str, Path] = ".",
-    overwrite: bool = False,
-    max_workers: int = 4,
-) -> List[Path]:
-    """
-    Unzip files in parallel.
-
-    Parameters
-    ----------
-    max_workers : int, optional
-        The maximum number of threads to use for downloading, by default 4.
-    """
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = []
-        for f in files:
-            futures.append(
-                executor.submit(unzip_file, f, output_dir, overwrite=overwrite)
-            )
-        for future in as_completed(futures):
-            try:
-                future.result()
-            except Exception as e:
-                print(f"An error occurred: {e}", unzip_file)
-
-    responses = list(output_dir.rglob("*.nc"))
-    return responses
-
-
-def unzip_file(zip_path: str, extract_to: str, overwrite: bool = False) -> None:
-    """
-    Unzip a file to a specified directory with a progress bar and optional overwrite.
-
-    Parameters
-    ----------
-    zip_path : str
-        The path to the ZIP file.
-    extract_to : str
-        The directory where the contents will be extracted.
-    overwrite : bool, optional
-        Whether to overwrite existing files, by default False.
-    """
-    # Ensure the extract_to directory exists
-    Path(extract_to).mkdir(parents=True, exist_ok=True)
-
-    # Open the ZIP file
-    with zipfile.ZipFile(zip_path, "r") as zip_ref:
-        # Get the list of file names in the zip file
-        file_list = zip_ref.namelist()
-
-        # Iterate over the file names with a progress bar
-        for file in tqdm(file_list, desc="Extracting files", unit="file"):
-            file_path = Path(extract_to) / file
-            if not file_path.exists() or overwrite:
-                zip_ref.extract(member=file, path=extract_to)
 
 
 hirham_url = "http://ensemblesrt3.dmi.dk/data/prudence/temp/nichan/Daily2D_GrIS/"

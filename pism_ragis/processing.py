@@ -14,7 +14,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with PISM; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 # pylint: disable=too-many-positional-arguments
 
@@ -23,6 +22,7 @@ Module for data processing
 """
 
 import contextlib
+import datetime
 import os
 import pathlib
 import re
@@ -35,95 +35,12 @@ from pathlib import Path
 from typing import Any, Hashable, List, Mapping, Union
 
 import dask
-import earthaccess
 import joblib
 import numpy as np
 import pandas as pd
 import requests
 import xarray as xr
 from tqdm.auto import tqdm
-
-kg2cmsle = 1 / 1e12 * 1.0 / 362.5 / 10.0
-gt2cmsle = 1 / 362.5 / 10.0
-
-
-def download_earthaccess_dataset(
-    doi: str = "10.5067/7FILV218JZA2",
-    filter_str: str = "Greenland_polygons",
-    result_dir: Union[Path, str] = "calfin",
-) -> List:
-    """
-    Download datasets via Earthaccess.
-
-    Parameters
-    ----------
-    doi : str, optional
-        The DOI of the dataset to download. Default is "10.5067/7FILV218JZA2".
-    filter_str : str, optional
-        A string to filter the search results. Default is "Greenland_polygons".
-    result_dir : Union[Path, str], optional
-        The directory where the downloaded files will be saved. Default is "calfin".
-
-    Returns
-    -------
-    None
-    """
-    p = Path(result_dir)
-    p.mkdir(parents=True, exist_ok=True)
-
-    earthaccess.login()
-    result = earthaccess.search_data(doi=doi)
-    result_filtered = [
-        granule
-        for granule in result
-        if filter_str in granule["umm"]["DataGranule"]["Identifiers"][0]["Identifier"]
-    ]
-    return earthaccess.download(result_filtered, p)
-
-
-def download_dataset(
-    url: str = "https://dataverse.geus.dk/api/access/datafile/:persistentId?persistentId=doi:10.22008/FK2/OHI23Z/MRSBQR",
-    chunk_size: int = 1024,
-) -> xr.Dataset:
-    """
-    Download a dataset from the specified URL and return it as an xarray Dataset.
-
-    Parameters
-    ----------
-    url : str, optional
-        The URL of the dataset to download. Default is the mass balance dataset URL.
-    chunk_size : int, optional
-        The size of the chunks to download at a time, in bytes. Default is 1024 bytes.
-
-    Returns
-    -------
-    xr.Dataset
-        The downloaded dataset as an xarray Dataset.
-
-    Examples
-    --------
-    >>> dataset = download_dataset()
-    >>> print(dataset)
-    """
-    # Get the file size from the headers
-    response = requests.head(url, timeout=10)
-    file_size = int(response.headers.get("content-length", 0))
-
-    # Initialize the progress bar
-    progress = tqdm(total=file_size, unit="iB", unit_scale=True)
-
-    # Download the file in chunks and update the progress bar
-    print(f"Downloading {url}")
-    with requests.get(url, stream=True, timeout=10) as r:
-        r.raise_for_status()
-        with open("temp.nc", "wb") as f:
-            for chunk in r.iter_content(chunk_size=chunk_size):
-                f.write(chunk)
-                progress.update(len(chunk))
-    progress.close()
-
-    # Open the downloaded file with xarray
-    return xr.open_dataset("temp.nc")
 
 
 def unzip_file(zip_path: str, extract_to: str, overwrite: bool = False) -> None:
@@ -152,6 +69,36 @@ def unzip_file(zip_path: str, extract_to: str, overwrite: bool = False) -> None:
             file_path = Path(extract_to) / file
             if not file_path.exists() or overwrite:
                 zip_ref.extract(member=file, path=extract_to)
+
+
+def decimal_year_to_datetime(decimal_year: float) -> datetime:
+    """
+    Convert a decimal year to a datetime object.
+
+    Parameters
+    ----------
+    decimal_year : float
+        The decimal year to be converted.
+
+    Returns
+    -------
+    datetime.datetime
+        The corresponding datetime object.
+
+    Notes
+    -----
+    The function calculates the date by determining the start of the year and adding
+    the fractional part of the year as days. If the resulting date has an hour value
+    of 12 or more, it rounds up to the next day and sets the time to midnight.
+    """
+    year = int(decimal_year)
+    remainder = decimal_year - year
+    start_of_year = datetime.datetime(year, 1, 1)
+    days_in_year = (datetime.datetime(year + 1, 1, 1) - start_of_year).days
+    date = start_of_year + datetime.timedelta(days=remainder * days_in_year)
+    if date.hour >= 12:
+        date = date + datetime.timedelta(days=1)
+    return date.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def days_in_year(year: int) -> int:
@@ -215,7 +162,10 @@ def preprocess_time(
     ds,
     regexp: str = "ERA5-(.+?).nc",
     freq: str = "MS",
-    drop_vars: Union[List[str], None] = None,
+    periods: int | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    drop_vars: List[str] | None = None,
     drop_dims: List[str] = ["nv4"],
 ):
     """
@@ -248,9 +198,6 @@ def preprocess_time(
     AssertionError
         If the regular expression does not match any part of the filename.
     """
-    m_year_re = re.search(regexp, ds.encoding["source"])
-    assert m_year_re is not None
-    m_year = m_year_re.group(1)
 
     if "time" not in ds.coords:
         nt = 1
@@ -258,7 +205,13 @@ def preprocess_time(
     else:
         nt = ds.time.size
 
-    time = xr.cftime_range(m_year, freq=freq, periods=nt + 1)
+    if start_date and end_date and periods:
+        time = xr.cftime_range(start_date, end_date, periods=periods)
+    else:
+        m_year_re = re.search(regexp, ds.encoding["source"])
+        assert m_year_re is not None
+        m_year = m_year_re.group(1)
+        time = xr.cftime_range(m_year, freq=freq, periods=nt + 1)
     time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
     ds = ds.assign_coords(time=time_centered)
 
