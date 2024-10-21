@@ -110,7 +110,8 @@ if __name__ == "__main__":
 
     fn = "mankoff_greenland_mass_balance.nc"
     p_fn = p / fn
-    ds.pint.dequantify().to_netcdf(p_fn, encoding=encoding)
+    mankoff_ds = ds.pint.dequantify()
+    mankoff_ds.to_netcdf(p_fn, encoding=encoding)
 
     short_name = "GREENLAND_MASS_TELLUS_MASCON_CRI_TIME_SERIES_RL06.1_V3"
     results = download_earthaccess(result_dir=p, short_name=short_name)
@@ -140,4 +141,10 @@ if __name__ == "__main__":
     ds["cumulative_mass_balance_uncertainty"].attrs.update({"units": "Gt"})
     fn = "grace_greenland_mass_balance.nc"
     p_fn = p / fn
-    ds.to_netcdf(fn)
+    grace_ds = ds
+    grace_ds.to_netcdf(fn)
+
+    fn = "combined_greenland_mass_balance.nc"
+    p_fn = p / fn
+    combined_ds = xr.merge([grace_ds, mankoff_ds])
+    combined_ds.to_netcdf(fn)

@@ -27,7 +27,6 @@ import os
 import pathlib
 import re
 import shutil
-import time
 import zipfile
 from calendar import isleap
 from pathlib import Path
@@ -39,6 +38,8 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from tqdm.auto import tqdm
+
+from pism_ragis.decorators import profileit
 
 
 def unzip_file(zip_path: str, extract_to: str, overwrite: bool = False) -> None:
@@ -574,6 +575,7 @@ class UtilsMethods:
         return self._obj.drop_vars(nonnumeric_vars, errors=errors)
 
 
+@profileit
 def load_ensemble(
     filenames: List[Union[Path, str]], parallel: bool = True, engine: str = "netcdf4"
 ) -> xr.Dataset:
@@ -597,26 +599,22 @@ def load_ensemble(
     This function uses Dask to load the dataset in parallel and handle large chunks efficiently.
     It sets the Dask configuration to split large chunks during array slicing.
     """
-    start = time.time()
     with dask.config.set(**{"array.slicing.split_large_chunks": True}):
         print("Loading ensemble files... ", end="", flush=True)
         ds = xr.open_mfdataset(
             filenames,
             parallel=parallel,
-            chunks=-1,
+            chunks={"exp_id": -1, "time": -1},
             engine=engine,
         ).drop_vars(["spatial_ref", "mapping"], errors="ignore")
     if "time" in ds["pism_config"].coords:
         ds["pism_config"] = ds["pism_config"].isel(time=0).drop_vars("time")
     print("Done.")
-    end = time.time()
-    time_elapsed = end - start
-    print(f"Loading  ...took {time_elapsed:.0f}s")
     return ds
 
 
 def normalize_cumulative_variables(
-    ds: xr.Dataset, variables, reference_year: int = 1992
+    ds: xr.Dataset, variables, reference_year: float = 1992.0
 ) -> xr.Dataset:
     """
     Normalize cumulative variables in an xarray Dataset by subtracting their values at a reference year.
@@ -627,8 +625,8 @@ def normalize_cumulative_variables(
         The xarray Dataset containing the cumulative variables to be normalized.
     variables : str or list of str
         The name(s) of the cumulative variables to be normalized.
-    reference_year : int, optional
-        The reference year to use for normalization. Default is 1992.
+    reference_year : float, optional
+        The reference year to use for normalization. Default is 1992.0.
 
     Returns
     -------
@@ -651,7 +649,8 @@ def normalize_cumulative_variables(
     Data variables:
         cumulative_var  (time) int64 0 10 20 30 40 50
     """
-    ds[variables] -= ds[variables].sel(time=f"{reference_year}-01-01", method="nearest")
+    reference_date = decimal_year_to_datetime(reference_year)
+    ds[variables] -= ds[variables].sel(time=reference_date, method="nearest")
     return ds
 
 
