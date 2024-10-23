@@ -161,16 +161,27 @@ if __name__ == "__main__":
     ds.rio.write_crs(crs, inplace=True)
 
     if add_config:
-        config = ds["pism_config"]
+        pism_config = ds["pism_config"]
+
+        # List of suffixes to exclude
+        suffixes_to_exclude = ["_doc", "_type", "_units", "_option", "_choices"]
+
+        # Filter the dictionary
+        config = {
+            k: v
+            for k, v in pism_config.attrs.items()
+            if not any(k.endswith(suffix) for suffix in suffixes_to_exclude)
+        }
+
         stats = ds["run_stats"]
         if cf:
-            pc_keys = np.array(list(config.attrs.keys()), dtype="S1024")
-            pc_vals = np.array(list(config.attrs.values()), dtype="S128")
+            pc_keys = np.array(list(config.keys()), dtype="S1024")
+            pc_vals = np.array(list(config.values()), dtype="S128")
             rs_keys = np.array(list(stats.attrs.keys()), dtype="S1024")
             rs_vals = np.array(list(stats.attrs.values()), dtype="S128")
         else:
-            pc_keys = list(config.attrs.keys())
-            pc_vals = list(config.attrs.values())
+            pc_keys = list(config.keys())
+            pc_vals = list(config.values())
             rs_keys = list(stats.attrs.keys())
             rs_vals = list(stats.attrs.values())
 
@@ -202,7 +213,7 @@ if __name__ == "__main__":
     basins_ds_scattered = client.scatter(
         [ds] + [ds.rio.clip([basin.geometry]) for _, basin in basins.iterrows()]
     )
-    basin_names = ["domain"] + [basin["SUBREGION1"] for _, basin in basins.iterrows()]
+    basin_names = ["GRACE"] + [basin["SUBREGION1"] for _, basin in basins.iterrows()]
     n_basins = len(basin_names)
     futures = client.map(compute_basin, basins_ds_scattered, basin_names)
     progress(futures)

@@ -34,7 +34,7 @@ import pint_xarray  # pylint: disable=unused-import
 import toml
 import xarray as xr
 
-from pism_ragis.download import download_earthaccess, download_netcdf
+from pism_ragis.download import download_earthaccess, download_netcdf, save_netcdf
 from pism_ragis.processing import decimal_year_to_datetime
 
 xr.set_options(keep_attrs=True)
@@ -111,7 +111,7 @@ if __name__ == "__main__":
     fn = "mankoff_greenland_mass_balance.nc"
     p_fn = p / fn
     mankoff_ds = ds.pint.dequantify()
-    mankoff_ds.to_netcdf(p_fn, encoding=encoding)
+    save_netcdf(mankoff_ds, p_fn)
 
     short_name = "GREENLAND_MASS_TELLUS_MASCON_CRI_TIME_SERIES_RL06.1_V3"
     results = download_earthaccess(result_dir=p, short_name=short_name)
@@ -136,15 +136,15 @@ if __name__ == "__main__":
     df["time"] = date
 
     ds = xr.Dataset.from_dataframe(df.set_index(df["time"]))
-    ds = ds.expand_dims({"basin": ["domain"]}, axis=-1)
+    ds = ds.expand_dims({"basin": ["GRACE"]}, axis=-1)
     ds["cumulative_mass_balance"].attrs.update({"units": "Gt"})
     ds["cumulative_mass_balance_uncertainty"].attrs.update({"units": "Gt"})
     fn = "grace_greenland_mass_balance.nc"
     p_fn = p / fn
     grace_ds = ds
-    grace_ds.to_netcdf(fn)
+    save_netcdf(grace_ds, p_fn)
 
     fn = "combined_greenland_mass_balance.nc"
     p_fn = p / fn
-    combined_ds = xr.merge([grace_ds, mankoff_ds])
-    combined_ds.to_netcdf(fn)
+    combined_ds = xr.concat([grace_ds, mankoff_ds], dim="time").sortby("time")
+    save_netcdf(combined_ds, p_fn)

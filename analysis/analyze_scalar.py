@@ -29,7 +29,7 @@ from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from functools import wraps
 from importlib.resources import files
 from pathlib import Path
-from typing import Any, Dict, Hashable, List, Mapping, Union
+from typing import Any, Callable, Dict, Hashable, List, Mapping, Union
 
 import dask
 import numpy as np
@@ -46,7 +46,7 @@ from tqdm.auto import tqdm
 import pism_ragis.processing as prp
 from pism_ragis.analysis import delta_analysis
 from pism_ragis.decorators import profileit, timeit
-from pism_ragis.filtering import importance_sampling
+from pism_ragis.filtering import filter_outliers, importance_sampling
 from pism_ragis.likelihood import log_normal
 from pism_ragis.logger import get_logger
 
@@ -66,9 +66,109 @@ obs_cmap = ["0.8", "0.7"]
 hist_cmap = ["#a6cee3", "#1f78b4"]
 
 
+def filter_config(ds: xr.Dataset, params: List[str]) -> xr.DataArray:
+    """
+    Filter the configuration parameters from the dataset.
+
+    This function selects the specified configuration parameters from the dataset
+    and returns them as a DataArray.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        The input dataset containing the configuration parameters.
+    params : List[str]
+        A list of configuration parameter names to be selected.
+
+    Returns
+    -------
+    xr.DataArray
+        The selected configuration parameters as a DataArray.
+
+    Examples
+    --------
+    >>> ds = xr.Dataset({'pism_config': (('pism_config_axis',), [1, 2, 3])},
+                        coords={'pism_config_axis': ['param1', 'param2', 'param3']})
+    >>> filter_config(ds, ['param1', 'param3'])
+    <xarray.DataArray 'pism_config' (pism_config_axis: 2)>
+    array([1, 3])
+    Coordinates:
+      * pism_config_axis  (pism_config_axis) <U6 'param1' 'param3'
+    """
+    config = ds.sel(pism_config_axis=params).pism_config
+    return config
+
+
+def prepare_observations(
+    basin_url: Union[Path, str],
+    grace_url: Union[Path, str],
+    config: Dict,
+    reference_year: float,
+    engine: str = "h5netcdf",
+) -> tuple:
+    """
+    Prepare observation datasets by normalizing cumulative variables.
+
+    This function loads observation datasets from the specified URLs, sorts them by basin,
+    normalizes the cumulative variables, and returns the processed datasets.
+
+    Parameters
+    ----------
+    basin_url : Union[Path, str]
+        The URL or path to the basin observation dataset.
+    grace_url : Union[Path, str]
+        The URL or path to the GRACE observation dataset.
+    config : Dict
+        A dictionary containing configuration settings for processing the datasets.
+    reference_year : float
+        The reference year for normalizing cumulative variables.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the processed basin and GRACE observation datasets.
+
+    Examples
+    --------
+    >>> config = {
+    ...     "Cumulative Variables": {"cumulative_mass_balance": "mass_balance"},
+    ...     "Cumulative Uncertainty Variables": {"cumulative_mass_balance_uncertainty": "mass_balance_uncertainty"}
+    ... }
+    >>> prepare_observations("basin.nc", "grace.nc", config, 2000.0)
+    (<xarray.Dataset>, <xarray.Dataset>)
+    """
+    obs_basin = xr.open_dataset(basin_url, engine=engine, chunks=-1)
+    obs_basin = obs_basin.sortby("basin")
+
+    cumulative_vars = config["Cumulative Variables"]
+    cumulative_uncertainty_vars = config["Cumulative Uncertainty Variables"]
+
+    obs_basin = prp.normalize_cumulative_variables(
+        obs_basin,
+        list(cumulative_vars.values()) + list(cumulative_uncertainty_vars.values()),
+        reference_year,
+    )
+
+    obs_grace = xr.open_dataset(grace_url, engine=engine, chunks=-1)
+    obs_grace = obs_grace.sortby("basin")
+
+    cumulative_vars = config["Cumulative Variables"]["cumulative_mass_balance"]
+    cumulative_uncertainty_vars = config["Cumulative Uncertainty Variables"][
+        "cumulative_mass_balance_uncertainty"
+    ]
+
+    obs_grace = prp.normalize_cumulative_variables(
+        obs_grace,
+        [cumulative_vars] + [cumulative_uncertainty_vars],
+        reference_year,
+    )
+
+    return obs_basin, obs_grace
+
+
 @timeit
 def prepare_simulations(
-    filenames: List[Union[Path, str]],
+    filenames: List[Path | str],
     config: Dict,
     reference_year: float,
     parallel: bool = True,
@@ -133,7 +233,7 @@ def prepare_simulations(
     return ds
 
 
-def config_to_dataframe(config: xr.DataArray):
+def config_to_dataframe(config: xr.DataArray, ensemble: str | None = None):
     """
     Convert an xarray DataArray configuration to a pandas DataFrame.
 
@@ -152,6 +252,8 @@ def config_to_dataframe(config: xr.DataArray):
     df = config.to_dataframe().reset_index()
     df = df.pivot(index=dims, columns="pism_config_axis", values="pism_config")
     df.reset_index(inplace=True)
+    if ensemble:
+        df["Ensemble"] = ensemble
     return df
 
 
@@ -175,80 +277,6 @@ def convert_bstrings_to_str(element: Any) -> Any:
     return element
 
 
-@profileit
-def filter_outliers(
-    ds: xr.Dataset,
-    outlier_range: List[float],
-    outlier_variable: str,
-    freq: str = "YS",
-    subset: Dict[str, str | int] = {"basin": "GIS", "ensemble_id": "RAGIS"},
-):
-    """
-    Filter outliers from a dataset based on a specified variable and range.
-
-    This function filters out ensemble members from the dataset `ds` where the values of
-    `outlier_variable` fall outside the specified `outlier_range`. The filtering is done
-    for the specified subset of the dataset.
-
-    Parameters
-    ----------
-    ds : xr.Dataset
-        The input dataset containing the data to be filtered.
-    outlier_range : List[float]
-        A list containing the lower and upper bounds for the outlier range.
-    outlier_variable : str
-        The variable in the dataset to be used for outlier detection.
-    subset : Dict[str, Union[str, int]], optional
-        A dictionary specifying the subset of the dataset to apply the filter on, by default {"basin": "GIS", "ensemble_id": "RAGIS"}.
-
-    Returns
-    -------
-    Dict[str, xr.Dataset]
-        A dictionary with two keys:
-        - "filtered": The dataset with outliers.
-        - "outliers": The dataset containing only the outliers.
-    """
-    lower_bound, upper_bound = outlier_range
-    if hasattr(ds[outlier_variable], "units"):
-        outlier_variable_units = ds[outlier_variable].attrs["units"]
-    else:
-        outlier_variable_units = ""
-    print(
-        f"Filtering outliers [{lower_bound}, {upper_bound}] {outlier_variable_units} for {outlier_variable}"
-    )
-
-    # Select the subset and drop non-numeric variables once
-    subset_ds = ds.sel(subset).drop_vars(
-        [var for var in ds.data_vars if not ds[var].dtype.kind in "iufc"]
-    )
-
-    # Calculate weights for each month
-    days_in_month = subset_ds.time.dt.days_in_month
-    wgts = days_in_month.groupby("time.year") / days_in_month.groupby("time.year").sum()
-
-    # Calculate the weighted sum for the outlier variable
-    outlier_filter = (
-        (subset_ds[outlier_variable] * wgts).resample(time=freq).sum(dim="time")
-    )
-
-    # Create a mask for filtering outliers
-    mask = (outlier_filter >= lower_bound) & (outlier_filter <= upper_bound)
-    mask = mask.any(dim="time").compute()  # Compute the mask
-
-    # Filter the dataset based on the mask
-    filtered_exp_ids = ds.exp_id.where(mask, drop=True)
-    outlier_exp_ids = ds.exp_id.where(~mask, drop=True)
-
-    n_members = len(ds.exp_id)
-    n_members_filtered = len(filtered_exp_ids)
-    print(f"Ensemble size: {n_members}, outlier-filtered size: {n_members_filtered}")
-
-    filtered_ds = ds.sel(exp_id=filtered_exp_ids)
-    outliers_ds = ds.sel(exp_id=outlier_exp_ids)
-
-    return filtered_ds, outliers_ds
-
-
 def plot_outliers(
     filtered_da: xr.DataArray, outliers_da: xr.DataArray, filename: Path | str
 ):
@@ -257,7 +285,6 @@ def plot_outliers(
     """
     fig, ax = plt.subplots(1, 1)
     if filtered_da.size > 0:
-        print(filtered_da)
         filtered_da.plot(hue="exp_id", color="k", add_legend=False, ax=ax, lw=0.5)
     if outliers_da.size > 0:
         outliers_da.plot(hue="exp_id", color="r", add_legend=False, ax=ax, lw=0.5)
@@ -731,6 +758,62 @@ def plot_obs_sims_3(
     plt.close()
 
 
+# def plot_filtered_hist():
+#     outliers_filtered_df = pd.concat([outliers_df, filtered_df]).reset_index(drop=True)
+#     # Apply the conversion function to each column
+#     outliers_filtered_df = outliers_filtered_df.apply(prp.convert_column_to_numeric)
+#     for col in ["surface.given.file", "ocean.th.file", "calving.rate_scaling.file"]:
+#         outliers_filtered_df[col] = outliers_filtered_df[col].apply(prp.simplify_path)
+#     outliers_filtered_df["surface.given.file"] = outliers_filtered_df[
+#         "surface.given.file"
+#     ].apply(prp.simplify_climate)
+#     outliers_filtered_df["ocean.th.file"] = outliers_filtered_df["ocean.th.file"].apply(
+#         prp.simplify_ocean
+#     )
+#     outliers_filtered_df["calving.rate_scaling.file"] = outliers_filtered_df[
+#         "calving.rate_scaling.file"
+#     ].apply(prp.simplify_calving)
+
+#     df = outliers_filtered_df.rename(columns=params_short_dict)
+
+#     n_params = len(params_short_dict)
+#     plt.rcParams["font.size"] = 4
+#     fig, axs = plt.subplots(
+#         5,
+#         3,
+#         sharey=True,
+#         figsize=[6.2, 6.2],
+#     )
+#     fig.subplots_adjust(hspace=1.0, wspace=0.1)
+#     for k, v in enumerate(params_short_dict.values()):
+#         legend = bool(k == 0)
+#         try:
+#             sns.histplot(
+#                 data=df,
+#                 x=v,
+#                 hue="Ensemble",
+#                 hue_order=["Filtered", "Outliers"],
+#                 palette=sim_cmap,
+#                 common_norm=False,
+#                 stat="probability",
+#                 multiple="dodge",
+#                 alpha=0.8,
+#                 linewidth=0.2,
+#                 ax=axs.ravel()[k],
+#                 legend=legend,
+#             )
+#         except:
+#             pass
+#     for ax in axs.flatten():
+#         ax.set_ylabel("")
+#         ticklabels = ax.get_xticklabels()
+#         for tick in ticklabels:
+#             tick.set_rotation(45)
+#     fn = result_dir / Path("figures") / Path("outliers_hist.pdf")
+#     fig.savefig(fn)
+#     plt.close()
+
+
 if __name__ == "__main__":
     __spec__ = None
 
@@ -744,10 +827,16 @@ if __name__ == "__main__":
         default="./results",
     )
     parser.add_argument(
-        "--obs_url",
-        help="""Path to "observed" mass balance.""",
+        "--mankoff_url",
+        help="""Path to "observed" Mankoff mass balance.""",
         type=str,
-        default="data/mass_balance/combined_greenland_mass_balance.nc",
+        default="data/mass_balance/mankoff_greenland_mass_balance.nc",
+    )
+    parser.add_argument(
+        "--grace_url",
+        help="""Path to "observed" GRACE mass balance.""",
+        type=str,
+        default="data/mass_balance/grace_greenland_mass_balance.nc",
     )
     parser.add_argument(
         "--engine",
@@ -757,7 +846,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--filter_range",
-        help="""Time slice used for Importance Sampling. Default="1990 2019". """,
+        help="""Time slice used for Importance Sampling. Default="1986 2019". """,
         type=str,
         nargs=2,
         default="1986 2019",
@@ -840,7 +929,7 @@ if __name__ == "__main__":
     basin_files = options.FILES
     ensemble = options.ensemble
     engine = options.engine
-    filter_start_year, filter_end_year = options.filter_range.split(" ")
+    filter_start_year, filter_end_year = options.filter_range
     fudge_factor = options.fudge_factor
     notebook = options.notebook
     parallel = options.parallel
@@ -885,13 +974,17 @@ if __name__ == "__main__":
     flux_uncertainty_vars = {
         k + "_uncertainty": v + "_uncertainty" for k, v in flux_vars.items()
     }
-    cumulative_vars = ragis_config["Cumulative Variables"]
-    cumulative_uncertainty_vars = {
-        k + "_uncertainty": v + "_uncertainty" for k, v in cumulative_vars.items()
-    }
 
     simulated_ds = prepare_simulations(
         basin_files, ragis_config, reference_year, parallel=parallel, engine=engine
+    )
+
+    observed_mankoff_ds, observed_grace_ds = prepare_observations(
+        options.mankoff_url,
+        options.grace_url,
+        ragis_config,
+        reference_year,
+        engine=engine,
     )
 
     # fig, ax = plt.subplots(1, 1)
@@ -903,6 +996,7 @@ if __name__ == "__main__":
     filtered_ds, outliers_ds = filter_outliers(
         simulated_ds, outlier_range=outlier_range, outlier_variable=outlier_variable
     )
+
     plot_outliers(
         filtered_ds.sel(basin="GIS", ensemble_id="RAGIS")[outlier_variable],
         outliers_ds.sel(basin="GIS", ensemble_id="RAGIS")[outlier_variable],
@@ -910,112 +1004,45 @@ if __name__ == "__main__":
     )
 
     prior_config = simulated_ds.sel(pism_config_axis=params).pism_config
-    prior = config_to_dataframe(prior_config)
-    prior["Ensemble"] = "Prior"
+    prior_df = config_to_dataframe(prior_config, ensemble="Prior")
 
-    outlier_config = outliers_ds.sel(pism_config_axis=params).pism_config
-    dims = [dim for dim in outlier_config.dims if not dim in ["pism_config_axis"]]
-    outlier_df = outlier_config.to_dataframe().reset_index()
-    outlier_df = outlier_df.pivot(
-        index=dims, columns="pism_config_axis", values="pism_config"
-    )
-    outlier_df.reset_index(inplace=True)
-    outlier_df["Ensemble"] = "Outliers"
+    outliers_config = filter_config(outliers_ds, params)
+    outliers_df = config_to_dataframe(outliers_config, ensemble="Outliers")
 
-    filtered_config = filtered_ds.sel(pism_config_axis=params).pism_config
-    dims = [dim for dim in filtered_config.dims if not dim in ["pism_config_axis"]]
-    filtered_df = filtered_config.to_dataframe().reset_index()
-    filtered_df = filtered_df.pivot(
-        index=dims, columns="pism_config_axis", values="pism_config"
-    )
-    filtered_df.reset_index(inplace=True)
-    filtered_df["Ensemble"] = "Filtered"
+    filtered_config = filter_config(filtered_ds, params)
+    filtered_df = config_to_dataframe(filtered_config, ensemble="Filtered")
 
-    outliers_filtered_df = pd.concat([outlier_df, filtered_df]).reset_index(drop=True)
-    # Apply the conversion function to each column
-    outliers_filtered_df = outliers_filtered_df.apply(prp.convert_column_to_numeric)
-    for col in ["surface.given.file", "ocean.th.file", "calving.rate_scaling.file"]:
-        outliers_filtered_df[col] = outliers_filtered_df[col].apply(prp.simplify)
-    outliers_filtered_df["surface.given.file"] = outliers_filtered_df[
-        "surface.given.file"
-    ].apply(prp.simplify_climate)
-    outliers_filtered_df["ocean.th.file"] = outliers_filtered_df["ocean.th.file"].apply(
-        prp.simplify_ocean
-    )
-    outliers_filtered_df["calving.rate_scaling.file"] = outliers_filtered_df[
-        "calving.rate_scaling.file"
-    ].apply(prp.simplify_calving)
-
-    df = outliers_filtered_df.rename(columns=params_short_dict)
-
-    n_params = len(params_short_dict)
-    plt.rcParams["font.size"] = 4
-    fig, axs = plt.subplots(
-        5,
-        3,
-        sharey=True,
-        figsize=[6.2, 6.2],
-    )
-    fig.subplots_adjust(hspace=1.0, wspace=0.1)
-    for k, v in enumerate(params_short_dict.values()):
-        legend = bool(k == 0)
-        try:
-            sns.histplot(
-                data=df,
-                x=v,
-                hue="Ensemble",
-                hue_order=["Filtered", "Outliers"],
-                palette=sim_cmap,
-                common_norm=False,
-                stat="probability",
-                multiple="dodge",
-                alpha=0.8,
-                linewidth=0.2,
-                ax=axs.ravel()[k],
-                legend=legend,
-            )
-        except:
-            pass
-    for ax in axs.flatten():
-        ax.set_ylabel("")
-        ticklabels = ax.get_xticklabels()
-        for tick in ticklabels:
-            tick.set_rotation(45)
-    fn = result_dir / Path("figures") / Path("outliers_hist.pdf")
-    fig.savefig(fn)
-    plt.close()
-
-    observed = xr.open_dataset(options.obs_url, engine=engine, chunks=-1).sel(
-        time=slice("1980", "2022")
-    )
-    observed = observed.sortby("basin")
-    observed = prp.normalize_cumulative_variables(
-        observed,
-        list(cumulative_vars.values()) + list(cumulative_uncertainty_vars.values()),
-        reference_year,
-    )
-
-    observed_days_in_month = observed["time"].dt.days_in_month
-
-    observed_wgts = 1 / (observed_days_in_month)
-    observed_resampled = (
-        (observed * observed_wgts)
-        .resample(time=resampling_frequency)
-        .sum(dim="time")
-        .rolling(time=13)
-        .mean()
-    )
+    obs_mankoff_basins = set(observed_mankoff_ds.basin.values)
+    obs_grace_basins = set(observed_grace_ds.basin.values)
 
     simulated = filtered_ds
+    sim_basins = set(simulated.basin.values)
+    sim_grace = set(simulated.basin.values)
 
-    simulated_resampled = (
-        simulated.drop_vars(["pism_config", "run_stats"], errors="ignore")
-        .resample(time=resampling_frequency)
-        .sum(dim="time")
-        .rolling(time=13)
-        .mean()
+    intersection_mankoff = list(sim_basins.intersection(obs_mankoff_basins))
+    intersection_grace = list(sim_grace.intersection(obs_grace_basins))
+
+    observed_mankoff_basins_ds = observed_mankoff_ds.sel(
+        {"basin": intersection_mankoff}
     )
-    simulated_resampled["pism_config"] = simulated["pism_config"]
+    simulated_mankoff_basins_ds = simulated.sel({"basin": intersection_mankoff})
+
+    observed_mankoff_basins_resampled_ds = observed_mankoff_basins_ds.resample(
+        {"time": resampling_frequency}
+    ).mean()
+    simulated_mankoff_basins_resampled_ds = simulated_mankoff_basins_ds.resample(
+        {"time": resampling_frequency}
+    ).mean()
+
+    observed_grace_basins_ds = observed_grace_ds.sel({"basin": intersection_grace})
+    simulated_grace_basins_ds = simulated.sel({"basin": intersection_grace})
+
+    observed_grace_basins_resampled_ds = observed_grace_basins_ds.resample(
+        {"time": resampling_frequency}
+    ).mean()
+    simulated_grace_basins_resampled_ds = simulated_grace_basins_ds.resample(
+        {"time": resampling_frequency}
+    ).mean()
 
     filtered_all = {}
     prior_posterior_list = []
@@ -1026,10 +1053,10 @@ if __name__ == "__main__":
     ):
         print(f"Importance sampling using {obs_mean_var}")
         f = importance_sampling(
-            simulated=simulated_resampled.sel(
+            simulated=simulated_mankoff_basins_resampled_ds.sel(
                 time=slice(str(filter_start_year), str(filter_end_year))
             ),
-            observed=observed_resampled.sel(
+            observed=observed_mankoff_basins_resampled_ds.sel(
                 time=slice(str(filter_start_year), str(filter_end_year))
             ),
             log_likelihood=log_normal,
@@ -1042,42 +1069,40 @@ if __name__ == "__main__":
 
         with ProgressBar():
             result = f.compute()
-        filtered_ids = result["exp_id_sampled"]
-        filtered_ids["basin"] = filtered_ids["basin"].astype(str)
 
-        posterior_config = (
-            simulated.sel(pism_config_axis=params).sel(exp_id=filtered_ids).pism_config
-        )
-        dims = [dim for dim in prior_config.dims if not dim in ["pism_config_axis"]]
-        posterior_df = posterior_config.to_dataframe().reset_index()
-        posterior = posterior_df.pivot(
-            index=dims, columns="pism_config_axis", values="pism_config"
-        )
-        posterior.reset_index(inplace=True)
-        posterior["Ensemble"] = "Posterior"
+        importance_sampled_ids = result["exp_id_sampled"]
+        importance_sampled_ids["basin"] = importance_sampled_ids["basin"].astype(str)
 
-        prior_posterior_f = pd.concat([prior, posterior]).reset_index(drop=True)
+        posterior_config = filter_config(simulated_mankoff_basins_ds, params)
+        posterior_df = config_to_dataframe(posterior_config, ensemble="Posterior")
+
+        prior_posterior_f = pd.concat([prior_df, posterior_df]).reset_index(drop=True)
         prior_posterior_f["filtered_by"] = obs_mean_var
         prior_posterior_list.append(prior_posterior_f)
 
-        filtered_all[obs_mean_var] = pd.concat([prior, posterior]).rename(
+        filtered_all[obs_mean_var] = pd.concat([prior_df, posterior_df]).rename(
             columns=params_short_dict
         )
 
-        simulated_filtered = simulated_resampled.sel(exp_id=filtered_ids)
-        simulated_filtered["Ensemble"] = "Posterior"
+        simulated_mankoff_basins_filtered_ds = (
+            simulated_mankoff_basins_resampled_ds.sel(exp_id=importance_sampled_ids)
+        )
+        simulated_mankoff_basins_filtered_ds["Ensemble"] = "Posterior"
 
-        sim_prior = simulated_resampled
+        sim_prior = simulated_mankoff_basins_resampled_ds
         sim_prior["Ensemble"] = "Prior"
-        sim_posterior = simulated_filtered
+        sim_posterior = simulated_mankoff_basins_filtered_ds
         sim_posterior["Ensemble"] = "Posterior"
 
         with prp.tqdm_joblib(
-            tqdm(desc="Plotting basins", total=len(observed_resampled.basin))
+            tqdm(
+                desc="Plotting basins",
+                total=len(observed_mankoff_basins_resampled_ds.basin),
+            )
         ) as progress_bar:
             result = Parallel(n_jobs=options.n_jobs)(
                 delayed(plot_obs_sims)(
-                    observed_resampled.sel(basin=basin),
+                    observed_mankoff_basins_resampled_ds.sel(basin=basin),
                     sim_prior.sel(basin=basin, ensemble_id=ensemble),
                     sim_posterior.sel(basin=basin, ensemble_id=ensemble),
                     config=ragis_config,
@@ -1087,22 +1112,23 @@ if __name__ == "__main__":
                     obs_alpha=obs_alpha,
                     sim_alpha=sim_alpha,
                 )
-                for basin in observed_resampled.basin
+                for basin in observed_mankoff_basins_resampled_ds.basin
             )
 
     prior_posterior = pd.concat(prior_posterior_list).reset_index()
     prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)
-    for col in ["surface.given.file", "ocean.th.file", "calving.rate_scaling.file"]:
-        prior_posterior[col] = prior_posterior[col].apply(prp.simplify)
-    prior_posterior["surface.given.file"] = prior_posterior["surface.given.file"].apply(
-        prp.simplify_climate
-    )
-    prior_posterior["ocean.th.file"] = prior_posterior["ocean.th.file"].apply(
-        prp.simplify_ocean
-    )
-    prior_posterior["calving.rate_scaling.file"] = prior_posterior[
-        "calving.rate_scaling.file"
-    ].apply(prp.simplify_calving)
+    # Define a mapping of columns to their corresponding functions
+
+    column_function_mapping: Dict[str, List[Callable]] = {
+        "surface.given.file": [prp.simplify_path, prp.simplify_climate],
+        "ocean.th.file": [prp.simplify_path, prp.simplify_ocean],
+        "calving.rate_scaling.file": [prp.simplify_path, prp.simplify_calving],
+    }
+
+    # Apply the functions to the corresponding columns
+    for col, functions in column_function_mapping.items():
+        for func in functions:
+            prior_posterior[col] = prior_posterior[col].apply(func)
 
     for (basin, filtering_var), df in prior_posterior.rename(
         columns=params_short_dict
@@ -1148,7 +1174,7 @@ if __name__ == "__main__":
         fig.savefig(fn)
         plt.close()
 
-    ensemble_df = prior.apply(prp.convert_column_to_numeric).drop(
+    ensemble_df = prior_df.apply(prp.convert_column_to_numeric).drop(
         columns=["Ensemble", "exp_id"], errors="ignore"
     )
     climate_dict = {

@@ -30,7 +30,7 @@ import shutil
 import zipfile
 from calendar import isleap
 from pathlib import Path
-from typing import Any, Hashable, List, Mapping, Union
+from typing import Any, Dict, Hashable, List, Mapping, Union
 
 import dask
 import joblib
@@ -40,6 +40,9 @@ import xarray as xr
 from tqdm.auto import tqdm
 
 from pism_ragis.decorators import profileit
+from pism_ragis.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def unzip_file(zip_path: str, extract_to: str, overwrite: bool = False) -> None:
@@ -742,7 +745,7 @@ def select_experiment(ds: xr.Dataset, exp_id: str, n: int) -> xr.Dataset:
     return exp
 
 
-def simplify(my_str: str) -> str:
+def simplify_path(my_str: str) -> str:
     """
     Simplify string by extracting the file name.
 
@@ -759,29 +762,12 @@ def simplify(my_str: str) -> str:
     return Path(my_str).name
 
 
-def convert_column_to_numeric(column: pd.Series) -> pd.Series:
-    """
-    Convert column to numeric if possible.
-
-    Parameters
-    ----------
-    column : pd.Series
-        The column to convert.
-
-    Returns
-    -------
-    pd.Series
-        The converted column, or the original column if conversion fails.
-    """
-    try:
-        return pd.to_numeric(column, errors="raise")
-    except ValueError:
-        return column
-
-
 def simplify_climate(my_str: str) -> str:
     """
     Simplify climate string.
+
+    This function simplifies the input climate string by returning a standardized
+    climate model name based on the presence of specific substrings.
 
     Parameters
     ----------
@@ -791,14 +777,28 @@ def simplify_climate(my_str: str) -> str:
     Returns
     -------
     str
-        "MAR" if "MAR" is in the input string, otherwise "HIRHAM".
+        The standardized climate model name based on the input string.
+
+    Examples
+    --------
+    >>> simplify_climate("MAR_2020")
+    'MAR'
+    >>> simplify_climate("RACMO_2020")
+    'RACMO'
+    >>> simplify_climate("Other_2020")
+    'HIRHAM'
     """
-    if "MAR" in my_str:
-        return "MAR"
-    elif "RACMO" in my_str:
-        return "RACMO"
-    else:
-        return "HIRHAM"
+    climate_mapping: Dict[str, str] = {
+        "MAR": "MAR",
+        "RACMO": "RACMO",
+        "HIRHAM": "HIRHAM",
+    }
+
+    for key in climate_mapping:  # pylint: disable=consider-using-dict-items
+        if key in my_str:
+            return climate_mapping[key]
+
+    return "HIRHAM"
 
 
 def simplify_ocean(my_str: str) -> str:
@@ -833,6 +833,26 @@ def simplify_calving(my_str: str) -> int:
         The simplified calving value.
     """
     return int(my_str.split("_")[3])
+
+
+def convert_column_to_numeric(column: pd.Series) -> pd.Series:
+    """
+    Convert column to numeric if possible.
+
+    Parameters
+    ----------
+    column : pd.Series
+        The column to convert.
+
+    Returns
+    -------
+    pd.Series
+        The converted column, or the original column if conversion fails.
+    """
+    try:
+        return pd.to_numeric(column, errors="raise")
+    except ValueError:
+        return column
 
 
 def transpose_dataframe(df: pd.DataFrame, exp_id: str) -> pd.DataFrame:

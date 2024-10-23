@@ -23,7 +23,7 @@ Module for filtering (calibration).
 """
 
 import warnings
-from typing import Callable
+from typing import Callable, Dict, List
 
 import numpy as np
 import xarray as xr
@@ -179,3 +179,70 @@ def importance_sampling(
 
     samples = sample_with_replacement_xr(weights, n_samples=n_samples, seed=seed)
     return xr.merge([log_likes, weights, samples])
+
+
+def filter_outliers(
+    ds: xr.Dataset,
+    outlier_range: List[float],
+    outlier_variable: str,
+    freq: str = "YS",
+    subset: Dict[str, str | int] = {"basin": "GIS", "ensemble_id": "RAGIS"},
+):
+    """
+    Filter outliers from a dataset based on a specified variable and range.
+
+    This function filters out ensemble members from the dataset `ds` where the values of
+    `outlier_variable` fall outside the specified `outlier_range`. The filtering is done
+    for the specified subset of the dataset.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        The input dataset containing the data to be filtered.
+    outlier_range : List[float]
+        A list containing the lower and upper bounds for the outlier range.
+    outlier_variable : str
+        The variable in the dataset to be used for outlier detection.
+    subset : Dict[str, Union[str, int]], optional
+        A dictionary specifying the subset of the dataset to apply the filter on, by default {"basin": "GIS", "ensemble_id": "RAGIS"}.
+
+    Returns
+    -------
+    Dict[str, xr.Dataset]
+        A dictionary with two keys:
+        - "filtered": The dataset with outliers.
+        - "outliers": The dataset containing only the outliers.
+    """
+    lower_bound, upper_bound = outlier_range
+    if hasattr(ds[outlier_variable], "units"):
+        outlier_variable_units = ds[outlier_variable].attrs["units"]
+    else:
+        outlier_variable_units = ""
+    print(
+        f"Filtering outliers [{lower_bound}, {upper_bound}] {outlier_variable_units} for {outlier_variable}"
+    )
+
+    # Select the subset and drop non-numeric variables once
+    subset_ds = (
+        ds.sel(subset)
+        .drop_vars([var for var in ds.data_vars if not ds[var].dtype.kind in "iufc"])
+        .drop_vars(subset.keys(), errors="ignore")
+    )
+
+    outlier_filter = (
+        subset_ds[outlier_variable].resample({"time": freq}).mean(dim="time")
+    )
+
+    mask = (outlier_filter <= lower_bound) | (outlier_filter >= upper_bound)
+    mask = mask.any(dim="time").compute()  # Compute the mask
+
+    # Filter the dataset based on the mask
+    filtered_exp_ids = ds.exp_id.where(~mask, drop=True)
+    outlier_exp_ids = ds.exp_id.where(mask, drop=True)
+
+    n_members = len(ds.exp_id)
+    n_members_filtered = len(filtered_exp_ids)
+    print(f"Ensemble size: {n_members}, outlier-filtered size: {n_members_filtered}")
+    filtered_ds = ds.sel(exp_id=filtered_exp_ids)
+    outliers_ds = ds.sel(exp_id=outlier_exp_ids)
+    return filtered_ds, outliers_ds

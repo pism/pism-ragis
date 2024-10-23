@@ -42,6 +42,12 @@ cumulative_mass_balance = "cumulative_mass_balance"
 cumulative_grounding_line_flux = "cumulative_grounding_line_flux"
 cumulative_smb = "cumulative_surface_mass_balance"
 
+['Cumulative Uncertainty Variables']
+
+cumulative_mass_balance_uncertainty = "cumulative_mass_balance_uncertainty"
+cumulative_grounding_line_flux_uncertainty = "cumulative_grounding_line_flux_uncertainty"
+cumulative_smb_uncertainty = "cumulative_surface_mass_balance_uncertainty"
+
 ["PISM Spatial"]
 
 ice_mass = "cumulative_mass_balance"
