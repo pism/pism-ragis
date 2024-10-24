@@ -521,7 +521,7 @@ def plot_obs_sims(
 
     y_min, y_max = axs[1].get_ylim()
     scaler = y_min + (y_max - y_min) * 0.05
-    obs_filtered = obs.sel(time=slice(filter_range[0], filter_range[-1]))
+    obs_filtered = obs.sel(time=slice(f"{filter_range[0]}", f"{filter_range[-1]}"))
     filter_range_ds = obs_filtered[mass_cumulative_varname]
     filter_range_ds *= 0
     filter_range_ds += scaler
@@ -846,17 +846,17 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--filter_range",
-        help="""Time slice used for Importance Sampling. Default="1986 2019". """,
-        type=str,
+        help="""Time slice used for Importance Sampling, needs an integer year. Default="1986 2019". """,
+        type=int,
         nargs=2,
-        default="1986 2019",
+        default=[1986, 2019],
     )
     parser.add_argument(
         "--outlier_range",
         help="""Ensemble members outside this range are removed. Default="-1_250 250". """,
-        type=str,
+        type=float,
         nargs=2,
-        default="-1250 -250",
+        default=[-1250.0, -250.0],
     )
     parser.add_argument(
         "--outlier_variable",
@@ -873,8 +873,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--fudge_factor",
         help="""Observational uncertainty multiplier. Default=3""",
-        type=int,
-        default=3,
+        type=float,
+        default=3.0,
     )
     parser.add_argument(
         "--notebook",
@@ -936,13 +936,12 @@ if __name__ == "__main__":
     reference_year = options.reference_year
     resampling_frequency = options.resampling_frequency
     outlier_variable = options.outlier_variable
-    outlier_range = [float(v) for v in options.outlier_range.split(" ")]
+    outlier_range = options.outlier_range
     ragis_config_file = Path(
         str(files("pism_ragis.data").joinpath("ragis_config.toml"))
     )
     ragis_config = toml.load(ragis_config_file)
     all_params_dict = ragis_config["Parameters"]
-
     params = [
         "calving.vonmises_calving.sigma_max",
         "calving.rate_scaling.file",
@@ -1207,16 +1206,6 @@ if __name__ == "__main__":
         prefix=("pism_config_axis", prefixes)
     )
 
-    sensitivity_indices_groups = {
-        "surface": "Climate",
-        "atmosphere": "Climate",
-        "ocean": "Ocean",
-        "calving": "Calving",
-        "frontal_melt": "Frontal Melt",
-        "basal_resistance": "Flow",
-        "basal_yield_stress": "Flow",
-        "stress_balance": "Flow",
-    }
     parameter_groups = ragis_config["Parameter Groups"]
 
     si_prefixes = [parameter_groups[name] for name in all_delta_indices.prefix.values]

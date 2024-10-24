@@ -20,14 +20,14 @@
 
 ['Parameter Groups']
 
-"surface"= "Climate"
-"atmosphere"= "Climate"
-"ocean"= "Ocean"
-"calving"= "Calving"
-"frontal_melt"= "Frontal Melt"
-"basal_resistance"= "Flow"
-"basal_yield_stress"= "Flow"
-"stress_balance"= "Flow"
+"surface" = "Climate"
+"atmosphere" = "Climate"
+"ocean" = "Ocean"
+"calving" = "Calving"
+"frontal_melt" = "Frontal Melt"
+"basal_resistance" = "Flow"
+"basal_yield_stress" = "Flow"
+"stress_balance" = "Flow"
 
 
 ['Flux Variables']
