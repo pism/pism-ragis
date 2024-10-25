@@ -50,7 +50,7 @@ from pism_ragis.filtering import filter_outliers, importance_sampling
 from pism_ragis.likelihood import log_normal
 from pism_ragis.logger import get_logger
 
-logger = get_logger(__name__)
+logger = get_logger("pism_ragis")
 
 xr.set_options(keep_attrs=True)
 plt.style.use("tableau-colorblind10")
@@ -1066,8 +1066,11 @@ if __name__ == "__main__":
             sim_var=sim_var,
         )
 
-        with ProgressBar():
+        with ProgressBar() as pbar:
             result = f.compute()
+            logger.info(
+                "Importance Sampling: Finished in %2.2f seconds", pbar.last_duration
+            )
 
         importance_sampled_ids = result["exp_id_sampled"]
         importance_sampled_ids["basin"] = importance_sampled_ids["basin"].astype(str)
