@@ -34,7 +34,7 @@ build-backend = "setuptools.build_meta"
 py-modules = ["pism_ragis"]
 
 [tool.setuptools.package-data]
-"pism_ragis" = ['data/*.txt', 'data/*.gpkg', 'data/*.toml']
+"pism_ragis" = ['logging.conf', 'data/*.txt', 'data/*.gpkg', 'data/*.toml']
 
 [tool.flake8]
 # https://pep8.readthedocs.io/en/latest/intro.html#error-codes

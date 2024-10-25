@@ -29,11 +29,13 @@ from pathlib import Path
 
 import cf_xarray.units  # pylint: disable=unused-import
 import numpy as np
+import pandas as pd
 import pint_xarray  # pylint: disable=unused-import
 import toml
 import xarray as xr
 
-from pism_ragis.processing import download_dataset
+from pism_ragis.download import download_earthaccess, download_netcdf, save_netcdf
+from pism_ragis.processing import decimal_year_to_datetime
 
 xr.set_options(keep_attrs=True)
 
@@ -44,15 +46,9 @@ if __name__ == "__main__":
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Prepare Mass Balance from Mankoff et al (2021)."
-    parser.add_argument(
-        "--url",
-        help="""URL to dataset. Default is https://dataverse.geus.dk/api/access/datafile/:persistentId?persistentId=doi:10.22008/FK2/OHI23Z/MRSBQR.""",
-        type=str,
-        default="https://dataverse.geus.dk/api/access/datafile/:persistentId?persistentId=doi:10.22008/FK2/OHI23Z/MRSBQR",
-    )
+    url = "https://dataverse.geus.dk/api/access/datafile/:persistentId?persistentId=doi:10.22008/FK2/OHI23Z/MRSBQR"
     options = parser.parse_args()
-    url = options.url
-    p = Path("mankoff")
+    p = Path("mass_balance")
     p.mkdir(parents=True, exist_ok=True)
 
     ragis_config_file = Path(
@@ -68,7 +64,7 @@ if __name__ == "__main__":
     gis_vars = [v for v in gis_vars_dict.values() if not "uncertainty" in v]
     gis_uncertainty_vars = [v for v in gis_vars_dict.values() if "uncertainty" in v]
 
-    ds = download_dataset(url)
+    ds = download_netcdf(url)
     for v in ["MB_err", "BMB_err", "MB_ROI", "MB_ROI_err", "BMB_ROI_err"]:
         ds[v].attrs["units"] = "Gt day-1"
     ds = ds.pint.quantify()
@@ -76,7 +72,7 @@ if __name__ == "__main__":
     comp = {"zlib": True, "complevel": 2}
     encoding = {var: comp for var in ds.data_vars}
 
-    fn = "mankoff_mass_balance_clean.nc"
+    fn = "mankoff_greenland_mass_balance_clean.nc"
     p_fn = p / fn
     ds.pint.dequantify().to_netcdf(p_fn, encoding=encoding)
 
@@ -112,6 +108,43 @@ if __name__ == "__main__":
     comp = {"zlib": True, "complevel": 2}
     encoding = {var: comp for var in ds.data_vars}
 
-    fn = "mankoff_mass_balance.nc"
+    fn = "mankoff_greenland_mass_balance.nc"
     p_fn = p / fn
-    ds.pint.dequantify().to_netcdf(p_fn, encoding=encoding)
+    mankoff_ds = ds.pint.dequantify()
+    save_netcdf(mankoff_ds, p_fn)
+
+    short_name = "GREENLAND_MASS_TELLUS_MASCON_CRI_TIME_SERIES_RL06.1_V3"
+    results = download_earthaccess(result_dir=p, short_name=short_name)
+
+    # Read the data into a pandas DataFrame
+    df = pd.read_csv(
+        results[0],
+        header=32,  # Skip the header lines
+        sep="\s+",
+        names=[
+            "year",
+            "cumulative_mass_balance",
+            "cumulative_mass_balance_uncertainty",
+        ],
+    )
+
+    # Vectorize the function to apply it to the entire array
+    vectorized_conversion = np.vectorize(decimal_year_to_datetime)
+
+    # Print the result
+    date = vectorized_conversion(df["year"])
+    df["time"] = date
+
+    ds = xr.Dataset.from_dataframe(df.set_index(df["time"]))
+    ds = ds.expand_dims({"basin": ["GRACE"]}, axis=-1)
+    ds["cumulative_mass_balance"].attrs.update({"units": "Gt"})
+    ds["cumulative_mass_balance_uncertainty"].attrs.update({"units": "Gt"})
+    fn = "grace_greenland_mass_balance.nc"
+    p_fn = p / fn
+    grace_ds = ds
+    save_netcdf(grace_ds, p_fn)
+
+    fn = "combined_greenland_mass_balance.nc"
+    p_fn = p / fn
+    combined_ds = xr.concat([grace_ds, mankoff_ds], dim="time").sortby("time")
+    save_netcdf(combined_ds, p_fn)

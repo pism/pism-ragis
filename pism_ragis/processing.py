@@ -14,7 +14,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with PISM; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 # pylint: disable=too-many-positional-arguments
 
@@ -23,105 +22,85 @@ Module for data processing
 """
 
 import contextlib
+import datetime
 import os
 import pathlib
 import re
 import shutil
+import zipfile
 from calendar import isleap
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Hashable, List, Mapping, Union
+from typing import Any, Dict, Hashable, List, Mapping, Union
 
 import dask
-import earthaccess
 import joblib
 import numpy as np
 import pandas as pd
-import requests
 import xarray as xr
 from tqdm.auto import tqdm
 
-kg2cmsle = 1 / 1e12 * 1.0 / 362.5 / 10.0
-gt2cmsle = 1 / 362.5 / 10.0
+from pism_ragis.decorators import profileit
+from pism_ragis.logger import get_logger
+
+logger = get_logger(__name__)
 
 
-def download_earthaccess_dataset(
-    doi: str = "10.5067/7FILV218JZA2",
-    filter_str: str = "Greenland_polygons",
-    result_dir: Union[Path, str] = "calfin",
-) -> List:
+def unzip_file(zip_path: str, extract_to: str, overwrite: bool = False) -> None:
     """
-    Download datasets via Earthaccess.
+    Unzip a file to a specified directory with a progress bar and optional overwrite.
 
     Parameters
     ----------
-    doi : str, optional
-        The DOI of the dataset to download. Default is "10.5067/7FILV218JZA2".
-    filter_str : str, optional
-        A string to filter the search results. Default is "Greenland_polygons".
-    result_dir : Union[Path, str], optional
-        The directory where the downloaded files will be saved. Default is "calfin".
-
-    Returns
-    -------
-    None
+    zip_path : str
+        The path to the ZIP file.
+    extract_to : str
+        The directory where the contents will be extracted.
+    overwrite : bool, optional
+        Whether to overwrite existing files, by default False.
     """
-    p = Path(result_dir)
-    p.mkdir(parents=True, exist_ok=True)
+    # Ensure the extract_to directory exists
+    Path(extract_to).mkdir(parents=True, exist_ok=True)
 
-    earthaccess.login()
-    result = earthaccess.search_data(doi=doi)
-    result_filtered = [
-        granule
-        for granule in result
-        if filter_str in granule["umm"]["DataGranule"]["Identifiers"][0]["Identifier"]
-    ]
-    return earthaccess.download(result_filtered, p)
+    # Open the ZIP file
+    with zipfile.ZipFile(zip_path, "r") as zip_ref:
+        # Get the list of file names in the zip file
+        file_list = zip_ref.namelist()
+
+        # Iterate over the file names with a progress bar
+        for file in tqdm(file_list, desc="Extracting files", unit="file"):
+            file_path = Path(extract_to) / file
+            if not file_path.exists() or overwrite:
+                zip_ref.extract(member=file, path=extract_to)
 
 
-def download_dataset(
-    url: str = "https://dataverse.geus.dk/api/access/datafile/:persistentId?persistentId=doi:10.22008/FK2/OHI23Z/MRSBQR",
-    chunk_size: int = 1024,
-) -> xr.Dataset:
+def decimal_year_to_datetime(decimal_year: float) -> datetime.datetime:
     """
-    Download a dataset from the specified URL and return it as an xarray Dataset.
+    Convert a decimal year to a datetime object.
 
     Parameters
     ----------
-    url : str, optional
-        The URL of the dataset to download. Default is the mass balance dataset URL.
-    chunk_size : int, optional
-        The size of the chunks to download at a time, in bytes. Default is 1024 bytes.
+    decimal_year : float
+        The decimal year to be converted.
 
     Returns
     -------
-    xr.Dataset
-        The downloaded dataset as an xarray Dataset.
+    datetime.datetime
+        The corresponding datetime object.
 
-    Examples
-    --------
-    >>> dataset = download_mass_balance()
-    >>> print(dataset)
+    Notes
+    -----
+    The function calculates the date by determining the start of the year and adding
+    the fractional part of the year as days. If the resulting date has an hour value
+    of 12 or more, it rounds up to the next day and sets the time to midnight.
     """
-    # Get the file size from the headers
-    response = requests.head(url, timeout=10)
-    file_size = int(response.headers.get("content-length", 0))
-
-    # Initialize the progress bar
-    progress = tqdm(total=file_size, unit="iB", unit_scale=True)
-
-    # Download the file in chunks and update the progress bar
-    print(f"Downloading {url}")
-    with requests.get(url, stream=True, timeout=10) as r:
-        r.raise_for_status()
-        with open("temp.nc", "wb") as f:
-            for chunk in r.iter_content(chunk_size=chunk_size):
-                f.write(chunk)
-                progress.update(len(chunk))
-    progress.close()
-
-    # Open the downloaded file with xarray
-    return xr.open_dataset("temp.nc")
+    year = int(decimal_year)
+    remainder = decimal_year - year
+    start_of_year = datetime.datetime(year, 1, 1)
+    days_in_year = (datetime.datetime(year + 1, 1, 1) - start_of_year).days
+    date = start_of_year + datetime.timedelta(days=remainder * days_in_year)
+    if date.hour >= 12:
+        date = date + datetime.timedelta(days=1)
+    return date.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def days_in_year(year: int) -> int:
@@ -184,7 +163,11 @@ def calculate_area(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
 def preprocess_time(
     ds,
     regexp: str = "ERA5-(.+?).nc",
-    drop_vars: Union[List[str], None] = None,
+    freq: str = "MS",
+    periods: int | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    drop_vars: List[str] | None = None,
     drop_dims: List[str] = ["nv4"],
 ):
     """
@@ -200,6 +183,8 @@ def preprocess_time(
         The input dataset to be processed.
     regexp : str, optional
         The regular expression pattern to extract the year from the filename, by default "ERA5-(.+?).nc".
+    freq : str, optional
+        The frequency string to create the time range, by default "MS".
     drop_vars : Union[List[str], None], optional
         A list of variable names to be dropped from the dataset, by default None.
     drop_dims : List[str], optional
@@ -215,14 +200,28 @@ def preprocess_time(
     AssertionError
         If the regular expression does not match any part of the filename.
     """
-    m_year_re = re.search(regexp, ds.encoding["source"])
-    assert m_year_re is not None
-    m_year = m_year_re.group(1)
 
-    time = xr.date_range(m_year, freq="MS", periods=ds.time.size + 1)
+    if "time" not in ds.coords:
+        nt = 1
+        ds = ds.expand_dims(dim="time", axis=0)
+    else:
+        nt = ds.time.size
+
+    if start_date and end_date and periods:
+        time = xr.cftime_range(start_date, end_date, periods=periods)
+    else:
+        m_year_re = re.search(regexp, ds.encoding["source"])
+        assert m_year_re is not None
+        m_year = m_year_re.group(1)
+        time = xr.cftime_range(m_year, freq=freq, periods=nt + 1)
     time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
     ds = ds.assign_coords(time=time_centered)
-    ds = ds.cf.add_bounds("time")
+
+    time_bounds = xr.DataArray(
+        np.vstack([time[:-1], time[1:]]).T, dims=["time", "bounds"]
+    )
+    # Add bounds to the dataset
+    ds = ds.assign_coords(time_bounds=time_bounds)
 
     return ds.drop_vars(drop_vars, errors="ignore").drop_dims(
         drop_dims, errors="ignore"
@@ -426,8 +425,8 @@ def tqdm_joblib(tqdm_object):
 def to_decimal_year(date):
     """Convert datetime date to decimal year"""
     year = date.year
-    start_of_this_year = datetime(year=year, month=1, day=1)
-    start_of_next_year = datetime(year=year + 1, month=1, day=1)
+    start_of_this_year = datetime.datetime(year=year, month=1, day=1)
+    start_of_next_year = datetime.datetime(year=year + 1, month=1, day=1)
     year_elapsed = (date - start_of_this_year).total_seconds()
     year_duration = (start_of_next_year - start_of_this_year).total_seconds()
     fraction = year_elapsed / year_duration
@@ -579,6 +578,7 @@ class UtilsMethods:
         return self._obj.drop_vars(nonnumeric_vars, errors=errors)
 
 
+@profileit
 def load_ensemble(
     filenames: List[Union[Path, str]], parallel: bool = True, engine: str = "netcdf4"
 ) -> xr.Dataset:
@@ -607,9 +607,8 @@ def load_ensemble(
         ds = xr.open_mfdataset(
             filenames,
             parallel=parallel,
-            chunks={"exp_id": -1},
+            chunks={"exp_id": -1, "time": -1},
             engine=engine,
-            decode_cf=False,
         ).drop_vars(["spatial_ref", "mapping"], errors="ignore")
     if "time" in ds["pism_config"].coords:
         ds["pism_config"] = ds["pism_config"].isel(time=0).drop_vars("time")
@@ -618,7 +617,7 @@ def load_ensemble(
 
 
 def normalize_cumulative_variables(
-    ds: xr.Dataset, variables, reference_year: int = 1992
+    ds: xr.Dataset, variables, reference_year: float = 1992.0
 ) -> xr.Dataset:
     """
     Normalize cumulative variables in an xarray Dataset by subtracting their values at a reference year.
@@ -629,8 +628,8 @@ def normalize_cumulative_variables(
         The xarray Dataset containing the cumulative variables to be normalized.
     variables : str or list of str
         The name(s) of the cumulative variables to be normalized.
-    reference_year : int, optional
-        The reference year to use for normalization. Default is 1992.
+    reference_year : float, optional
+        The reference year to use for normalization. Default is 1992.0.
 
     Returns
     -------
@@ -653,7 +652,8 @@ def normalize_cumulative_variables(
     Data variables:
         cumulative_var  (time) int64 0 10 20 30 40 50
     """
-    ds[variables] -= ds[variables].sel(time=f"{reference_year}-01-01", method="nearest")
+    reference_date = decimal_year_to_datetime(reference_year)
+    ds[variables] -= ds[variables].sel(time=reference_date, method="nearest")
     return ds
 
 
@@ -745,7 +745,7 @@ def select_experiment(ds: xr.Dataset, exp_id: str, n: int) -> xr.Dataset:
     return exp
 
 
-def simplify(my_str: str) -> str:
+def simplify_path(my_str: str) -> str:
     """
     Simplify string by extracting the file name.
 
@@ -762,29 +762,12 @@ def simplify(my_str: str) -> str:
     return Path(my_str).name
 
 
-def convert_column_to_numeric(column: pd.Series) -> pd.Series:
-    """
-    Convert column to numeric if possible.
-
-    Parameters
-    ----------
-    column : pd.Series
-        The column to convert.
-
-    Returns
-    -------
-    pd.Series
-        The converted column, or the original column if conversion fails.
-    """
-    try:
-        return pd.to_numeric(column, errors="raise")
-    except ValueError:
-        return column
-
-
 def simplify_climate(my_str: str) -> str:
     """
     Simplify climate string.
+
+    This function simplifies the input climate string by returning a standardized
+    climate model name based on the presence of specific substrings.
 
     Parameters
     ----------
@@ -794,14 +777,28 @@ def simplify_climate(my_str: str) -> str:
     Returns
     -------
     str
-        "MAR" if "MAR" is in the input string, otherwise "HIRHAM".
+        The standardized climate model name based on the input string.
+
+    Examples
+    --------
+    >>> simplify_climate("MAR_2020")
+    'MAR'
+    >>> simplify_climate("RACMO_2020")
+    'RACMO'
+    >>> simplify_climate("Other_2020")
+    'HIRHAM'
     """
-    if "MAR" in my_str:
-        return "MAR"
-    elif "RACMO" in my_str:
-        return "RACMO"
-    else:
-        return "HIRHAM"
+    climate_mapping: Dict[str, str] = {
+        "MAR": "MAR",
+        "RACMO": "RACMO",
+        "HIRHAM": "HIRHAM",
+    }
+
+    for key in climate_mapping:  # pylint: disable=consider-using-dict-items
+        if key in my_str:
+            return climate_mapping[key]
+
+    return "HIRHAM"
 
 
 def simplify_ocean(my_str: str) -> str:
@@ -836,6 +833,26 @@ def simplify_calving(my_str: str) -> int:
         The simplified calving value.
     """
     return int(my_str.split("_")[3])
+
+
+def convert_column_to_numeric(column: pd.Series) -> pd.Series:
+    """
+    Convert column to numeric if possible.
+
+    Parameters
+    ----------
+    column : pd.Series
+        The column to convert.
+
+    Returns
+    -------
+    pd.Series
+        The converted column, or the original column if conversion fails.
+    """
+    try:
+        return pd.to_numeric(column, errors="raise")
+    except ValueError:
+        return column
 
 
 def transpose_dataframe(df: pd.DataFrame, exp_id: str) -> pd.DataFrame:

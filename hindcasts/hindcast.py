@@ -161,12 +161,6 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
-        "--i_dir",
-        dest="input_dir",
-        help="input directory",
-        default=abspath(join(script_directory, "..")),
-    )
-    parser.add_argument(
         "--data_dir",
         dest="data_dir",
         help="data directory",
@@ -340,9 +334,6 @@ for each in {m_dirs};
       mkdir -p $each
 done\n\n
 """
-    if options.system != "debug":
-        cmd = f"""lfs setstripe -c -1 {dirs["output"]}"""
-        sub.call(shlex.split(cmd))
 
     ensemble_infile = os.path.split(ensemble_file)[-1]
     ensemble_outfile = join(uq_dir, ensemble_infile)

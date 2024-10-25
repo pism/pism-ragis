@@ -20,14 +20,14 @@
 
 ['Parameter Groups']
 
-"surface"= "Climate"
-"atmosphere"= "Climate"
-"ocean"= "Ocean"
-"calving"= "Calving"
-"frontal_melt"= "Frontal Melt"
-"basal_resistance"= "Flow"
-"basal_yield_stress"= "Flow"
-"stress_balance"= "Flow"
+"surface" = "Climate"
+"atmosphere" = "Climate"
+"ocean" = "Ocean"
+"calving" = "Calving"
+"frontal_melt" = "Frontal Melt"
+"basal_resistance" = "Flow"
+"basal_yield_stress" = "Flow"
+"stress_balance" = "Flow"
 
 
 ['Flux Variables']
@@ -41,6 +41,12 @@ smb_flux = "surface_mass_balance"
 cumulative_mass_balance = "cumulative_mass_balance"
 cumulative_grounding_line_flux = "cumulative_grounding_line_flux"
 cumulative_smb = "cumulative_surface_mass_balance"
+
+['Cumulative Uncertainty Variables']
+
+cumulative_mass_balance_uncertainty = "cumulative_mass_balance_uncertainty"
+cumulative_grounding_line_flux_uncertainty = "cumulative_grounding_line_flux_uncertainty"
+cumulative_smb_uncertainty = "cumulative_surface_mass_balance_uncertainty"
 
 ["PISM Spatial"]
 

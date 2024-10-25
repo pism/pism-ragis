@@ -235,7 +235,7 @@ if __name__ == "__main__":
         default="ssa+sia",
     )
     parser.add_argument("--start", help="Simulation start year", default="1980-1-1")
-    parser.add_argument("--end", help="Simulation end year", default="2020-1-1")
+    parser.add_argument("--end", help="Simulation end year", default="1990-1-1")
     parser.add_argument(
         "-e",
         "--ensemble_file",
@@ -334,9 +334,6 @@ for each in {m_dirs};
       mkdir -p $each
 done\n\n
 """
-    if options.system != "debug":
-        cmd = f"""lfs setstripe -c -1 {dirs["output"]}"""
-        sub.call(shlex.split(cmd))
 
     ensemble_infile = os.path.split(ensemble_file)[-1]
     ensemble_outfile = join(uq_dir, ensemble_infile)

@@ -23,10 +23,15 @@ Tests for filtering module.
 # from typing import Tuple
 
 import numpy as np
+import pandas as pd
 import pytest
 import xarray as xr
 
-from pism_ragis.filtering import sample_with_replacement, sample_with_replacement_xr
+from pism_ragis.filtering import (
+    filter_outliers,
+    sample_with_replacement,
+    sample_with_replacement_xr,
+)
 
 
 @pytest.fixture(name="weights_da")
@@ -105,3 +110,72 @@ def test_sample_with_replacement():
     assert np.allclose(
         np.bincount(result, minlength=len(exp_id)) / n_samples, weights, atol=0.1
     ), "Sampled distribution should be close to weights"
+
+
+def test_filter_outliers():
+    """
+    Test the filter_outliers function.
+
+    This test creates a sample xarray.Dataset, calls the filter_outliers function,
+    and asserts that the function correctly filters outliers based on the specified
+    variable and range.
+
+    The test checks that:
+    - The function returns two xarray.Dataset objects.
+    - The filtered dataset does not contain outliers.
+    - The outliers dataset contains only outliers.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+
+    Examples
+    --------
+    >>> test_filter_outliers()
+    """
+    # Create a sample dataset
+    nt = 120
+    ne = 22
+    freq = "MS"
+
+    time = pd.date_range("2000-01-01", periods=nt, freq=freq)
+    exp_id = np.arange(ne)
+    data = np.random.rand(nt, 4, ne, 1) * 100  # Random data for the variable
+
+    ds = xr.Dataset(
+        {"grounding_line_flux": (("time", "basin", "exp_id", "ensemble_id"), data)},
+        coords={
+            "time": time,
+            "exp_id": exp_id,
+            "basin": ["GIS", "CW", "NW", "SW"],
+            "ensemble_id": ["RAGIS"],
+        },
+    )
+
+    # Define the outlier range and variable
+    outlier_range = [40.0, 60.0]
+    outlier_variable = "grounding_line_flux"
+
+    # Call the function
+    filtered_ds, outliers_ds = filter_outliers(
+        ds, outlier_range, outlier_variable, freq=freq
+    )
+
+    # Assert the results
+    assert isinstance(filtered_ds, xr.Dataset)
+    assert isinstance(outliers_ds, xr.Dataset)
+    assert "grounding_line_flux" in filtered_ds
+    assert "grounding_line_flux" in outliers_ds
+
+    # Check that the filtered dataset does not contain outliers
+    assert (filtered_ds[outlier_variable] <= outlier_range[1]).all()
+    assert (filtered_ds[outlier_variable] >= outlier_range[0]).all()
+
+    # Check that the outliers dataset contains only outliers
+    assert (outliers_ds[outlier_variable] > outlier_range[1]).any() or (
+        outliers_ds[outlier_variable] < outlier_range[0]
+    ).any()
