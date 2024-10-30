@@ -39,7 +39,7 @@ import pandas as pd
 import xarray as xr
 from tqdm.auto import tqdm
 
-from pism_ragis.decorators import profileit
+from pism_ragis.decorators import profileit, timeit
 from pism_ragis.logger import get_logger
 
 logger = get_logger(__name__)
@@ -608,6 +608,7 @@ def load_ensemble(
             filenames,
             parallel=parallel,
             chunks={"exp_id": -1, "time": -1},
+            decode_cf=False,
             engine=engine,
         ).drop_vars(["spatial_ref", "mapping"], errors="ignore")
     if "time" in ds["pism_config"].coords:
@@ -615,7 +616,7 @@ def load_ensemble(
     print("Done.")
     return ds
 
-
+@timeit
 def normalize_cumulative_variables(
     ds: xr.Dataset, variables, reference_year: float = 1992.0
 ) -> xr.Dataset:
@@ -656,7 +657,7 @@ def normalize_cumulative_variables(
     ds[variables] -= ds[variables].sel(time=reference_date, method="nearest")
     return ds
 
-
+@timeit
 def standardize_variable_names(
     ds: xr.Dataset, name_dict: Union[Mapping[Any, Hashable], None]
 ) -> xr.Dataset:
