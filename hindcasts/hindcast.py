@@ -272,7 +272,7 @@ if __name__ == "__main__":
 
     stress_balance = options.stress_balance
     ensemble_file = options.ensemble_file
-    pism_exec = "pismr"
+    pism_exec = "pism"
 
     assert options.FILE is not None
     input_file = abspath(options.FILE[0])
