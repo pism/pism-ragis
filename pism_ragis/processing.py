@@ -610,6 +610,7 @@ def load_ensemble(
             filenames,
             parallel=parallel,
             chunks={"exp_id": -1, "time": -1},
+            decode_cf=False,
             engine=engine,
         ).drop_vars(["spatial_ref", "mapping"], errors="ignore")
     if "time" in ds["pism_config"].coords:

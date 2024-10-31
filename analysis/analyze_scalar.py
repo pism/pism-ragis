@@ -842,7 +842,7 @@ if __name__ == "__main__":
         "--engine",
         help="""Engine for xarray. Default="netcdf4".""",
         type=str,
-        default="h5netcdf",
+        default="netcdf4",
     )
     parser.add_argument(
         "--filter_range",
