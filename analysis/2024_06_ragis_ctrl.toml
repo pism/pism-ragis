@@ -1,6 +1,0 @@
-project = "RAGIS"
-proj_dir = "2024_06_ragis_ctrl"
-ensemble_id = "RAGIS"
-scalar_dir = "scalar"
-resolution = 900
-spatial_dir = "spatial"

@@ -3,7 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - python=3.11.7
-  - hdf5=*="*mpich*"
+  - hdf5
   - petsc
   - petsc4py
   - cdo

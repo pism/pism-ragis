@@ -39,7 +39,7 @@ import pandas as pd
 import xarray as xr
 from tqdm.auto import tqdm
 
-from pism_ragis.decorators import profileit
+from pism_ragis.decorators import profileit, timeit
 from pism_ragis.logger import get_logger
 
 logger = get_logger(__name__)
@@ -602,7 +602,9 @@ def load_ensemble(
     This function uses Dask to load the dataset in parallel and handle large chunks efficiently.
     It sets the Dask configuration to split large chunks during array slicing.
     """
-    with dask.config.set(**{"array.slicing.split_large_chunks": True}):
+    with dask.config.set(
+        **{"array.slicing.split_large_chunks": True, "scheduler": "processes"}
+    ):
         print("Loading ensemble files... ", end="", flush=True)
         ds = xr.open_mfdataset(
             filenames,
@@ -616,6 +618,7 @@ def load_ensemble(
     return ds
 
 
+@timeit
 def normalize_cumulative_variables(
     ds: xr.Dataset, variables, reference_year: float = 1992.0
 ) -> xr.Dataset:
@@ -657,6 +660,7 @@ def normalize_cumulative_variables(
     return ds
 
 
+@timeit
 def standardize_variable_names(
     ds: xr.Dataset, name_dict: Union[Mapping[Any, Hashable], None]
 ) -> xr.Dataset:

@@ -215,7 +215,7 @@ def prepare_simulations(
     >>> ds = prepare_simulations(filenames, config)
     """
     ds = prp.load_ensemble(filenames, parallel=parallel, engine=engine).sortby("basin")
-    # ds = xr.apply_ufunc(np.vectorize(convert_bstrings_to_str), ds, dask="parallelized")
+    ds = xr.apply_ufunc(np.vectorize(convert_bstrings_to_str), ds, dask="parallelized")
     ds = ds.dropna(dim="exp_id")
 
     ds = prp.standardize_variable_names(ds, config["PISM Spatial"])
