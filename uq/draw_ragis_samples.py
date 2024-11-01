@@ -10,7 +10,7 @@ from typing import Any, Dict
 import numpy as np
 import pandas as pd
 from pyDOE2 import lhs
-from SALib.sample import saltelli
+from SALib.sample import sobol
 from scipy.stats.distributions import randint, uniform
 
 short2long: Dict[str, str] = {
@@ -26,8 +26,8 @@ short2long: Dict[str, str] = {
 
 climate: Dict[int, str] = {
     0: "HIRHAM5-monthly-ERA5_1975_2021.nc",
-    1: "MARv3.14-monthly-ERA5-1975_2023.nc",
-    2: "RACMO2.3p2_ERA5_FGRN055_1975_2023.nc",
+    1: "MARv3.14-monthly-ERA5_1940_2023.nc",
+    2: "RACMO2.3p2_ERA5_FGRN055_1940_2023.nc",
 }
 gcms: Dict[int, str] = {
     0: "ACCESS1-3_rcp85",
@@ -54,6 +54,9 @@ initialstates: Dict[int, str] = {
     1: "gris_g900m_v2023_RAGIS_id_CTRL_0_25.nc",
 }
 
+retreatfiles: Dict[int, str|bool] = {
+    0: "pism_g450m_frontretreat_calfin_1972_2019.nc",
+    1: ""}
 
 dists: Dict[str, Any] = {
     "ragis": {
@@ -67,6 +70,7 @@ dists: Dict[str, Any] = {
             "frontal_melt.routing.parameter_b": uniform(loc=1.0, scale=0.70),
             "frontal_melt.routing.power_alpha": uniform(loc=0.3, scale=0.55),
             "frontal_melt.routing.power_beta": uniform(loc=1.1, scale=0.7),
+            "prescribed_retreat_file": randint(0, len(retreatfiles)),
         },
         "default_values": {
             "basal_resistance.pseudo_plastic.q": 0.7508221,
@@ -85,7 +89,6 @@ dists: Dict[str, Any] = {
             "ocean.models": "th",
             "ocean.th.gamma_T": 0.0001,
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
-            "prescribed_retreat_file": "pism_g450m_frontretreat_calfin_1972_2019.nc",
             "sliding_law": "pseudo_plastic",
             "stress_balance.sia.enhancement_factor": 2.608046,
             "stress_balance.ssa.Glen_exponent": 3.309718,
@@ -134,8 +137,8 @@ parser.add_argument(
     "--n_samples",
     dest="n_samples",
     type=int,
-    help="""number of samples to draw. default=10.""",
-    default=10,
+    help="""number of samples to draw. default=16.""",
+    default=16,
 )
 parser.add_argument(
     "-d",
@@ -156,8 +159,8 @@ parser.add_argument(
     "--method",
     dest="method",
     type=str,
-    choices=["lhs", "saltelli"],
-    help="""number of samples to draw. default=lhs.""",
+    choices=["lhs", "sobol"],
+    help="""Sampling method, Latin Hypercube or Sobol. default=lhs.""",
     default="lhs",
 )
 parser.add_argument(
@@ -192,8 +195,8 @@ keys_prior = list(distributions.keys())
 print(keys_prior)
 
 # Generate uniform samples (i.e. one unit hypercube)
-if method == "saltelli":
-    unif_sample = saltelli.sample(
+if method == "sobol":
+    unif_sample = sobol.sample(
         problem, n_draw_samples, calc_second_order=calc_second_order
     )
 else:
@@ -223,16 +226,15 @@ for i, key in enumerate(keys_prior):
         dist_sample[:, i] = [
             initialstates[id] for id in distributions[key].ppf(unif_sample[:, i])
         ]
+    elif key == "prescribed_retreat_file":
+        dist_sample[:, i] = [
+            retreatfiles[id] for id in distributions[key].ppf(unif_sample[:, i])
+        ]
     elif key == "stress_balance":
         dist_sample[:, i] = [
             f"{sb_dict[int(id)]}" for id in distributions[key].ppf(unif_sample[:, i])
         ]
 
-    elif key == "frontal_melt_file":
-        dist_sample[:, i] = [
-            f"jib_ocean_forcing_{int(id)}_1980_2020.nc"
-            for id in distributions[key].ppf(unif_sample[:, i])
-        ]
     elif key == "ocean_file":
         dist_sample[:, i] = [
             f"MAR3.9_{gcms[int(id)]}_ocean_1960-2100_v4.nc"

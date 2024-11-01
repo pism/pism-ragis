@@ -77,7 +77,7 @@ if __name__ == "__main__":
     dem_da = dem_da.assign_attrs({"units": "m", "standard_name": "surface_altitude"})
     dem_uncertainty_da = xr.zeros_like(dem_da) + 30
     dem_uncertainty_da.name = "usurf_uncertainty"
-    dem_uncertainty_da = dem_uncertainty_da.assign_attrs({"units": "m"})
+    dem_uncertainty_da = dem_uncertainty_da.assign_attrs({"units": "m", "standard_name": None})
     mask_da = rxr.open_rasterio(mask_file).squeeze()
     mask_da.name = "mask"
     mask_da = mask_da.assign_attrs({"mask": "m"})

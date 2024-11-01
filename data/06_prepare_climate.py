@@ -396,7 +396,7 @@ def process_racmo_cdo(
     data_dir: Union[str, Path],
     output_file: Union[str, Path],
     vars_dict: Dict,
-    start_year: int = 1975,
+    start_year: int = 1940,
     end_year: int = 2023,
     max_workers: int = 4,
 ) -> None:
@@ -912,32 +912,35 @@ if __name__ == "__main__":
         "gld": {"pism_name": "climatic_mass_balance", "units": "kg m^-2 day^-1"},
     }
 
-    output_file = result_dir / Path("RACMO2.3p2_ERA5_FGRN055_1975_2023.nc")
+    start_year, end_year = 1940, 2023
+    output_file = result_dir / Path(f"RACMO2.3p2_ERA5_FGRN055_{start_year}_{end_year}.nc")
     process_racmo_cdo(
         data_dir=result_dir,
-        start_year=1975,
-        end_year=2023,
+        start_year=start_year,
+        end_year=end_year,
         output_file=output_file,
         vars_dict=racmo_vars_dict,
         max_workers=max_workers,
     )
 
-    output_file = result_dir / Path("MARv3.14-monthly-ERA5_1975_2023.nc")
+    start_year, end_year = 1940, 2023
+    output_file = result_dir / Path(f"MARv3.14-monthly-ERA5_{start_year}_{end_year}.nc")
     process_mar_cdo(
         data_dir=result_dir,
         vars_dict=mar_vars_dict,
-        start_year=1975,
-        end_year=2023,
+        start_year=start_year,
+        end_year=end_year,
         output_file=output_file,
         max_workers=max_workers,
     )
 
-    output_file = result_dir / Path("HIRHAM5-monthly-ERA5_1975_2021.nc")
+    start_year, end_year = 1980, 2021
+    output_file = result_dir / Path(f"HIRHAM5-monthly-ERA5_{start_year}_${end_year}.nc")
     process_hirham_cdo(
         data_dir=result_dir,
         vars_dict=hirham_vars_dict,
-        start_year=1980,
-        end_year=2021,
+        start_year=start_year,
+        end_year=end_year,
         output_file=output_file,
         base_url=hirham_url,
         max_workers=max_workers,

@@ -644,7 +644,7 @@ done\n\n
             }
 
             if hasattr(combination, "prescribed_retreat_file") & (
-                combination["prescribed_retreat_file"] is not False
+                combination["prescribed_retreat_file"] != False
             ):
                 calving_parameters[
                     "geometry.front_retreat.prescribed.file"
@@ -728,7 +728,7 @@ done\n\n
             print("------------------------------------------------------------\n")
 
             if options.system == "debug":
-                redirect = " 2>&1 | tee {jobs}/job.${job_id}"
+                redirect = " 2>&1 | tee {jobs}/job.debug"
             else:
                 redirect = " > {jobs}/job.${job_id} 2>&1"
 
