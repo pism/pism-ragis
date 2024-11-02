@@ -22,45 +22,52 @@ Adjust 'tillwat' in a PISM state file based on observed surface speeds.
 
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from pathlib import Path
-from dask.diagnostics import ProgressBar
+
 import xarray as xr
+from dask.diagnostics import ProgressBar
 
 if __name__ == "__main__":
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Generating scripts for warming experiments."
-    parser.add_argument(
-        "INFILE", nargs=1, help="Input file", default=None
-    )
-    parser.add_argument(
-        "OUTFILE", nargs=1, help="Input file", default=None
-    )
+    parser.add_argument("INFILE", nargs=1, help="Input file", default=None)
+    parser.add_argument("OUTFILE", nargs=1, help="Input file", default=None)
     parser.add_argument(
         "--speed_file",
         type=str,
         help="""File with observed velocities. Needs to be on the same projection but not the same resolution as the INFILE.""",
-        default=None
+        default=None,
     )
     parser.add_argument(
         "--speed_variable",
         type=str,
         help="""Variable to use. Default='v'.""",
-        default="v"
+        default="v",
+    )
+    parser.add_argument(
+        "--speed_threshold",
+        type=float,
+        help="""Speed threshold. Default=200 m/yr.""",
+        default=200.0,
     )
 
-    speed_threshold = 200.0
     tillwat_max = 2.0
     options = parser.parse_args()
     infile = Path(options.INFILE[0])
     outfile = Path(options.OUTFILE[0])
     speed_file = Path(options.speed_file)
     speed_var = options.speed_variable
+    speed_threshold = options.speed_threshold
 
     pism_ds = xr.open_dataset(infile)
     speed_ds = xr.open_dataset(speed_file)
-    # pism_ds["tillwat"] = pism_ds["tillwat"].where(speed_ds[speed_var].interp_like(pism_ds) > speed_threshold, tillwat_max)
-    # comp={"zlib": True, "complevel": 2},
-    # encoding = {var: comp for var in pism_ds.data_vars}
-    # with ProgressBar():
-    #     pism_ds.to_netcdf(outfile, encoding=encoding)
+    speed_da = speed_ds[speed_var].interp_like(pism_ds["tillwat"])
+    tillwat_da = pism_ds["tillwat"]
+    pism_ds["tillwat"] = tillwat_da.where(
+        speed_da <= speed_threshold, other=tillwat_max
+    )
 
+    comp = ({"zlib": True, "complevel": 2},)
+    encoding = {var: comp for var in pism_ds.data_vars}
+    with ProgressBar():
+        pism_ds.to_netcdf(outfile, encoding=encoding)
