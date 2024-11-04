@@ -27,6 +27,6 @@ variables:
   mapping:false_northing = 0 ;
   mapping:false_easting = 0 ;
 data:
- x_bnds = -800, 1000;
- y_bnds = -3400, -600;
+ x_bnds = -660650, 887350;
+ y_bnds = -3376550, -640550;
 }
