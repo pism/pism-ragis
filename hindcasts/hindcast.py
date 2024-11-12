@@ -61,7 +61,7 @@ def create_offset_file(file_name: str, delta_T: float = 0.0, frac_P: float = 1.0
     ds = xr.Dataset(
         data_vars=dict(  # pylint: disable=R1735
             delta_T=(["time"], dT, {"units": "K"}),
-            frac_P=(["time"], fP, {"units": ""}),
+            frac_P=(["time"], fP, {"units": "1"}),
             time_bounds=(["time", "bnds"], time_bounds, {}),
         ),
         coords=dict(  # pylint: disable=R1735
@@ -159,6 +159,12 @@ if __name__ == "__main__":
         dest="boot_file",
         help="File to boot from",
         default=None,
+    )
+    parser.add_argument(
+        "--i_dir",
+        dest="input_dir",
+        help="input directory",
+        default=abspath(join(script_directory, "..")),
     )
     parser.add_argument(
         "--data_dir",
@@ -726,7 +732,7 @@ done\n\n
             print("------------------------------------------------------------\n")
 
             if options.system == "debug":
-                redirect = " 2>&1 | tee {jobs}/job.${job_id}"
+                redirect = " 2>&1 | tee {jobs}/job"
             else:
                 redirect = " > {jobs}/job.${job_id} 2>&1"
 
