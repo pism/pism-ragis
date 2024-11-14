@@ -279,7 +279,7 @@ if __name__ == "__main__":
 
     master_config_file = computing.get_path_to_config()
 
-    regridvars = "litho_temp,enthalpy,age,tillwat,bmelt,ice_area_specific_volume,thk"
+    regridvars = "litho_temp,enthalpy,age,tillwat,bmelt,ice_area_specific_volume"
 
     dirs = {"output": "$output_dir"}
     for d in ["performance", "state", "scalar", "spatial", "jobs", "basins"]:
@@ -466,7 +466,7 @@ done\n\n
             else:
                 general_params_dict[
                     "output.sizes.medium"
-                ] = "sftgif,velsurf_mag,mask,usurf,bmelt"
+                ] = "velsurf_mag,mask,usurf,diffusivity"
 
             grid = {}
             grid["grid.file"] = grid_file

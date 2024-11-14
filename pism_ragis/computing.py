@@ -179,6 +179,7 @@ spatial_ts_vars["dem"] = [
 spatial_ts_vars["calibrate"] = [
     "velsurf_mag",
     "velbase_mag",
+    "diffusivity",
     "mask",
     "flux_divergence",
 ]
