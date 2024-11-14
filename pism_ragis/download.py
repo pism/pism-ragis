@@ -136,21 +136,19 @@ def download_archive(url: str) -> Union[tarfile.TarFile, zipfile.ZipFile]:
         or as a ZipFile object if the file is a .zip.
     """
     archive: Union[tarfile.TarFile, zipfile.ZipFile]
-    with urlopen(url) as req:
-        total_size = int(req.info().get("Content-Length").strip())
-        buffer = BytesIO()
-        for chunk in tqdm(
-            iter(lambda: req.read(1024), b""), total=total_size // 1024, unit="KB"
-        ):
-            buffer.write(chunk)
-        buffer.seek(0)
+    req = urlopen(url)
+    total_size = int(req.info().get("Content-Length").strip())
+    buffer = BytesIO()
+    for chunk in tqdm(
+        iter(lambda: req.read(1024), b""), total=total_size // 1024, unit="KB"
+    ):
+        buffer.write(chunk)
+    buffer.seek(0)
 
-        if url.endswith("tar.gz"):
-            with tarfile.open(fileobj=buffer, mode="r|gz") as archive:
-                return archive
-        else:
-            with zipfile.ZipFile(buffer) as archive:
-                return archive
+    if url.endswith("tar.gz"):
+        return tarfile.open(fileobj=buffer, mode="r|gz") 
+    else:
+        return zipfile.ZipFile(buffer)
 
 
 def download_earthaccess(

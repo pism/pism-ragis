@@ -359,7 +359,8 @@ done\n\n
     else:
         pism_path = os.environ.get("PISM_PREFIX")  # type: ignore
 
-    print(os.environ.get("PISM_PREFIX"))
+    print(f"""Using PISM found in {os.environ.get("PISM_PREFIX")}""")
+    print("+++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n")
     tm_cmd: List[Any] = [
         join(pism_path, "bin/create_timeline.py"),
         "-a",

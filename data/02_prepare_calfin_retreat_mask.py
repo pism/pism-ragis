@@ -278,7 +278,7 @@ if __name__ == "__main__":
     ds = xr.open_mfdataset(result_filtered).load()
     ds = ds.cf.add_bounds("time")
 
-    comp = {"zlib": True, "complevel": 2}
+    comp = {"zlib": True, "complevel": 2, "_FillValue": None}
     encoding_compression = {var: comp for var in ds.data_vars}
     encoding.update(encoding_compression)
 
