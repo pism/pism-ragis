@@ -22,6 +22,7 @@ jobs:
         micromamba-version: '2.0.2-2' # any version from https://github.com/mamba-org/micromamba-releases
         generate-run-shell: true
         environment-file: environment.yml
+        environment-name: pims-ragis
     - name: Import numpy in micromamba environment (bash)
       run: python -c "import numpy"
       shell: bash -el {0}
