@@ -59,6 +59,11 @@ retreatfiles: Dict[int, str | bool] = {
     1: "",
 }
 
+slidinglaw: Dict[int, str] = {
+    0: "pseudo_plastic",
+    1: "regularized_coulomb",
+}
+
 dists: Dict[str, Any] = {
     "ragis": {
         "uq": {
@@ -93,6 +98,35 @@ dists: Dict[str, Any] = {
             "sliding_law": "pseudo_plastic",
             "stress_balance.sia.enhancement_factor": 2.608046,
             "stress_balance.ssa.Glen_exponent": 3.309718,
+        },
+    },
+    "flow": {
+        "uq": {
+            "basal_resistance.pseudo_plastic.q": uniform(0.25, 0.75),
+            "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden":  uniform(
+                loc=0.01, scale=0.03
+            ), 
+            "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max": uniform(loc=40.0, scale=20.0),
+            "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min": uniform(loc=5.0, scale=30.0),
+            "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max": uniform(loc=-1000, scale=1000),
+            "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min": uniform(loc=0, scale=1500),
+            "sliding_law": randint(0, len(slidinglaw)),
+            "stress_balance.sia.enhancement_factor": uniform(loc=1.0, scale=3.0),
+            "stress_balance.ssa.Glen_exponent": uniform(loc=2.75, scale=0.75),
+            "stress_balance.sia.Glen_exponent": uniform(loc=1.0, scale=3.0),
+        },
+        "default_values": {
+            "calving.thickness_calving.threshold": 50,
+            "calving.vonmises_calving.sigma_max": 750000,
+            "climate": "given_smb",
+            "climate_file": "HIRHAM5-monthly-ERA5_1975_2021.nc",
+            "fractures": "false",
+            "frontal_melt": "off",
+            "ocean.th.gamma_T": 0.0001,
+            "hydrology": "diffuse",
+            "ocean.models": "const",
+            "ocean_file": None,
+            "prescribed_retreat_file": "pism_g450m_frontretreat_calfin_2007.nc"
         },
     },
     "dem": {
