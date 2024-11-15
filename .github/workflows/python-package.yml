@@ -27,3 +27,6 @@ jobs:
         environment-file: environment.yml
         cache-environment: true
         post-cleanup: 'all'
+     - name: Test with pytest
+      run: |
+        python -m pytest
