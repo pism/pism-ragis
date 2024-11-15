@@ -67,7 +67,7 @@ if __name__ == "__main__":
         speed_da <= speed_threshold, other=tillwat_max
     )
 
-    comp = ({"zlib": True, "complevel": 2},)
+    comp = {"zlib": True, "complevel": 2, "_FillValue": None}
     encoding = {var: comp for var in pism_ds.data_vars}
     with ProgressBar():
         pism_ds.to_netcdf(outfile, encoding=encoding)

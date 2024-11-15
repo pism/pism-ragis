@@ -173,6 +173,8 @@ def create_ds(
         f"frontretreat_g{resolution}m_{start.year}-{start.month}-{start.day}.nc"
     )
     ds.to_netcdf(fn, encoding=encoding)
+    ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
+    ds.rio.write_crs(crs, inplace=True)
     return fn
 
 
@@ -277,6 +279,8 @@ if __name__ == "__main__":
     start = time.time()
     ds = xr.open_mfdataset(result_filtered).load()
     ds = ds.cf.add_bounds("time")
+    ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
+    ds.rio.write_crs(crs, inplace=True)
 
     comp = {"zlib": True, "complevel": 2, "_FillValue": None}
     encoding_compression = {var: comp for var in ds.data_vars}
