@@ -135,18 +135,17 @@ def download_archive(url: str) -> Union[tarfile.TarFile, zipfile.ZipFile]:
         The downloaded archive file as a tarfile.TarFile object if the file is a .tar.gz,
         or as a ZipFile object if the file is a .zip.
     """
-    archive: Union[tarfile.TarFile, zipfile.ZipFile]
-    req = urlopen(url)
-    total_size = int(req.info().get("Content-Length").strip())
-    buffer = BytesIO()
-    for chunk in tqdm(
-        iter(lambda: req.read(1024), b""), total=total_size // 1024, unit="KB"
-    ):
-        buffer.write(chunk)
-    buffer.seek(0)
+    with urlopen(url) as req:
+        total_size = int(req.info().get("Content-Length").strip())
+        buffer = BytesIO()
+        for chunk in tqdm(
+            iter(lambda: req.read(1024), b""), total=total_size // 1024, unit="KB"
+        ):
+            buffer.write(chunk)
+        buffer.seek(0)
 
     if url.endswith("tar.gz"):
-        return tarfile.open(fileobj=buffer, mode="r|gz") 
+        return tarfile.open(fileobj=buffer, mode="r|gz")
     else:
         return zipfile.ZipFile(buffer)
 

@@ -268,7 +268,6 @@ def process_hirham_cdo(
     print(f"Time elapsed {time_elapsed:.0f}s")
 
 
-
 def process_racmo_cdo(
     data_dir: Union[str, Path],
     output_file: Union[str, Path],
@@ -352,8 +351,6 @@ def process_racmo_cdo(
     print(f"Time elapsed {time_elapsed:.0f}s")
 
 
-
-
 def process_mar_cdo(
     data_dir: str,
     output_file: str,
@@ -414,8 +411,6 @@ def process_mar_cdo(
     end = time.time()
     time_elapsed = end - start
     print(f"Time elapsed {time_elapsed:.0f}s")
-
-
 
 
 def download_file(url: str, output_path: Path) -> None:
@@ -596,7 +591,9 @@ if __name__ == "__main__":
     }
 
     start_year, end_year = 1940, 2023
-    output_file = result_dir / Path(f"RACMO2.3p2_ERA5_FGRN055_{start_year}_{end_year}.nc")
+    output_file = result_dir / Path(
+        f"RACMO2.3p2_ERA5_FGRN055_{start_year}_{end_year}.nc"
+    )
     process_racmo_cdo(
         data_dir=result_dir,
         start_year=start_year,
