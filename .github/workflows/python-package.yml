@@ -19,7 +19,7 @@ jobs:
     steps:
     - uses: mamba-org/setup-micromamba@v1
       with:
-        generate-run-shell: true
+        generate-run-shell: false
         environment-file: environment.yml
         environment-name: pism-ragis
     env:
