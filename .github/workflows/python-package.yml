@@ -27,6 +27,6 @@ jobs:
         environment-file: environment.yml
         cache-environment: true
         post-cleanup: 'all'
-    - name: Test with pytest
+    - name: Run tests
       run: |
-        python -m pytest
+        micromamba run -n pism-ragis pytest
