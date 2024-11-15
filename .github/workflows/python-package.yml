@@ -17,10 +17,9 @@ jobs:
       fail-fast: false
 
     steps:
-    - uses: mamba-org/setup-micromamba@v1
+    - uses: mamba-org/setup-micromamba@v2
       with:
-        generate-run-shell: false
-        init-shell: bash
+        generate-run-shell: true
         environment-file: environment.yml
         environment-name: pism-ragis
     env:
