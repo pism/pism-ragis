@@ -15,12 +15,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-
     steps:
-    - uses: mamba-org/setup-micromamba@v2
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up micromamba
+      uses: mamba-org/setup-micromamba@v2
       with:
-        generate-run-shell: true
+        micromamba-version: "latest"
+        activate-environment: "pism-ragis"
         environment-file: environment.yml
-        environment-name: pism-ragis
-    env:
-        ACTIONS_STEP_DEBUG: true
