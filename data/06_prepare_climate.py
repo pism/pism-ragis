@@ -617,14 +617,14 @@ if __name__ == "__main__":
         max_workers=max_workers,
     )
 
-    # start_year, end_year = 1980, 2021
-    # output_file = result_dir / Path(f"HIRHAM5-monthly-ERA5_1975_{end_year}.nc")
-    # process_hirham_cdo(
-    #     data_dir=result_dir,
-    #     vars_dict=hirham_vars_dict,
-    #     start_year=start_year,
-    #     end_year=end_year,
-    #     output_file=output_file,
-    #     base_url=hirham_url,
-    #     max_workers=max_workers,
-    # )
+    start_year, end_year = 1980, 2021
+    output_file = result_dir / Path(f"HIRHAM5-monthly-ERA5_1975_{end_year}.nc")
+    process_hirham_cdo(
+        data_dir=result_dir,
+        vars_dict=hirham_vars_dict,
+        start_year=start_year,
+        end_year=end_year,
+        output_file=output_file,
+        base_url=hirham_url,
+        max_workers=max_workers,
+    )
