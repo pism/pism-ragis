@@ -32,6 +32,6 @@ jobs:
     - name: Import numpy in micromamba environment (pwsh)
       run: python -c "import numpy"
       shell: pwsh
-   - name: Run custom command in micromamba environment
-     run: pytest --version
-     shell: micromamba-shell {0}
+    - name: Run custom command in micromamba environment
+      run: pytest --version
+      shell: micromamba-shell {0}
