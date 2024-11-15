@@ -18,7 +18,7 @@ jobs:
 
     steps:
     - uses: mamba-org/setup-micromamba@v1
-    env:
-        ACTIONS_STEP_DEBUG: true
     with:
       environment-file: environment.yml
+    env:
+        ACTIONS_STEP_DEBUG: true
