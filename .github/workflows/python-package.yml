@@ -27,10 +27,7 @@ jobs:
         environment-file: environment.yml
         cache-environment: true
         post-cleanup: 'all'
-    - name: Install dependencies
-      run: |
-        micromamba install -y -n pism-ragis -f environment.yml
-        micromamba activate pism-ragis
     - name: Run tests
       run: |
-        micromamba run -n pism-ragis pytest
+        python -m pytest
+      shell: micromamba-shell {0}
