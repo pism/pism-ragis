@@ -649,7 +649,7 @@ done\n\n
             }
 
             if hasattr(combination, "prescribed_retreat_file") & (
-                combination["prescribed_retreat_file"] != False
+                combination["prescribed_retreat_file"] is not False
             ):
                 calving_parameters[
                     "geometry.front_retreat.prescribed.file"

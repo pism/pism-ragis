@@ -17,7 +17,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 """
-Generate scrips to hindcasts of the Greenland Ice Sheet using the Parallel Ice Sheet Model (PISM)
+Generate scrips to calibrate initial states of the Greenland Ice Sheet using the Parallel Ice Sheet Model (PISM)
 """
 
 import inspect
@@ -646,7 +646,7 @@ done\n\n
             }
 
             if hasattr(combination, "prescribed_retreat_file") & (
-                combination["prescribed_retreat_file"] != False
+                combination["prescribed_retreat_file"] is not False
             ):
                 calving_parameters[
                     "geometry.front_retreat.prescribed.file"

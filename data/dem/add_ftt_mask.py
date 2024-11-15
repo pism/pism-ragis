@@ -39,7 +39,14 @@ if __name__ == "__main__":
     ds = xr.open_dataset(infile).fillna(0)
     ds["ftt_mask"] = xr.full_like(ds["mask"], fill_value=False, dtype=bool)
     ds["ftt_mask"] = ds["ftt_mask"].where(ds["mask"] != (2 or 3), 1)
-    ds["ftt_mask"].attrs.update({"flag_meanings": "no_ftt apply_ftt", "long_name": "force to thickness mask", "flag_values": [0, 1], "valid_range": [0, 1]})
+    ds["ftt_mask"].attrs.update(
+        {
+            "flag_meanings": "no_ftt apply_ftt",
+            "long_name": "force to thickness mask",
+            "flag_values": [0, 1],
+            "valid_range": [0, 1],
+        }
+    )
 
     comp = {"zlib": True, "complevel": 2, "_FillValue": None}
     encoding = {var: comp for var in ds.data_vars}

@@ -54,9 +54,10 @@ initialstates: Dict[int, str] = {
     1: "gris_g900m_v2023_RAGIS_id_CTRL_0_25.nc",
 }
 
-retreatfiles: Dict[int, str|bool] = {
+retreatfiles: Dict[int, str | bool] = {
     0: "pism_g450m_frontretreat_calfin_1972_2019.nc",
-    1: ""}
+    1: "",
+}
 
 dists: Dict[str, Any] = {
     "ragis": {
@@ -112,15 +113,12 @@ dists: Dict[str, Any] = {
         },
         "default_values": {
             "climate": "given_pdd_delta",
-            "hydrology": "diffuse",
-            "frontal_melt": "off",
+            "hydrology": "routing",
             "ocean": "constant",
-            "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
             "climate_file": "HIRHAM5-monthly-ERA5_1975_2021.nc",
             "salinity": 34,
             "fractures": "false",
             "frontal_melt": "routing",
-            "hydrology": "routing",
             "ocean.models": "th",
             "ocean.th.gamma_T": 0.0001,
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
