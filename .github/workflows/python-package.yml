@@ -25,3 +25,5 @@ jobs:
         micromamba-version: "latest"
         generate-run-shell: true
         environment-file: environment.yml
+        cache-environment: true
+        post-cleanup: 'all'
