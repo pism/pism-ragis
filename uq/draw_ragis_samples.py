@@ -116,7 +116,7 @@ dists: Dict[str, Any] = {
             "frontal_melt": "off",
             "ocean": "constant",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
-            "climate_file": "HIRHAM5-monthly-ERA5_1975_2021.nc",
+            "climate_file": "RACMO2.3p2_ERA5_FGRN055_1940_2023.nc",
             "salinity": 34,
             "fractures": "false",
             "frontal_melt": "routing",
