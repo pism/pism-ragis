@@ -23,12 +23,7 @@ jobs:
         generate-run-shell: true
         environment-file: environment.yml
         environment-name: pims-ragis
-    - name: Import numpy in micromamba environment (bash)
-      run: python -c "import numpy"
-      shell: bash -el {0}
-    - name: Import numpy in micromamba environment (pwsh)
-      run: python -c "import numpy"
-      shell: pwsh
-    - name: Run custom command in micromamba environment
-      run: pytest --version
+    - run: |
+        pytest --version
+        pytest
       shell: micromamba-shell {0}
