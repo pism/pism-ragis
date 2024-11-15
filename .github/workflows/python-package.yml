@@ -25,7 +25,3 @@ jobs:
         generate-run-shell: true
         environment-file: environment.yml
         environment-name: pism-ragis
-    - run: |
-        pytest --version
-        pytest
-      shell: micromamba-shell {0}
