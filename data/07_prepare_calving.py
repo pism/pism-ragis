@@ -114,7 +114,7 @@ parser.add_argument(
 
 options = parser.parse_args()
 amplification_factors = [-1.0, 1.0, 1.05, 1.10, 1.20, 1.50, 2.00]
-start_year = 1975
+start_year = 1900
 end_year = 2025
 year_high = 2000
 

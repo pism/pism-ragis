@@ -139,7 +139,7 @@ dists: Dict[str, Any] = {
             "frontal_melt.routing.parameter_b": uniform(loc=1.0, scale=0.70),
             "frontal_melt.routing.power_alpha": uniform(loc=0.3, scale=0.55),
             "frontal_melt.routing.power_beta": uniform(loc=1.1, scale=0.7),
-            "delta_T": uniform(-2, 0.5),
+            "delta_T": uniform(-2, 3.0),
             "frac_P": uniform(0.0, 0.5),
             "surface.pdd.factor_ice": uniform(loc=4, scale=8),
             "surface.pdd.factor_snow": uniform(loc=0.5, scale=5.5),
@@ -154,18 +154,9 @@ dists: Dict[str, Any] = {
             "fractures": "false",
             "frontal_melt": "routing",
             "ocean.models": "th",
-            "ocean.th.gamma_T": 0.0001,
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
             "surface.pdd.refreeze": 0.6,
-            "till_effective_fraction_overburden": 0.01845403,
             "sliding_law": "pseudo_plastic",
-            "pseudo_plastic_q": 0.7508221,
-            "sia_e": 2.608046,
-            "ssa_n": 3.309718,
-            "phi_min": 7.193718,
-            "phi_max": 42.79528,
-            "z_min": -369.6359,
-            "z_max": 243.8239,
             "prescribed_retreat_file": None,
         },
     },
@@ -252,7 +243,7 @@ sb_dict = {0: "ssa+sia", 1: "blatter"}
 for i, key in enumerate(keys_prior):
     if key == "calving.rate_scaling.file":
         dist_sample[:, i] = [
-            f"seasonal_calving_id_{int(id)}_1975_2025.nc"
+            f"seasonal_calving_id_{int(id)}_1900_2025.nc"
             for id in distributions[key].ppf(unif_sample[:, i])
         ]
     elif key == "climate_file":
