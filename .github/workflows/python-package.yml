@@ -29,5 +29,6 @@ jobs:
         post-cleanup: 'all'
     - name: Run tests
       run: |
+        python -c "import petsc4py; petsc4py.init(sys.argv); from petsc4py import PETSc;"
         python -m pytest
       shell: micromamba-shell {0}

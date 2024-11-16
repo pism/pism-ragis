@@ -103,13 +103,21 @@ dists: Dict[str, Any] = {
     "flow": {
         "uq": {
             "basal_resistance.pseudo_plastic.q": uniform(0.25, 0.75),
-            "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden":  uniform(
+            "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden": uniform(
                 loc=0.01, scale=0.03
-            ), 
-            "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max": uniform(loc=40.0, scale=20.0),
-            "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min": uniform(loc=5.0, scale=30.0),
-            "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min": uniform(loc=-1000, scale=1000),
-            "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max": uniform(loc=0, scale=1500),
+            ),
+            "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max": uniform(
+                loc=40.0, scale=20.0
+            ),
+            "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min": uniform(
+                loc=5.0, scale=30.0
+            ),
+            "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min": uniform(
+                loc=-1000, scale=1000
+            ),
+            "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max": uniform(
+                loc=0, scale=1500
+            ),
             "sliding_law": randint(0, len(slidinglaw)),
             "stress_balance.sia.enhancement_factor": uniform(loc=1.0, scale=3.0),
             "stress_balance.ssa.Glen_exponent": uniform(loc=2.75, scale=0.75),
@@ -126,13 +134,12 @@ dists: Dict[str, Any] = {
             "hydrology": "diffuse",
             "ocean.models": "const",
             "ocean_file": None,
-            "prescribed_retreat_file": "pism_g450m_frontretreat_calfin_2007.nc"
+            "prescribed_retreat_file": "pism_g450m_frontretreat_calfin_2007.nc",
         },
     },
     "dem": {
         "uq": {
-            "calving.vonmises_calving.sigma_max": uniform(loc=350_000, scale=300_000),
-            "calving.rate_scaling.file": randint(0, 7),
+            "calving.vonmises_calving.sigma_max": uniform(loc=300_000, scale=300_000),
             "ocean.th.gamma_T": uniform(loc=0.5e-4, scale=1.00e-4),
             "ocean_file": randint(0, len(gcms)),
             "frontal_melt.routing.parameter_a": uniform(loc=2.4e-4, scale=1.2e-4),
@@ -149,6 +156,7 @@ dists: Dict[str, Any] = {
             "climate": "given_pdd_delta",
             "hydrology": "routing",
             "ocean": "constant",
+            "calving.rate_scaling.file": "seasonal_calving_id_1_1900_2025.nc",
             "climate_file": "RACMO2.3p2_ERA5_FGRN055_1940_2023.nc",
             "salinity": 34,
             "fractures": "false",
