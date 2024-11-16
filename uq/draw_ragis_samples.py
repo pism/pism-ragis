@@ -254,6 +254,10 @@ for i, key in enumerate(keys_prior):
             f"seasonal_calving_id_{int(id)}_1900_2025.nc"
             for id in distributions[key].ppf(unif_sample[:, i])
         ]
+    elif key == "sliding_law":
+        dist_sample[:, i] = [
+            slidinglaw[id] for id in distributions[key].ppf(unif_sample[:, i])
+        ]
     elif key == "climate_file":
         dist_sample[:, i] = [
             climate[id] for id in distributions[key].ppf(unif_sample[:, i])
