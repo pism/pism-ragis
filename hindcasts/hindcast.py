@@ -599,7 +599,7 @@ done\n\n
 
             ocean_file_p = f"""$data_dir/ocean/{combination["ocean_file"]}"""
             frontal_melt = combination["frontal_melt"]
-            if frontal_melt == "discharge_routing":
+            if frontal_melt == "routing":
                 hydrology_parameters["hydrology.surface_input.file"] = runoff_file_p
 
                 frontalmelt_parameters = {
