@@ -295,6 +295,15 @@ if __name__ == "__main__":
     ds.sel({"time": slice("1972", "1979")}).to_netcdf(p_fn, encoding=encoding)
 
     p = Path("front_retreat")
+    fn = Path(f"pism_g{resolution}m_frontretreat_calfin_1972.nc")
+    p_fn = p / fn
+
+    ds.sel({"time": "1972"}).isel({"time": 0}).to_netcdf(p_fn, encoding=encoding)
+    end = time.time()
+    time_elapsed = end - start
+    print(f"Time elapsed {time_elapsed:.0f}s")
+
+    p = Path("front_retreat")
     fn = Path(f"pism_g{resolution}m_frontretreat_calfin_2007.nc")
     p_fn = p / fn
 
