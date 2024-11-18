@@ -718,7 +718,7 @@ done\n\n
             print("------------------------------------------------------------\n")
 
             all_params = " \\\n  ".join(
-                [f"-{k} {v}" for k, v in list(all_params_dict.items())]
+                [f"-{k} {v}" for k, v in sorted(list(all_params_dict.items()))]
             )
 
             if commandline_options is not None:

@@ -2,7 +2,7 @@ netcdf pism_overrides {
     variables:
     byte pism_overrides;
 
-    pism_overrides:output.checkpoint.interval = 1.0;
+    pism_overrides:output.checkpoint.interval = 100.0;
 
     pism_overrides:time.calendar = "standard";
 
