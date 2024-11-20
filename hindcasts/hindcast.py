@@ -315,7 +315,7 @@ if __name__ == "__main__":
     pism_config = "pism"
     pism_config_nc = join(output_dir, pism_config + ".nc")
 
-    nc_cmd = f"ncgen -o {pism_config_nc} {input_dir}/config/{pism_config}.cdl"
+    nc_cmd = f"ncgen3 -o {pism_config_nc} {input_dir}/config/{pism_config}.cdl"
     sub.call(shlex.split(nc_cmd))
 
     m_dirs = " ".join(list(dirs.values()))
@@ -368,7 +368,7 @@ done\n\n
     print(f"""Using PISM found in {os.environ.get("PISM_PREFIX")}""")
     print("+++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n")
     tm_cmd: List[Any] = [
-        join(pism_path, "bin/create_timeline.py"),
+        join(pism_path, "bin/pism_create_timeline"),
         "-a",
         start_date,
         "-e",
