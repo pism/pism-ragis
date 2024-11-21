@@ -621,7 +621,7 @@ systems["pleiades"] = {
     "submit": "qsub",
     "work_dir": "PBS_O_WORKDIR",
     "job_id": "PBS_JOBID",
-    "queue": {"long": 20, "normal": 20, "debug": 20},
+    "queue": {"long": 20, "normal": 20, "debug": 20, "devel": 20},
 }
 
 systems["stampede2"] = {
@@ -662,21 +662,21 @@ systems["anvil"] = {
 
 
 systems["pleiades_haswell"] = systems["pleiades"].copy()
-systems["pleiades_haswell"]["queue"] = {"long": 24, "normal": 24, "debug": 24}
+systems["pleiades_haswell"]["queue"] = {"long": 24, "normal": 24, "debug": 24, "devel": 24}
 
 systems["pleiades_ivy"] = systems["pleiades"].copy()
-systems["pleiades_ivy"]["queue"] = {"long": 20, "normal": 20, "debug": 20}
+systems["pleiades_ivy"]["queue"] = {"long": 20, "normal": 20, "debug": 20, "devel": 20}
 
 systems["pleiades_sandy"] = systems["pleiades"].copy()
-systems["pleiades_sandy"]["queue"] = {"long": 16, "normal": 16, "debug": 16}
+systems["pleiades_sandy"]["queue"] = {"long": 16, "normal": 16, "debug": 16, "devel": 16}
 
 systems["pleiades_broadwell"] = systems["pleiades"].copy()
-systems["pleiades_broadwell"]["queue"] = {"long": 28, "normal": 28, "debug": 28}
+systems["pleiades_broadwell"]["queue"] = {"long": 28, "normal": 28, "debug": 28, "devel": 28}
 
 systems["electra_broadwell"] = systems["pleiades_broadwell"].copy()
 
 systems["electra_skylake"] = systems["pleiades"].copy()
-systems["electra_skylake"]["queue"] = {"long": 40, "normal": 40, "debug": 40}
+systems["electra_skylake"]["queue"] = {"long": 40, "normal": 40, "debug": 40, "devel": 40}
 
 
 systems["debug"]["header"] = ""
