@@ -254,7 +254,6 @@ if __name__ == "__main__":
     data_dir = abspath(options.data_dir)
     output_dir = abspath(options.output_dir)
     boot_file = options.boot_file
-    ftt_file = options.ftt_file
     grid_file = options.grid_file
     compression_level = options.compression_level
     oformat = options.oformat
