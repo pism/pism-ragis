@@ -635,6 +635,18 @@ systems["stampede2"] = {
     },
 }
 
+systems["stampede3"] = {
+    "mpido": "ibrun",
+    "submit": "sbatch",
+    "work_dir": "SLURM_SUBMIT_DIR",
+    "job_id": "SLURM_JOBID",
+    "queue": {
+        "small": 56,
+        "normal": 56,
+        "development": 56,
+    },
+}
+
 systems["frontera"] = {
     "mpido": "ibrun",
     "submit": "sbatch",
@@ -819,6 +831,30 @@ cd $SLURM_SUBMIT_DIR
 # this ./nodes file is necessary for slurm to spawn mpi processes
 # across multiple compute nodes
 srun -l /bin/hostname | sort -n | awk '{{print $2}}' > ./nodes_$SLURM_JOBID
+
+ulimit -l unlimited
+ulimit -s unlimited
+ulimit
+
+"""
+
+systems["stampede3"][
+    "header"
+] = """#!/bin/sh
+#SBATCH -n {cores}
+#SBATCH -N {nodes}
+#SBATCH --time={walltime}
+#SBATCH -p {queue}
+#SBATCH --mail-type=BEGIN
+#SBATCH --mail-type=END
+#SBATCH --mail-type=FAIL
+#SBATCH --output=pism.%j
+
+module list
+
+umask 007
+
+cd $SLURM_SUBMIT_DIR
 
 ulimit -l unlimited
 ulimit -s unlimited
@@ -1144,6 +1180,8 @@ def make_batch_post_header(system):
         "chinook-rl8-40",
         "chinook-rl8-24",
         "stampede2",
+        "stampede3",
+        "frontera",
     ):
         post_header = post_headers["slurm"] + v
     else:

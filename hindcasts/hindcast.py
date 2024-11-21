@@ -180,7 +180,7 @@ if __name__ == "__main__":
         dest="osize",
         choices=["small", "medium", "big", "big_2d", "custom", "none"],
         help="output size type",
-        default="custom",
+        default="none",
     )
     parser.add_argument(
         "-s",
@@ -368,7 +368,7 @@ done\n\n
         "-p",
         periodicity,
         "-d",
-        "2008-01-01",
+        "1980-01-01",
         pism_timefile,
     ]
     sub.call(tm_cmd)

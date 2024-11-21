@@ -189,7 +189,7 @@ parser.add_argument(
     default="ragis",
 )
 parser.add_argument(
-    "--calc_second_order",
+    "--second_order",
     action="store_true",
     help="""Second order interactions.""",
     default=False,
@@ -216,7 +216,7 @@ parser.add_argument(
 )
 options = parser.parse_args()
 n_draw_samples = options.n_samples
-calc_second_order = options.calc_second_order
+calc_second_order = options.second_order
 method = options.method
 outfile = options.OUTFILE[-1]
 distribution_name = options.distribution
@@ -237,7 +237,7 @@ print(keys_prior)
 # Generate uniform samples (i.e. one unit hypercube)
 if method == "sobol":
     unif_sample = sobol.sample(
-        problem, n_draw_samples, calc_second_order=calc_second_order
+        problem, n_draw_samples, calc_second_order=calc_second_order, seed=42
     )
 else:
     unif_sample = lhs(len(keys_prior), n_draw_samples)
