@@ -183,13 +183,6 @@ if __name__ == "__main__":
         default="custom",
     )
     parser.add_argument(
-        "--test_climate_models",
-        dest="test_climate_models",
-        action="store_true",
-        help="Turn off ice dynamics and mass transport to test climate models",
-        default=False,
-    )
-    parser.add_argument(
         "-s",
         "--system",
         dest="system",
@@ -261,6 +254,7 @@ if __name__ == "__main__":
     data_dir = abspath(options.data_dir)
     output_dir = abspath(options.output_dir)
     boot_file = options.boot_file
+    ftt_file = options.ftt_file
     grid_file = options.grid_file
     compression_level = options.compression_level
     oformat = options.oformat
@@ -455,19 +449,13 @@ done\n\n
             outfile = f"g{horizontal_resolution}m_{experiment}.nc"
 
             general_params_dict["output.file"] = join(dirs["state"], outfile)
-            general_params_dict["bootstrap"] = ""
-            #              general_params_dict["input.file"] = pism_dataname
-            general_params_dict["i"] = boot_file
-            if hasattr(combination, "input.regrid.file"):
-                regrid_file = (
-                    f"""$data_dir/initial_states/{combination["input.regrid.file"]}"""
-                )
-                general_params_dict["input.regrid.file"] = regrid_file
-            else:
+            if boot_file is not None:
+                general_params_dict["bootstrap"] = ""
+                general_params_dict["i"] = boot_file
                 general_params_dict["input.regrid.file"] = input_file
-            general_params_dict["input.regrid.vars"] = regridvars
-            if test_climate_models:
-                general_params_dict["test_climate_models"] = ""
+                general_params_dict["input.regrid.vars"] = regridvars
+            else:
+                general_params_dict["i"] = input_file
 
             if osize != "custom":
                 general_params_dict["output.size"] = osize

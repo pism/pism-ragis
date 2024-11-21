@@ -161,6 +161,12 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
+        "--force_to_thickness_file",
+        dest="ftt_file",
+        help="Force-to-thickness target file",
+        default=None,
+    )
+    parser.add_argument(
         "--i_dir",
         dest="input_dir",
         help="input directory",
@@ -255,6 +261,7 @@ if __name__ == "__main__":
     data_dir = abspath(options.data_dir)
     output_dir = abspath(options.output_dir)
     boot_file = options.boot_file
+    ftt_file = options.ftt_file
     grid_file = options.grid_file
     compression_level = options.compression_level
     oformat = options.oformat
@@ -279,7 +286,7 @@ if __name__ == "__main__":
 
     master_config_file = computing.get_path_to_config()
 
-    regridvars = "litho_temp,enthalpy,age,tillwat,bmelt,ice_area_specific_volume"
+    regridvars = "litho_temp,enthalpy,age,tillwat,bmelt,ice_area_specific_volume,thk"
 
     dirs = {"output": "$output_dir"}
     for d in ["performance", "state", "scalar", "spatial", "jobs", "basins"]:
@@ -449,16 +456,13 @@ done\n\n
             outfile = f"g{horizontal_resolution}m_{experiment}.nc"
 
             general_params_dict["output.file"] = join(dirs["state"], outfile)
-            general_params_dict["bootstrap"] = ""
-            general_params_dict["i"] = boot_file
-            if hasattr(combination, "input.regrid.file"):
-                regrid_file = (
-                    f"""$data_dir/initial_states/{combination["input.regrid.file"]}"""
-                )
-                general_params_dict["input.regrid.file"] = regrid_file
-            else:
+            if boot_file is not None:
+                general_params_dict["bootstrap"] = ""
+                general_params_dict["i"] = boot_file
                 general_params_dict["input.regrid.file"] = input_file
-            general_params_dict["input.regrid.vars"] = regridvars
+                general_params_dict["input.regrid.vars"] = regridvars
+            else:
+                general_params_dict["i"] = input_file
             if test_climate_models:
                 general_params_dict["test_climate_models"] = ""
 
@@ -577,7 +581,7 @@ done\n\n
                 climate_parameters["atmosphere.frac_P.file"] = climate_offset_file_p
 
             if combination["climate"] in ("forcing_smb"):
-                climate_parameters["surface.force_to_thickness.file"] = boot_file
+                climate_parameters["surface.force_to_thickness.file"] = ftt_file
 
             climate_params_dict = computing.generate_climate(
                 combination["climate"], **climate_parameters
