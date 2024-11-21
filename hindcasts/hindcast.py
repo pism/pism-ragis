@@ -263,7 +263,6 @@ if __name__ == "__main__":
     # system = available_systems[options.system]
 
     spatial_ts = options.spatial_ts
-    test_climate_models = options.test_climate_models
     exstep = options.exstep
     tsstep = options.tsstep
     float_kill_calve_near_grounding_line = options.float_kill_calve_near_grounding_line
