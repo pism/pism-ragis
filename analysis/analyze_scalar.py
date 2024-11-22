@@ -103,7 +103,7 @@ def prepare_observations(
     basin_url: Union[Path, str],
     grace_url: Union[Path, str],
     config: Dict,
-    reference_year: float,
+    reference_date: str,
     engine: str = "h5netcdf",
 ) -> tuple:
     """
@@ -120,8 +120,8 @@ def prepare_observations(
         The URL or path to the GRACE observation dataset.
     config : Dict
         A dictionary containing configuration settings for processing the datasets.
-    reference_year : float
-        The reference year for normalizing cumulative variables.
+    reference_date : str
+        The reference date for normalizing cumulative variables.
 
     Returns
     -------
@@ -134,7 +134,7 @@ def prepare_observations(
     ...     "Cumulative Variables": {"cumulative_mass_balance": "mass_balance"},
     ...     "Cumulative Uncertainty Variables": {"cumulative_mass_balance_uncertainty": "mass_balance_uncertainty"}
     ... }
-    >>> prepare_observations("basin.nc", "grace.nc", config, 2000.0)
+    >>> prepare_observations("basin.nc", "grace.nc", config, "2000-01-1")
     (<xarray.Dataset>, <xarray.Dataset>)
     """
     obs_basin = xr.open_dataset(basin_url, engine=engine, chunks=-1)
@@ -146,7 +146,7 @@ def prepare_observations(
     obs_basin = prp.normalize_cumulative_variables(
         obs_basin,
         list(cumulative_vars.values()) + list(cumulative_uncertainty_vars.values()),
-        reference_year,
+        reference_date,
     )
 
     obs_grace = xr.open_dataset(grace_url, engine=engine, chunks=-1)
@@ -160,7 +160,7 @@ def prepare_observations(
     obs_grace = prp.normalize_cumulative_variables(
         obs_grace,
         [cumulative_vars] + [cumulative_uncertainty_vars],
-        reference_year,
+        reference_date,
     )
 
     return obs_basin, obs_grace
@@ -170,7 +170,7 @@ def prepare_observations(
 def prepare_simulations(
     filenames: List[Path | str],
     config: Dict,
-    reference_year: float,
+    reference_date: str,
     parallel: bool = True,
     engine: str = "netcdf4",
 ) -> xr.Dataset:
@@ -228,7 +228,7 @@ def prepare_simulations(
     ds = prp.normalize_cumulative_variables(
         ds,
         list(config["Cumulative Variables"].values()),
-        reference_year=reference_year,
+        reference_date=reference_date,
     )
     return ds
 
@@ -394,7 +394,7 @@ def plot_obs_sims(
     filtering_var: str,
     filter_range: List[int] = [1990, 2019],
     fig_dir: Union[str, Path] = "figures",
-    reference_year: float = 1986.0,
+    reference_date: str = "1986-01-1",
     sim_alpha: float = 0.4,
     obs_alpha: float = 1.0,
     sigma: float = 2,
@@ -546,7 +546,7 @@ def plot_obs_sims(
 
     axs[0].xaxis.set_tick_params(labelbottom=False)
 
-    axs[0].set_ylabel(f"Cumulative mass\nloss since {reference_year} (Gt)")
+    axs[0].set_ylabel(f"Cumulative mass\nloss since {reference_date} (Gt)")
     axs[0].set_xlabel("")
     axs[0].set_title(f"{basin} filtered by {filtering_var}")
     axs[1].set_title("")
@@ -567,7 +567,7 @@ def plot_obs_sims_3(
     filtering_var: str,
     filter_range: List[int] = [1990, 2019],
     fig_dir: Union[str, Path] = "figures",
-    reference_year: float = 1986.0,
+    reference_date: str = "1986-01-01",
     sim_alpha: float = 0.4,
     obs_alpha: float = 1.0,
     sigma: float = 2,
@@ -742,7 +742,7 @@ def plot_obs_sims_3(
     axs[0].xaxis.set_tick_params(labelbottom=False)
     axs[1].xaxis.set_tick_params(labelbottom=False)
 
-    axs[0].set_ylabel(f"Cumulative mass\nloss since {reference_year} (Gt)")
+    axs[0].set_ylabel(f"Cumulative mass\nloss since {reference_date} (Gt)")
     axs[0].set_xlabel("")
     axs[1].set_xlabel("")
     axs[0].set_title(f"{basin} filtered by {filtering_var}")
@@ -895,10 +895,10 @@ if __name__ == "__main__":
         default="MS",
     )
     parser.add_argument(
-        "--reference_year",
-        help="""Reference year.""",
-        type=float,
-        default=2004,
+        "--reference_date",
+        help="""Reference date.""",
+        type=str,
+        default="2004-01-1",
     )
     parser.add_argument(
         "--n_jobs",
@@ -933,7 +933,7 @@ if __name__ == "__main__":
     fudge_factor = options.fudge_factor
     notebook = options.notebook
     parallel = options.parallel
-    reference_year = options.reference_year
+    reference_date = options.reference_date
     resampling_frequency = options.resampling_frequency
     outlier_variable = options.outlier_variable
     outlier_range = options.outlier_range
@@ -975,14 +975,14 @@ if __name__ == "__main__":
     }
 
     simulated_ds = prepare_simulations(
-        basin_files, ragis_config, reference_year, parallel=parallel, engine=engine
+        basin_files, ragis_config, reference_date, parallel=parallel, engine=engine
     )
 
     observed_mankoff_ds, observed_grace_ds = prepare_observations(
         options.mankoff_url,
         options.grace_url,
         ragis_config,
-        reference_year,
+        reference_date,
         engine=engine,
     )
 

@@ -172,6 +172,8 @@ if __name__ == "__main__":
             for k, v in pism_config.attrs.items()
             if not any(k.endswith(suffix) for suffix in suffixes_to_exclude)
         }
+        if "geometry.front_retreat.prescribed.file" not in config.keys():
+            config["geometry.front_retreat.prescribed.file"] = "false"
 
         stats = ds["run_stats"]
         if cf:
@@ -225,6 +227,7 @@ if __name__ == "__main__":
         basin_sums["basin"] = basin_sums["basin"].astype(f"S{n_basins}")
         basin_sums["ensemble_id"] = basin_sums["ensemble_id"].astype(f"S{n_ensemble}")
         basin_sums.attrs["Conventions"] = "CF-1.8"
+
     basin_sums.to_netcdf(basins_file, engine=engine)
 
     client.close()

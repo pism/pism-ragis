@@ -610,7 +610,7 @@ def load_ensemble(
             filenames,
             parallel=parallel,
             chunks={"exp_id": -1, "time": -1},
-            decode_cf=False,
+            decode_cf=True,
             engine=engine,
         ).drop_vars(["spatial_ref", "mapping"], errors="ignore")
     if "time" in ds["pism_config"].coords:
@@ -621,7 +621,7 @@ def load_ensemble(
 
 @timeit
 def normalize_cumulative_variables(
-    ds: xr.Dataset, variables, reference_year: float = 1992.0
+    ds: xr.Dataset, variables, reference_date: str = "1992-01-01"
 ) -> xr.Dataset:
     """
     Normalize cumulative variables in an xarray Dataset by subtracting their values at a reference year.
@@ -656,7 +656,6 @@ def normalize_cumulative_variables(
     Data variables:
         cumulative_var  (time) int64 0 10 20 30 40 50
     """
-    reference_date = decimal_year_to_datetime(reference_year)
     ds[variables] -= ds[variables].sel(time=reference_date, method="nearest")
     return ds
 
