@@ -578,9 +578,6 @@ class UtilsMethods:
         return self._obj.drop_vars(nonnumeric_vars, errors=errors)
 
 
-def preprocess_sort(ds, dim: str = "pism_config_axis"):
-    return ds.sortby(dim)
-
 @profileit
 def load_ensemble(
     filenames: List[Union[Path, str]], parallel: bool = True, engine: str = "netcdf4"
@@ -612,7 +609,6 @@ def load_ensemble(
         ds = xr.open_mfdataset(
             filenames,
             parallel=parallel,
-            preprocess=preprocess_sort,
             chunks={"exp_id": -1, "time": -1},
             decode_cf=True,
             engine=engine,
