@@ -118,7 +118,6 @@ dists: Dict[str, Any] = {
             "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max": uniform(
                 loc=0, scale=1500
             ),
-            "sliding_law": randint(0, len(slidinglaw)),
             "stress_balance.sia.enhancement_factor": uniform(loc=1.0, scale=3.0),
             "stress_balance.ssa.Glen_exponent": uniform(loc=2.75, scale=0.75),
             "stress_balance.sia.Glen_exponent": uniform(loc=1.0, scale=3.0),
@@ -135,6 +134,7 @@ dists: Dict[str, Any] = {
             "ocean.models": "const",
             "ocean_file": None,
             "prescribed_retreat_file": "pism_g450m_frontretreat_calfin_2007.nc",
+            "sliding_law": "pseudo_plastic",
         },
     },
     "dem": {

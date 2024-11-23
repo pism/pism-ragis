@@ -39,7 +39,7 @@ import seaborn as sns
 import toml
 import xarray as xr
 from dask.diagnostics import ProgressBar
-from dask.distributed import Client, LocalCluster, progress
+from dask.distributed import Client, progress
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 
@@ -99,6 +99,73 @@ def filter_config(ds: xr.Dataset, params: List[str]) -> xr.DataArray:
     return config
 
 
+@timeit
+def prepare_simulations(
+    filenames: List[Path | str],
+    config: Dict,
+    reference_date: str,
+    parallel: bool = True,
+    engine: str = "netcdf4",
+) -> xr.Dataset:
+    """
+    Prepare simulations by loading and processing ensemble datasets.
+
+    This function loads ensemble datasets from the specified filenames, processes them
+    according to the provided configuration, and returns the processed dataset. The
+    processing steps include sorting, dropping NaNs, standardizing variable names,
+    calculating cumulative variables, and normalizing cumulative variables.
+
+    Parameters
+    ----------
+    filenames : List[Union[Path, str]]
+        A list of file paths to the ensemble datasets.
+    config : Dict
+        A dictionary containing configuration settings for processing the datasets.
+    parallel : bool, optional
+        Whether to load the datasets in parallel, by default True.
+    engine : str, optional
+        The engine to use for loading the datasets, by default "netcdf4".
+
+    Returns
+    -------
+    xr.Dataset
+        The processed xarray dataset.
+
+    Examples
+    --------
+    >>> filenames = ["file1.nc", "file2.nc"]
+    >>> config = {
+    ...     "PISM Spatial": {...},
+    ...     "Cumulative Variables": {
+    ...         "cumulative_grounding_line_flux": "cumulative_gl_flux",
+    ...         "cumulative_smb": "cumulative_smb_flux"
+    ...     },
+    ...     "Flux Variables": {
+    ...         "grounding_line_flux": "gl_flux",
+    ...         "smb_flux": "smb_flux"
+    ...     }
+    ... }
+    >>> ds = prepare_simulations(filenames, config)
+    """
+    ds = prp.load_ensemble(filenames, parallel=parallel, engine=engine).sortby("basin")
+    ds = xr.apply_ufunc(np.vectorize(convert_bstrings_to_str), ds, dask="parallelized")
+
+    ds = prp.standardize_variable_names(ds, config["PISM Spatial"])
+    ds[config["Cumulative Variables"]["cumulative_grounding_line_flux"]] = ds[
+        config["Flux Variables"]["grounding_line_flux"]
+    ].cumsum() / len(ds.time)
+    ds[config["Cumulative Variables"]["cumulative_smb"]] = ds[
+        config["Flux Variables"]["smb_flux"]
+    ].cumsum() / len(ds.time)
+    ds = prp.normalize_cumulative_variables(
+        ds,
+        list(config["Cumulative Variables"].values()),
+        reference_date=reference_date,
+    )
+    return ds
+
+
+@timeit
 def prepare_observations(
     basin_url: Union[Path, str],
     grace_url: Union[Path, str],
@@ -167,72 +234,6 @@ def prepare_observations(
 
 
 @timeit
-def prepare_simulations(
-    filenames: List[Path | str],
-    config: Dict,
-    reference_date: str,
-    parallel: bool = True,
-    engine: str = "netcdf4",
-) -> xr.Dataset:
-    """
-    Prepare simulations by loading and processing ensemble datasets.
-
-    This function loads ensemble datasets from the specified filenames, processes them
-    according to the provided configuration, and returns the processed dataset. The
-    processing steps include sorting, dropping NaNs, standardizing variable names,
-    calculating cumulative variables, and normalizing cumulative variables.
-
-    Parameters
-    ----------
-    filenames : List[Union[Path, str]]
-        A list of file paths to the ensemble datasets.
-    config : Dict
-        A dictionary containing configuration settings for processing the datasets.
-    parallel : bool, optional
-        Whether to load the datasets in parallel, by default True.
-    engine : str, optional
-        The engine to use for loading the datasets, by default "netcdf4".
-
-    Returns
-    -------
-    xr.Dataset
-        The processed xarray dataset.
-
-    Examples
-    --------
-    >>> filenames = ["file1.nc", "file2.nc"]
-    >>> config = {
-    ...     "PISM Spatial": {...},
-    ...     "Cumulative Variables": {
-    ...         "cumulative_grounding_line_flux": "cumulative_gl_flux",
-    ...         "cumulative_smb": "cumulative_smb_flux"
-    ...     },
-    ...     "Flux Variables": {
-    ...         "grounding_line_flux": "gl_flux",
-    ...         "smb_flux": "smb_flux"
-    ...     }
-    ... }
-    >>> ds = prepare_simulations(filenames, config)
-    """
-    ds = prp.load_ensemble(filenames, parallel=parallel, engine=engine).sortby("basin")
-    ds = xr.apply_ufunc(np.vectorize(convert_bstrings_to_str), ds, dask="parallelized")
-    ds = ds.dropna(dim="exp_id")
-
-    ds = prp.standardize_variable_names(ds, config["PISM Spatial"])
-    ds[config["Cumulative Variables"]["cumulative_grounding_line_flux"]] = ds[
-        config["Flux Variables"]["grounding_line_flux"]
-    ].cumsum() / len(ds.time)
-    ds[config["Cumulative Variables"]["cumulative_smb"]] = ds[
-        config["Flux Variables"]["smb_flux"]
-    ].cumsum() / len(ds.time)
-    ds = prp.normalize_cumulative_variables(
-        ds,
-        list(config["Cumulative Variables"].values()),
-        reference_date=reference_date,
-    )
-    return ds
-
-
 def config_to_dataframe(config: xr.DataArray, ensemble: str | None = None):
     """
     Convert an xarray DataArray configuration to a pandas DataFrame.
@@ -291,7 +292,7 @@ def plot_outliers(
     fig.savefig(filename)
 
 
-@profileit
+@timeit
 def run_delta_analysis(
     ds: xr.Dataset,
     ensemble_df: pd.DataFrame,
@@ -996,14 +997,20 @@ if __name__ == "__main__":
         simulated_ds, outlier_range=outlier_range, outlier_variable=outlier_variable
     )
 
-    plot_outliers(
-        filtered_ds.sel(basin="GIS", ensemble_id="RAGIS")[outlier_variable],
-        outliers_ds.sel(basin="GIS", ensemble_id="RAGIS")[outlier_variable],
-        Path(fig_dir) / Path(f"{outlier_variable}_filtering.pdf"),
-    )
+    # plot_outliers(
+    #     filtered_ds.sel(basin="GIS", ensemble_id="RAGIS")[outlier_variable],
+    #     outliers_ds.sel(basin="GIS", ensemble_id="RAGIS")[outlier_variable],
+    #     Path(fig_dir) / Path(f"{outlier_variable}_filtering.pdf"),
+    # )
+
+    start = time.time()
 
     prior_config = simulated_ds.sel(pism_config_axis=params).pism_config
     prior_df = config_to_dataframe(prior_config, ensemble="Prior")
+
+    end = time.time()
+    time_elapsed = end - start
+    print(f"Time elapsed {time_elapsed:.0f}s")
 
     outliers_config = filter_config(outliers_ds, params)
     outliers_df = config_to_dataframe(outliers_config, ensemble="Outliers")

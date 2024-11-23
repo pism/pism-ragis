@@ -28,6 +28,11 @@ from typing import Callable, Dict, List
 import numpy as np
 import xarray as xr
 
+from pism_ragis.decorators import timeit
+from pism_ragis.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 def sample_with_replacement(
     weights: np.ndarray, exp_id: np.ndarray, n_samples: int, seed: int
@@ -99,6 +104,7 @@ def sample_with_replacement_xr(
     return da.rename({"sample": dim})
 
 
+@timeit
 def importance_sampling(
     simulated: xr.Dataset,
     observed: xr.Dataset,
@@ -181,6 +187,7 @@ def importance_sampling(
     return xr.merge([log_likes, weights, samples])
 
 
+@timeit
 def filter_outliers(
     ds: xr.Dataset,
     outlier_range: List[float],
@@ -242,7 +249,7 @@ def filter_outliers(
 
     n_members = len(ds.exp_id)
     n_members_filtered = len(filtered_exp_ids)
-    print(f"Ensemble size: {n_members}, outlier-filtered size: {n_members_filtered}")
     filtered_ds = ds.sel(exp_id=filtered_exp_ids)
     outliers_ds = ds.sel(exp_id=outlier_exp_ids)
+    print(f"Ensemble size: {n_members}, outlier-filtered size: {n_members_filtered}")
     return filtered_ds, outliers_ds

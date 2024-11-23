@@ -34,7 +34,6 @@ import shlex
 import subprocess
 import sys
 from collections import OrderedDict
-from typing import Dict, Union
 
 
 def get_path_to_config():
@@ -251,65 +250,6 @@ def generate_scalar_ts(
     params_dict["output.timeseries.times"] = step
 
     return params_dict
-
-
-def generate_grid_description(grid_resolution, domain, restart=False):
-    """
-    Generate grid description dict
-
-    Returns: OrderedDict
-    """
-
-    if domain.lower() in ("greenland_ext", "gris_ext"):
-        mx_max = 14400
-        my_max = 24080
-    elif domain.lower() in ("qaamerujup"):
-        mx_max = 520
-        my_max = 240
-    else:
-        mx_max = 10560
-        my_max = 18240
-
-    resolution_max = 150
-
-    accepted_resolutions = [
-        150,
-        300,
-        450,
-        600,
-        900,
-        1200,
-        1500,
-        1800,
-        2400,
-        3000,
-        3600,
-        4500,
-        6000,
-        9000,
-        18000,
-        36000,
-    ]
-
-    assert grid_resolution in accepted_resolutions
-
-    grid_div = grid_resolution / resolution_max
-
-    grid: Dict[str, Union[str, int, float]] = OrderedDict()
-    grid["grid.Mx"] = int(mx_max / grid_div)
-    grid["grid.My"] = int(my_max / grid_div)
-
-    grid["grid.Lz"] = 4000
-    grid["grid.Lbz"] = 2000
-    grid["grid.Mz"] = 201
-    grid["grid.Mbz"] = 21
-
-    if restart:
-        g_dict: Dict[str, Union[str, int, float]] = {}
-    else:
-        g_dict = grid
-
-    return g_dict
 
 
 def merge_dicts(*dict_args):
@@ -674,21 +614,41 @@ systems["anvil"] = {
 
 
 systems["pleiades_haswell"] = systems["pleiades"].copy()
-systems["pleiades_haswell"]["queue"] = {"long": 24, "normal": 24, "debug": 24, "devel": 24}
+systems["pleiades_haswell"]["queue"] = {
+    "long": 24,
+    "normal": 24,
+    "debug": 24,
+    "devel": 24,
+}
 
 systems["pleiades_ivy"] = systems["pleiades"].copy()
 systems["pleiades_ivy"]["queue"] = {"long": 20, "normal": 20, "debug": 20, "devel": 20}
 
 systems["pleiades_sandy"] = systems["pleiades"].copy()
-systems["pleiades_sandy"]["queue"] = {"long": 16, "normal": 16, "debug": 16, "devel": 16}
+systems["pleiades_sandy"]["queue"] = {
+    "long": 16,
+    "normal": 16,
+    "debug": 16,
+    "devel": 16,
+}
 
 systems["pleiades_broadwell"] = systems["pleiades"].copy()
-systems["pleiades_broadwell"]["queue"] = {"long": 28, "normal": 28, "debug": 28, "devel": 28}
+systems["pleiades_broadwell"]["queue"] = {
+    "long": 28,
+    "normal": 28,
+    "debug": 28,
+    "devel": 28,
+}
 
 systems["electra_broadwell"] = systems["pleiades_broadwell"].copy()
 
 systems["electra_skylake"] = systems["pleiades"].copy()
-systems["electra_skylake"]["queue"] = {"long": 40, "normal": 40, "debug": 40, "devel": 40}
+systems["electra_skylake"]["queue"] = {
+    "long": 40,
+    "normal": 40,
+    "debug": 40,
+    "devel": 40,
+}
 
 
 systems["debug"]["header"] = ""

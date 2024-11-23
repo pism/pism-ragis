@@ -468,7 +468,7 @@ done\n\n
             grid["grid.dy"] = f"{horizontal_resolution}m"
             grid["grid.Lz"] = 4000
             grid["grid.Lbz"] = 2000
-            grid["grid.Mz"] = 201
+            grid["grid.Mz"] = 401
             grid["grid.Mbz"] = 21
 
             grid_params_dict = grid

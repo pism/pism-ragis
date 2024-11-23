@@ -32,14 +32,13 @@ from calendar import isleap
 from pathlib import Path
 from typing import Any, Dict, Hashable, List, Mapping, Union
 
-import dask
 import joblib
 import numpy as np
 import pandas as pd
 import xarray as xr
 from tqdm.auto import tqdm
 
-from pism_ragis.decorators import profileit, timeit
+from pism_ragis.decorators import timeit
 from pism_ragis.logger import get_logger
 
 logger = get_logger(__name__)
@@ -578,7 +577,7 @@ class UtilsMethods:
         return self._obj.drop_vars(nonnumeric_vars, errors=errors)
 
 
-@profileit
+@timeit
 def load_ensemble(
     filenames: List[Union[Path, str]], parallel: bool = True, engine: str = "netcdf4"
 ) -> xr.Dataset:
@@ -596,25 +595,13 @@ def load_ensemble(
     -------
     xr.Dataset
         The loaded xarray Dataset containing the ensemble data.
-
-    Notes
-    -----
-    This function uses Dask to load the dataset in parallel and handle large chunks efficiently.
-    It sets the Dask configuration to split large chunks during array slicing.
     """
-    with dask.config.set(
-        **{"array.slicing.split_large_chunks": True, "scheduler": "processes"}
-    ):
-        print("Loading ensemble files... ", end="", flush=True)
-        ds = xr.open_mfdataset(
-            filenames,
-            parallel=parallel,
-            chunks={"exp_id": -1, "time": -1},
-            decode_cf=True,
-            engine=engine,
-        ).drop_vars(["spatial_ref", "mapping"], errors="ignore")
-    if "time" in ds["pism_config"].coords:
-        ds["pism_config"] = ds["pism_config"].isel(time=0).drop_vars("time")
+    print("Loading ensemble files... ", end="", flush=True)
+    ds = xr.open_mfdataset(
+        filenames,
+        parallel=parallel,
+        engine=engine,
+    ).drop_vars(["spatial_ref", "mapping"], errors="ignore")
     print("Done.")
     return ds
 

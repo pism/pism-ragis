@@ -21,10 +21,10 @@ Compute basins.
 
 # pylint: disable=redefined-outer-name
 
-from collections import OrderedDict
 import re
 import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from collections import OrderedDict
 from pathlib import Path
 from typing import Union
 
@@ -44,12 +44,6 @@ if __name__ == "__main__":
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Compute ensemble statistics."
-    parser.add_argument(
-        "--no_config",
-        help="""Do not add pism_config and run_stats. Default=False.""",
-        action="store_false",
-        default=True,
-    )
     parser.add_argument(
         "--cf",
         help="""Make output file CF Convetions compliant. Default="False".""",
@@ -96,7 +90,6 @@ if __name__ == "__main__":
     parser.add_argument("FILE", nargs=1, help="netCDF file to process", default=None)
 
     options = parser.parse_args()
-    add_config = options.no_config
     cf = options.cf
     crs = options.crs
     engine = options.engine
@@ -163,49 +156,8 @@ if __name__ == "__main__":
 
     p_config = ds["pism_config"]
     p_run_stats = ds["run_stats"]
-    
-    if add_config:
 
-        # List of suffixes to exclude
-        suffixes_to_exclude = ["_doc", "_type", "_units", "_option", "_choices"]
-
-        # Filter the dictionary
-        config = {
-            k: v
-            for k, v in ds["pism_config"].attrs.items()
-            if not any(k.endswith(suffix) for suffix in suffixes_to_exclude)
-        }
-        if "geometry.front_retreat.prescribed.file" not in config.keys():
-            config["geometry.front_retreat.prescribed.file"] = "false"
-
-        stats = ds["run_stats"]
-        config_sorted = OrderedDict(sorted(config.items()))
-        if cf:
-            pc_keys = np.array(list(config_sorted.keys()), dtype="S1024")
-            pc_vals = np.array(list(config_sorted.values()), dtype="S128")
-            rs_keys = np.array(list(stats.attrs.keys()), dtype="S1024")
-            rs_vals = np.array(list(stats.attrs.values()), dtype="S128")
-        else:
-            pc_keys = list(config_sorted.keys())
-            pc_vals = list(config_sorted.values())
-            rs_keys = list(stats.attrs.keys())
-            rs_vals = list(stats.attrs.values())
-
-        pism_config = xr.DataArray(
-            pc_vals,
-            dims=["pism_config_axis"],
-            coords={"pism_config_axis": pc_keys},
-            name="pism_config",
-        )
-        run_stats = xr.DataArray(
-            rs_vals,
-            dims=["run_stats_axis"],
-            coords={"run_stats_axis": rs_keys},
-            name="run_stats",
-        )
-        ds = xr.merge([ds[mb_vars], pism_config, run_stats])
-    else:
-        ds = ds[mb_vars]
+    ds = ds[mb_vars]
 
     print(f"Size in memory: {(ds.nbytes / 1024**3):.1f} GB")
 
@@ -231,8 +183,45 @@ if __name__ == "__main__":
         basin_sums["basin"] = basin_sums["basin"].astype(f"S{n_basins}")
         basin_sums["ensemble_id"] = basin_sums["ensemble_id"].astype(f"S{n_ensemble}")
         basin_sums.attrs["Conventions"] = "CF-1.8"
-    if not add_config:
-        basin_sums = xr.merge([basin_sums, p_config, p_run_stats])
+
+    # List of suffixes to exclude
+    suffixes_to_exclude = ["_doc", "_type", "_units", "_option", "_choices"]
+
+    # Filter the dictionary
+    config = {
+        k: v
+        for k, v in p_config.attrs.items()
+        if not any(k.endswith(suffix) for suffix in suffixes_to_exclude)
+    }
+    if "geometry.front_retreat.prescribed.file" not in config.keys():
+        config["geometry.front_retreat.prescribed.file"] = "false"
+
+    stats = p_run_stats
+    config_sorted = OrderedDict(sorted(config.items()))
+    if cf:
+        pc_keys = np.array(list(config_sorted.keys()), dtype="S1024")
+        pc_vals = np.array(list(config_sorted.values()), dtype="S128")
+        rs_keys = np.array(list(stats.attrs.keys()), dtype="S1024")
+        rs_vals = np.array(list(stats.attrs.values()), dtype="S128")
+    else:
+        pc_keys = list(config_sorted.keys())
+        pc_vals = list(config_sorted.values())
+        rs_keys = list(stats.attrs.keys())
+        rs_vals = list(stats.attrs.values())
+
+    pism_config = xr.DataArray(
+        pc_vals,
+        dims=["pism_config_axis"],
+        coords={"pism_config_axis": pc_keys},
+        name="pism_config",
+    )
+    run_stats = xr.DataArray(
+        rs_vals,
+        dims=["run_stats_axis"],
+        coords={"run_stats_axis": rs_keys},
+        name="run_stats",
+    )
+    basin_sums = xr.merge([basin_sums, pism_config, run_stats])
 
     basin_sums.to_netcdf(basins_file, engine=engine)
 
@@ -240,5 +229,3 @@ if __name__ == "__main__":
     end = time.time()
     time_elapsed = end - start
     print(f"Time elapsed {time_elapsed:.0f}s")
-
-    client.close()
