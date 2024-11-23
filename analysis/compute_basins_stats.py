@@ -21,6 +21,7 @@ Compute basins.
 
 # pylint: disable=redefined-outer-name
 
+from collections import OrderedDict
 import re
 import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
@@ -160,8 +161,10 @@ if __name__ == "__main__":
     ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
     ds.rio.write_crs(crs, inplace=True)
 
+    p_config = ds["pism_config"]
+    p_run_stats = ds["run_stats"]
+    
     if add_config:
-        pism_config = ds["pism_config"]
 
         # List of suffixes to exclude
         suffixes_to_exclude = ["_doc", "_type", "_units", "_option", "_choices"]
@@ -169,21 +172,22 @@ if __name__ == "__main__":
         # Filter the dictionary
         config = {
             k: v
-            for k, v in pism_config.attrs.items()
+            for k, v in ds["pism_config"].attrs.items()
             if not any(k.endswith(suffix) for suffix in suffixes_to_exclude)
         }
         if "geometry.front_retreat.prescribed.file" not in config.keys():
             config["geometry.front_retreat.prescribed.file"] = "false"
 
         stats = ds["run_stats"]
+        config_sorted = OrderedDict(sorted(config.items()))
         if cf:
-            pc_keys = np.array(list(config.keys()), dtype="S1024")
-            pc_vals = np.array(list(config.values()), dtype="S128")
+            pc_keys = np.array(list(config_sorted.keys()), dtype="S1024")
+            pc_vals = np.array(list(config_sorted.values()), dtype="S128")
             rs_keys = np.array(list(stats.attrs.keys()), dtype="S1024")
             rs_vals = np.array(list(stats.attrs.values()), dtype="S128")
         else:
-            pc_keys = list(config.keys())
-            pc_vals = list(config.values())
+            pc_keys = list(config_sorted.keys())
+            pc_vals = list(config_sorted.values())
             rs_keys = list(stats.attrs.keys())
             rs_vals = list(stats.attrs.values())
 
@@ -227,6 +231,8 @@ if __name__ == "__main__":
         basin_sums["basin"] = basin_sums["basin"].astype(f"S{n_basins}")
         basin_sums["ensemble_id"] = basin_sums["ensemble_id"].astype(f"S{n_ensemble}")
         basin_sums.attrs["Conventions"] = "CF-1.8"
+    if not add_config:
+        basin_sums = xr.merge([basin_sums, p_config, p_run_stats])
 
     basin_sums.to_netcdf(basins_file, engine=engine)
 

@@ -1,4 +1,3 @@
-#!/bin/env python3
 # Copyright (C) 2024 Andy Aschwanden, Constantine Khroulev
 #
 # This file is part of pism-ragis.
@@ -23,7 +22,6 @@ Compute basins.
 # pylint: disable=redefined-outer-name
 
 import re
-import socket
 import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from pathlib import Path
@@ -33,6 +31,7 @@ import dask
 import geopandas as gp
 import numpy as np
 import xarray as xr
+
 from dask.distributed import Client
 from dask_mpi import initialize
 from distributed.scheduler import logger
@@ -41,11 +40,18 @@ from pism_ragis.processing import compute_basin
 
 xr.set_options(keep_attrs=True)
 
-
 if __name__ == "__main__":
+    __spec__ = None
+
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Compute ensemble statistics."
+    parser.add_argument(
+        "--no_config",
+        help="""Do not add pism_config and run_stats. Default=False.""",
+        action="store_false",
+        default=True,
+    )
     parser.add_argument(
         "--cf",
         help="""Make output file CF Convetions compliant. Default="False".""",
@@ -57,6 +63,12 @@ if __name__ == "__main__":
         help="""Coordinate reference system. Default is EPSG:3413.""",
         type=str,
         default="EPSG:3413",
+    )
+    parser.add_argument(
+        "--engine",
+        help="""Engine for xarray. Default="netcdf4".""",
+        type=str,
+        default="netcdf4",
     )
     parser.add_argument(
         "--ensemble",
@@ -86,8 +98,10 @@ if __name__ == "__main__":
     parser.add_argument("FILE", nargs=1, help="netCDF file to process", default=None)
 
     options = parser.parse_args()
+    add_config = options.no_config
     cf = options.cf
     crs = options.crs
+    engine = options.engine
     ensemble = options.ensemble
     result_dir = Path(options.result_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
@@ -126,7 +140,6 @@ if __name__ == "__main__":
             m_id = str(m_id_re.group(1))
 
         n_ensemble = len(ensemble)
-
         ds = ds.expand_dims(
             {"ensemble_id": [ensemble], "exp_id": [m_id]}, axis=[-1, -2]
         )
@@ -139,7 +152,6 @@ if __name__ == "__main__":
             ds = ds.sel(
                 time=slice(options.temporal_range[0], options.temporal_range[1])
             )
-
     bmb_var = "tendency_of_ice_mass_due_to_basal_mass_flux"
     if bmb_var in ds:
         bmb_grounded_da = ds[bmb_var].where(ds["mask"] == 2)
@@ -148,36 +160,51 @@ if __name__ == "__main__":
         bmb_floating_da.name = "tendency_of_ice_mass_due_to_basal_mass_flux_floating"
         ds = xr.merge([ds, bmb_grounded_da, bmb_floating_da])
 
-    config = ds["pism_config"]
-    stats = ds["run_stats"]
-    ds = ds[mb_vars]
     ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
     ds.rio.write_crs(crs, inplace=True)
 
-    if cf:
-        pc_keys = np.array(list(config.attrs.keys()), dtype="S1024")
-        pc_vals = np.array(list(config.attrs.values()), dtype="S128")
-        rs_keys = np.array(list(stats.attrs.keys()), dtype="S1024")
-        rs_vals = np.array(list(stats.attrs.values()), dtype="S128")
-    else:
-        pc_keys = list(config.attrs.keys())
-        pc_vals = list(config.attrs.values())
-        rs_keys = list(stats.attrs.keys())
-        rs_vals = list(stats.attrs.values())
+    if add_config:
+        pism_config = ds["pism_config"]
 
-    pism_config = xr.DataArray(
-        pc_vals,
-        dims=["pism_config_axis"],
-        coords={"pism_config_axis": pc_keys},
-        name="pism_config",
-    )
-    run_stats = xr.DataArray(
-        rs_vals,
-        dims=["run_stats_axis"],
-        coords={"run_stats_axis": rs_keys},
-        name="run_stats",
-    )
-    ds = xr.merge([ds, pism_config, run_stats])
+        # List of suffixes to exclude
+        suffixes_to_exclude = ["_doc", "_type", "_units", "_option", "_choices"]
+
+        # Filter the dictionary
+        config = {
+            k: v
+            for k, v in pism_config.attrs.items()
+            if not any(k.endswith(suffix) for suffix in suffixes_to_exclude)
+        }
+        if "geometry.front_retreat.prescribed.file" not in config.keys():
+            config["geometry.front_retreat.prescribed.file"] = "false"
+
+        stats = ds["run_stats"]
+        if cf:
+            pc_keys = np.array(list(config.keys()), dtype="S1024")
+            pc_vals = np.array(list(config.values()), dtype="S128")
+            rs_keys = np.array(list(stats.attrs.keys()), dtype="S1024")
+            rs_vals = np.array(list(stats.attrs.values()), dtype="S128")
+        else:
+            pc_keys = list(config.keys())
+            pc_vals = list(config.values())
+            rs_keys = list(stats.attrs.keys())
+            rs_vals = list(stats.attrs.values())
+
+        pism_config = xr.DataArray(
+            pc_vals,
+            dims=["pism_config_axis"],
+            coords={"pism_config_axis": pc_keys},
+            name="pism_config",
+        )
+        run_stats = xr.DataArray(
+            rs_vals,
+            dims=["run_stats_axis"],
+            coords={"run_stats_axis": rs_keys},
+            name="run_stats",
+        )
+        ds = xr.merge([ds[mb_vars], pism_config, run_stats])
+    else:
+        ds = ds[mb_vars]
 
     print(f"Size in memory: {(ds.nbytes / 1024**3):.1f} GB")
 
@@ -188,7 +215,7 @@ if __name__ == "__main__":
     host = client.run_on_scheduler(socket.gethostname)
     port = client.scheduler_info()["services"]["dashboard"]
     login_node_address = (
-        "supercomputer.university.edu"  # Provide address/domain of login node
+        "pfe.nas.nasa.gov"  # Provide address/domain of login node
     )
 
     logger.info(
@@ -201,19 +228,24 @@ if __name__ == "__main__":
     start = time.time()
 
     basins_ds_scattered = client.scatter(
-        [ds.rio.clip([basin.geometry]) for _, basin in basins.iterrows()]
+        [ds] + [ds.rio.clip([basin.geometry]) for _, basin in basins.iterrows()]
     )
-    basin_names = [basin["SUBREGION1"] for _, basin in basins.iterrows()]
+    basin_names = ["GRACE"] + [basin["SUBREGION1"] for _, basin in basins.iterrows()]
     n_basins = len(basin_names)
     futures = client.map(compute_basin, basins_ds_scattered, basin_names)
-    basin_sums = xr.concat(client.gather(futures), dim="basin")
+    progress(futures)
+    basin_sums = xr.concat(client.gather(futures), dim="basin").drop_vars(
+        ["mapping", "spatial_ref"]
+    )
     del basin_sums["time"].attrs["bounds"]
     if cf:
         basin_sums["basin"] = basin_sums["basin"].astype(f"S{n_basins}")
         basin_sums["ensemble_id"] = basin_sums["ensemble_id"].astype(f"S{n_ensemble}")
         basin_sums.attrs["Conventions"] = "CF-1.8"
-    basin_sums.to_netcdf(basins_file)
 
+    basin_sums.to_netcdf(basins_file, engine=engine)
+
+    client.close()
     end = time.time()
     time_elapsed = end - start
     print(f"Time elapsed {time_elapsed:.0f}s")
