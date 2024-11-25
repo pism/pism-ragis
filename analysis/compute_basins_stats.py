@@ -221,7 +221,7 @@ if __name__ == "__main__":
     basin_sums = (
         xr.concat(client.gather(futures), dim="basin")
         .drop_vars(["mapping", "spatial_ref"])
-        .sortby(["basin", "time"])
+        .sortby(["basin", "pism_config_axis", "time"])
     )
     if cf:
         basin_sums["basin"] = basin_sums["basin"].astype(f"S{n_basins}")

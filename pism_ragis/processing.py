@@ -577,6 +577,13 @@ class UtilsMethods:
         return self._obj.drop_vars(nonnumeric_vars, errors=errors)
 
 
+def sort_basin(ds):
+    """
+    Sort preprocessing.
+    """
+    return ds.sortby(["basin", "pism_config_axis"])
+
+
 @timeit
 def load_ensemble(
     filenames: List[Union[Path, str]], parallel: bool = True, engine: str = "netcdf4"
@@ -600,7 +607,7 @@ def load_ensemble(
     ds = xr.open_mfdataset(
         filenames,
         parallel=parallel,
-        chunks={"exp_id": -1, "pism_config_axis": -1},
+        preprocess=sort_basin,
         engine=engine,
     ).drop_vars(["spatial_ref", "mapping"], errors="ignore")
     print("Done.")
@@ -791,6 +798,41 @@ def simplify_climate(my_str: str) -> str:
             return climate_mapping[key]
 
     return "HIRHAM"
+
+
+def simplify_retreat(my_str: str) -> str:
+    """
+    Simplify climate string.
+
+    This function simplifies the input climate string by returning a standardized
+    climate model name based on the presence of specific substrings.
+
+    Parameters
+    ----------
+    my_str : str
+        The input climate string.
+
+    Returns
+    -------
+    str
+        The standardized climate model name based on the input string.
+
+    Examples
+    --------
+    >>> simplify_climate("MAR_2020")
+    'MAR'
+    >>> simplify_climate("RACMO_2020")
+    'RACMO'
+    >>> simplify_climate("Other_2020")
+    'HIRHAM'
+    """
+
+    if my_str in ("false", ""):
+        short_str = "Free Running"
+    else:
+        short_str = "Prescribed Retreat"
+
+    return short_str
 
 
 def simplify_ocean(my_str: str) -> str:

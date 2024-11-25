@@ -299,7 +299,6 @@ def run_delta_analysis(
     filter_vars: List[str],
     group_dim: str = "basin",
     iter_dim: str = "time",
-    ensemble: str = "RAGIS",
     notebook: bool = False,
 ) -> xr.Dataset:
     """
@@ -317,8 +316,6 @@ def run_delta_analysis(
         DataFrame containing ensemble information, with a 'basin' column to group by.
     filter_vars : List[str]
         List of variables to filter by for sensitivity analysis.
-    ensemble_id : str, optional
-        The ensemble ID to select from the dataset, by default "RAGIS".
 
     Returns
     -------
@@ -354,10 +351,10 @@ def run_delta_analysis(
                 f"  ...sensitivity indices for basin {gdim} filtered by {filter_var} ",
             )
 
-            responses = ds.sel(basin=gdim, ensemble_id=ensemble)[filter_var]
+            responses = ds.sel({"basin": gdim})[filter_var]
             responses_scattered = client.scatter(
                 [
-                    responses.isel(time=k).to_numpy()
+                    responses.isel({"time": k}).to_numpy()
                     for k in range(len(responses[iter_dim]))
                 ]
             )
@@ -522,7 +519,7 @@ def plot_obs_sims(
 
     y_min, y_max = axs[1].get_ylim()
     scaler = y_min + (y_max - y_min) * 0.05
-    obs_filtered = obs.sel(time=slice(f"{filter_range[0]}", f"{filter_range[-1]}"))
+    obs_filtered = obs.sel({"time": slice(f"{filter_range[0]}", f"{filter_range[-1]}")})
     filter_range_ds = obs_filtered[mass_cumulative_varname]
     filter_range_ds *= 0
     filter_range_ds += scaler
@@ -946,6 +943,7 @@ if __name__ == "__main__":
     params = [
         "calving.vonmises_calving.sigma_max",
         "calving.rate_scaling.file",
+        "geometry.front_retreat.prescribed.file",
         "ocean.th.gamma_T",
         "surface.given.file",
         "ocean.th.file",
@@ -994,7 +992,10 @@ if __name__ == "__main__":
     # fig.savefig("grounding_line_flux_unfiltered.pdf")
 
     filtered_ds, outliers_ds = filter_outliers(
-        simulated_ds, outlier_range=outlier_range, outlier_variable=outlier_variable
+        simulated_ds,
+        outlier_range=outlier_range,
+        outlier_variable=outlier_variable,
+        subset={"basin": "GIS"},
     )
 
     # plot_outliers(
@@ -1053,9 +1054,9 @@ if __name__ == "__main__":
     filtered_all = {}
     prior_posterior_list = []
     for obs_mean_var, obs_std_var, sim_var in zip(
-        list(flux_vars.values())[:2],
-        list(flux_uncertainty_vars.values())[:2],
-        list(flux_vars.values())[:2],
+        list(flux_vars.values())[1:2],
+        list(flux_uncertainty_vars.values())[1:2],
+        list(flux_vars.values())[1:2],
     ):
         print(f"Importance sampling using {obs_mean_var}")
         f = importance_sampling(
@@ -1112,8 +1113,8 @@ if __name__ == "__main__":
             result = Parallel(n_jobs=options.n_jobs)(
                 delayed(plot_obs_sims)(
                     observed_mankoff_basins_resampled_ds.sel(basin=basin),
-                    sim_prior.sel(basin=basin, ensemble_id=ensemble),
-                    sim_posterior.sel(basin=basin, ensemble_id=ensemble),
+                    sim_prior.sel(basin=basin),
+                    sim_posterior.sel(basin=basin),
                     config=ragis_config,
                     filtering_var=obs_mean_var,
                     filter_range=[filter_start_year, filter_end_year],
@@ -1132,6 +1133,7 @@ if __name__ == "__main__":
         "surface.given.file": [prp.simplify_path, prp.simplify_climate],
         "ocean.th.file": [prp.simplify_path, prp.simplify_ocean],
         "calving.rate_scaling.file": [prp.simplify_path, prp.simplify_calving],
+        "geometry.front_retreat.prescribed.file": [prp.simplify_retreat],
     }
 
     # Apply the functions to the corresponding columns
@@ -1145,8 +1147,8 @@ if __name__ == "__main__":
         n_params = len(params_short_dict)
         plt.rcParams["font.size"] = 4
         fig, axs = plt.subplots(
-            5,
-            3,
+            4,
+            4,
             sharey=True,
             figsize=[6.2, 6.2],
         )

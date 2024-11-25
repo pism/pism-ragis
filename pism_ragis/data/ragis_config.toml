@@ -2,6 +2,7 @@
 
 'calving.vonmises_calving.sigma_max' = '$\sigma_{\mathrm{max}}$ (Pa)'
 'calving.rate_scaling.file' = 'Calving'
+'geometry.front_retreat.prescribed.file' = 'Retreat'
 'ocean.th.gamma_T' = '$\gamma$'
 'surface.given.file' = 'Climate'
 'ocean.th.file' = 'Ocean'
