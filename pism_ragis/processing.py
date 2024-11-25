@@ -600,6 +600,7 @@ def load_ensemble(
     ds = xr.open_mfdataset(
         filenames,
         parallel=parallel,
+        chunks={"exp_id": -1, "pism_config_axis": -1},
         engine=engine,
     ).drop_vars(["spatial_ref", "mapping"], errors="ignore")
     print("Done.")
