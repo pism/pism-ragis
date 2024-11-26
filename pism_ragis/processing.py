@@ -586,7 +586,7 @@ def sort_basin(ds):
 
 @timeit
 def load_ensemble(
-    filenames: List[Union[Path, str]], parallel: bool = True, engine: str = "netcdf4"
+    filenames: List[Union[Path, str]], parallel: bool = True, engine: str = "h5netcdf"
 ) -> xr.Dataset:
     """
     Load an ensemble of NetCDF files into an xarray Dataset.

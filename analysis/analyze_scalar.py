@@ -26,9 +26,9 @@ Analyze RAGIS ensemble.
 import time
 import warnings
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import wraps
 from importlib.resources import files
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable, Dict, Hashable, List, Mapping, Union
 
@@ -41,6 +41,7 @@ import toml
 import xarray as xr
 from dask.diagnostics import ProgressBar
 from dask.distributed import Client, progress
+from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 
 import pism_ragis.processing as prp
@@ -393,7 +394,7 @@ def plot_obs_sims(
     filtering_var: str,
     filter_range: List[int] = [1990, 2019],
     fig_dir: Union[str, Path] = "figures",
-    reference_date: str = "1986-01-1",
+    reference_year: float = 1986.0,
     sim_alpha: float = 0.4,
     obs_alpha: float = 1.0,
     sigma: float = 2,
@@ -427,9 +428,7 @@ def plot_obs_sims(
     """
 
     import pism_ragis.processing  # pylint: disable=import-outside-toplevel,reimported
-    import matplotlib  # pylint: disable=import-outside-toplevel,reimported
-    matplotlib.use('Agg')
-    
+
     Path(fig_dir).mkdir(exist_ok=True)
 
     percentile_range = (percentiles[1] - percentiles[0]) * 100
@@ -522,7 +521,7 @@ def plot_obs_sims(
 
     y_min, y_max = axs[1].get_ylim()
     scaler = y_min + (y_max - y_min) * 0.05
-    obs_filtered = obs.sel({"time": slice(f"{filter_range[0]}", f"{filter_range[-1]}")})
+    obs_filtered = obs.sel(time=slice(f"{filter_range[0]}", f"{filter_range[-1]}"))
     filter_range_ds = obs_filtered[mass_cumulative_varname]
     filter_range_ds *= 0
     filter_range_ds += scaler
@@ -547,7 +546,7 @@ def plot_obs_sims(
 
     axs[0].xaxis.set_tick_params(labelbottom=False)
 
-    axs[0].set_ylabel(f"Cumulative mass\nchange since {reference_date} (Gt)")
+    axs[0].set_ylabel(f"Cumulative mass\nloss since {reference_year} (Gt)")
     axs[0].set_xlabel("")
     axs[0].set_title(f"{basin} filtered by {filtering_var}")
     axs[1].set_title("")
@@ -841,9 +840,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--engine",
-        help="""Engine for xarray. Default="netcdf4".""",
+        help="""Engine for xarray. Default="h5netcdf".""",
         type=str,
-        default="netcdf4",
+        default="h5netcdf",
     )
     parser.add_argument(
         "--filter_range",
@@ -957,6 +956,7 @@ if __name__ == "__main__":
         "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max",
     ]
     params_short_dict = {key: all_params_dict[key] for key in params}
+    ensemble = "RAGIS"
 
     result_dir = Path(options.result_dir)
     fig_dir = result_dir / Path("figures")
@@ -999,7 +999,6 @@ if __name__ == "__main__":
     #     outliers_ds.sel(basin="GIS", ensemble_id="RAGIS")[outlier_variable],
     #     Path(fig_dir) / Path(f"{outlier_variable}_filtering.pdf"),
     # )
-
 
     prior_config = simulated_ds.sel(pism_config_axis=params).pism_config
     prior_df = config_to_dataframe(prior_config, ensemble="Prior")
@@ -1101,28 +1100,43 @@ if __name__ == "__main__":
                 total=len(observed_mankoff_basins_resampled_ds.basin),
             )
         ) as progress_bar:
+            result = Parallel(n_jobs=options.n_jobs)(
+                delayed(plot_obs_sims)(
+                    observed_mankoff_basins_resampled_ds.sel(basin=basin),
+                    sim_prior.sel(basin=basin, ensemble_id=ensemble),
+                    sim_posterior.sel(basin=basin, ensemble_id=ensemble),
+                    config=ragis_config,
+                    filtering_var=obs_mean_var,
+                    filter_range=[filter_start_year, filter_end_year],
+                    fig_dir=fig_dir,
+                    obs_alpha=obs_alpha,
+                    sim_alpha=sim_alpha,
+                )
+                for basin in observed_mankoff_basins_resampled_ds.basin
+            )
 
-            with ThreadPoolExecutor(max_workers=options.n_jobs) as executor:
-                futures = []
-                for basin in observed_mankoff_basins_resampled_ds.basin:
-                    futures.append(executor.submit(plot_obs_sims,
-                        observed_mankoff_basins_resampled_ds.sel(basin=basin),
-                        sim_prior.sel(basin=basin),
-                        sim_posterior.sel(basin=basin),
-                        config=ragis_config,
-                        filtering_var=obs_mean_var,
-                        filter_range=[filter_start_year, filter_end_year],
-                        fig_dir=fig_dir,
-                        obs_alpha=obs_alpha,
-                        sim_alpha=sim_alpha,
-    ))
-                for future in as_completed(futures):
-                    try:
-                        future.result()
-                    except Exception as e:
-                        print(f"An error occurred: {e}")
-
-            
+            # with ThreadPoolExecutor(max_workers=options.n_jobs) as executor:
+            #     futures = []
+            #     for basin in observed_mankoff_basins_resampled_ds.basin:
+            #         futures.append(
+            #             executor.submit(
+            #                 plot_obs_sims,
+            #                 observed_mankoff_basins_resampled_ds.sel(basin=basin),
+            #                 sim_prior.sel(basin=basin),
+            #                 sim_posterior.sel(basin=basin),
+            #                 config=ragis_config,
+            #                 filtering_var=obs_mean_var,
+            #                 filter_range=[filter_start_year, filter_end_year],
+            #                 fig_dir=fig_dir,
+            #                 obs_alpha=obs_alpha,
+            #                 sim_alpha=sim_alpha,
+            #             )
+            #         )
+            #     for future in as_completed(futures):
+            #         try:
+            #             future.result()
+            #         except Exception as e:
+            #             print(f"An error occurred: {e}")
 
     prior_posterior = pd.concat(prior_posterior_list).reset_index()
     prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)
@@ -1203,7 +1217,10 @@ if __name__ == "__main__":
     ].map(calving_dict)
 
     retreat_dict = {
-        v: k for k, v in enumerate(ensemble_df["geometry.front_retreat.prescribed.file"].unique())
+        v: k
+        for k, v in enumerate(
+            ensemble_df["geometry.front_retreat.prescribed.file"].unique()
+        )
     }
 
     ensemble_df["geometry.front_retreat.prescribed.file"] = ensemble_df[

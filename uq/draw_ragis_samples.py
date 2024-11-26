@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 
+# pylint: disable=unsupported-assignment-operation
+
 """
 Uncertainty quantification using Latin Hypercube Sampling or Sobol Sequences.
 """
 
 from argparse import ArgumentParser
+from pathlib import Path
 from typing import Any, Dict
 
 import numpy as np
@@ -63,6 +66,8 @@ slidinglaw: Dict[int, str] = {
     0: "pseudo_plastic",
     1: "regularized_coulomb",
 }
+
+sb_dict = {0: "ssa+sia", 1: "blatter"}
 
 dists: Dict[str, Any] = {
     "ragis": {
@@ -218,7 +223,7 @@ options = parser.parse_args()
 n_draw_samples = options.n_samples
 calc_second_order = options.second_order
 method = options.method
-outfile = options.OUTFILE[-1]
+outfile = Path(options.OUTFILE[-1])
 distribution_name = options.distribution
 posterior_file = options.posterior_file
 
@@ -232,6 +237,8 @@ problem = {
 }
 
 keys_prior = list(distributions.keys())
+print("Prior Keys")
+print("-----------------------")
 print(keys_prior)
 
 # Generate uniform samples (i.e. one unit hypercube)
@@ -242,50 +249,78 @@ if method == "sobol":
 else:
     unif_sample = lhs(len(keys_prior), n_draw_samples)
 
-n_samples = unif_sample.shape[0]
-# To hold the transformed variables
-dist_sample = np.zeros_like(unif_sample, dtype="object")
 
-sb_dict = {0: "ssa+sia", 1: "blatter"}
-# For each variable, transform with the inverse of the CDF (inv(CDF)=ppf)
-for i, key in enumerate(keys_prior):
-    if key == "calving.rate_scaling.file":
-        dist_sample[:, i] = [
-            f"seasonal_calving_id_{int(id)}_1900_2025.nc"
-            for id in distributions[key].ppf(unif_sample[:, i])
-        ]
-    elif key == "sliding_law":
-        dist_sample[:, i] = [
-            slidinglaw[id] for id in distributions[key].ppf(unif_sample[:, i])
-        ]
-    elif key == "climate_file":
-        dist_sample[:, i] = [
-            climate[id] for id in distributions[key].ppf(unif_sample[:, i])
-        ]
-    elif key == "calving.thickness_calving.file":
-        dist_sample[:, i] = [
-            tcts[id] for id in distributions[key].ppf(unif_sample[:, i])
-        ]
-    elif key == "input.regrid.file":
-        dist_sample[:, i] = [
-            initialstates[id] for id in distributions[key].ppf(unif_sample[:, i])
-        ]
-    elif key == "prescribed_retreat_file":
-        dist_sample[:, i] = [
-            retreatfiles[id] for id in distributions[key].ppf(unif_sample[:, i])
-        ]
-    elif key == "stress_balance":
-        dist_sample[:, i] = [
-            f"{sb_dict[int(id)]}" for id in distributions[key].ppf(unif_sample[:, i])
-        ]
+def add_default_values(df, dists, distribution_name):
+    """
+    Add default values.
+    """
+    print("\nAdding default values\n")
+    for key, val in dists[distribution_name]["default_values"].items():
+        if key not in df.columns:
+            df[key] = val
+            print(f"{key}: {val}")
 
-    elif key == "ocean_file":
-        dist_sample[:, i] = [
-            f"MAR3.9_{gcms[int(id)]}_ocean_1960-2100_v4.nc"
-            for id in distributions[key].ppf(unif_sample[:, i])
-        ]
-    else:
-        dist_sample[:, i] = distributions[key].ppf(unif_sample[:, i])
+    return df
+
+
+def convert_samples(unif_sample):
+    """
+    Convert samples.
+    """
+    n_samples = unif_sample.shape[0]
+    # To hold the transformed variables
+    dist_sample = np.zeros_like(unif_sample, dtype="object")
+
+    # For each variable, transform with the inverse of the CDF (inv(CDF)=ppf)
+    for i, key in enumerate(keys_prior):
+        if key == "calving.rate_scaling.file":
+            dist_sample[:, i] = [
+                f"seasonal_calving_id_{int(id)}_1900_2025.nc"
+                for id in distributions[key].ppf(unif_sample[:, i])
+            ]
+        elif key == "sliding_law":
+            dist_sample[:, i] = [
+                slidinglaw[id] for id in distributions[key].ppf(unif_sample[:, i])
+            ]
+        elif key == "climate_file":
+            dist_sample[:, i] = [
+                climate[id] for id in distributions[key].ppf(unif_sample[:, i])
+            ]
+        elif key == "calving.thickness_calving.file":
+            dist_sample[:, i] = [
+                tcts[id] for id in distributions[key].ppf(unif_sample[:, i])
+            ]
+        elif key == "input.regrid.file":
+            dist_sample[:, i] = [
+                initialstates[id] for id in distributions[key].ppf(unif_sample[:, i])
+            ]
+        elif key == "prescribed_retreat_file":
+            dist_sample[:, i] = [
+                retreatfiles[id] for id in distributions[key].ppf(unif_sample[:, i])
+            ]
+        elif key == "stress_balance":
+            dist_sample[:, i] = [
+                f"{sb_dict[int(id)]}"
+                for id in distributions[key].ppf(unif_sample[:, i])
+            ]
+
+        elif key == "ocean_file":
+            dist_sample[:, i] = [
+                f"MAR3.9_{gcms[int(id)]}_ocean_1960-2100_v4.nc"
+                for id in distributions[key].ppf(unif_sample[:, i])
+            ]
+        else:
+            dist_sample[:, i] = distributions[key].ppf(unif_sample[:, i])
+    return dist_sample, n_samples
+
+
+dist_sample, n_samples = convert_samples(unif_sample)
+dist_median_sample = convert_samples(np.median(unif_sample, axis=0, keepdims=True))
+
+dist_median_sample[0, 1] = "seasonal_calving_id_2_1900_2025.nc"
+dist_median_sample[0, 3] = gcms[0]
+dist_median_sample = np.vstack([dist_median_sample] * 2)
+dist_median_sample[:, -1] = retreatfiles.values()
 
 if posterior_file:
     X_posterior = pd.read_csv(posterior_file).drop(
@@ -313,10 +348,24 @@ else:
 df = pd.DataFrame(dist_sample, columns=keys)
 df.to_csv(outfile, index=True, index_label="id")
 
-print("\nAdding default values\n")
-for key, val in dists[distribution_name]["default_values"].items():
-    if key not in df.columns:
-        df[key] = val
-        print(f"{key}: {val}")
+ensemble_outfile = outfile.parent / Path(f"ensemble_{outfile.name}")
+ensemble_df = add_default_values(df, dists, distribution_name)
+ensemble_df.to_csv(ensemble_outfile, index=True, index_label="id")
 
-df.to_csv(f"ensemble_{outfile}", index=True, index_label="id")
+
+median_outfile = outfile.parent / Path(f"median_{outfile.name}")
+median_df = pd.DataFrame(
+    dist_median_sample, columns=keys, index=["MEDIAN-FREE", "MEDIAN-PRESCRIBED"]
+)
+median_df.to_csv(median_outfile, index=True, index_label="id")
+
+
+ensemble_median_outfile = outfile.parent.parent / Path(
+    f"ensemble_median_{outfile.name}"
+)
+ensemble_median_df = add_default_values(median_df, dists, distribution_name)
+ensemble_median_df.to_csv(
+    ensemble_median_outfile,
+    index=["MEDIAN-FREE", "MEDIAN-PRESCRIBED"],
+    index_label="id",
+)
