@@ -17,7 +17,7 @@ joblib
 jupyter
 matplotlib
 netCDF4<1.7
-numpy
+numpy>2.0.0
 openpyxl
 pandas
 pint_xarray

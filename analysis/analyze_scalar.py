@@ -28,6 +28,7 @@ import warnings
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from functools import wraps
 from importlib.resources import files
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable, Dict, Hashable, List, Mapping, Union
 
@@ -40,7 +41,6 @@ import toml
 import xarray as xr
 from dask.diagnostics import ProgressBar
 from dask.distributed import Client, progress
-from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 
 import pism_ragis.processing as prp
@@ -51,6 +51,7 @@ from pism_ragis.likelihood import log_normal
 from pism_ragis.logger import get_logger
 
 logger = get_logger("pism_ragis")
+
 
 xr.set_options(keep_attrs=True)
 plt.style.use("tableau-colorblind10")
@@ -426,7 +427,9 @@ def plot_obs_sims(
     """
 
     import pism_ragis.processing  # pylint: disable=import-outside-toplevel,reimported
-
+    import matplotlib  # pylint: disable=import-outside-toplevel,reimported
+    matplotlib.use('Agg')
+    
     Path(fig_dir).mkdir(exist_ok=True)
 
     percentile_range = (percentiles[1] - percentiles[0]) * 100
@@ -544,7 +547,7 @@ def plot_obs_sims(
 
     axs[0].xaxis.set_tick_params(labelbottom=False)
 
-    axs[0].set_ylabel(f"Cumulative mass\nloss since {reference_date} (Gt)")
+    axs[0].set_ylabel(f"Cumulative mass\nchange since {reference_date} (Gt)")
     axs[0].set_xlabel("")
     axs[0].set_title(f"{basin} filtered by {filtering_var}")
     axs[1].set_title("")
@@ -863,12 +866,6 @@ if __name__ == "__main__":
         default="grounding_line_flux",
     )
     parser.add_argument(
-        "--ensemble",
-        help="""Name of the ensemble. Default=RAGIS.""",
-        type=str,
-        default="RAGIS",
-    )
-    parser.add_argument(
         "--fudge_factor",
         help="""Observational uncertainty multiplier. Default=3""",
         type=float,
@@ -890,7 +887,7 @@ if __name__ == "__main__":
         "--resampling_frequency",
         help="""Resampling data to resampling_frequency for importance sampling. Default is "MS".""",
         type=str,
-        default="MS",
+        default="YS",
     )
     parser.add_argument(
         "--reference_date",
@@ -925,7 +922,6 @@ if __name__ == "__main__":
 
     options, unknown = parser.parse_known_args()
     basin_files = options.FILES
-    ensemble = options.ensemble
     engine = options.engine
     filter_start_year, filter_end_year = options.filter_range
     fudge_factor = options.fudge_factor
@@ -1004,14 +1000,9 @@ if __name__ == "__main__":
     #     Path(fig_dir) / Path(f"{outlier_variable}_filtering.pdf"),
     # )
 
-    start = time.time()
 
     prior_config = simulated_ds.sel(pism_config_axis=params).pism_config
     prior_df = config_to_dataframe(prior_config, ensemble="Prior")
-
-    end = time.time()
-    time_elapsed = end - start
-    print(f"Time elapsed {time_elapsed:.0f}s")
 
     outliers_config = filter_config(outliers_ds, params)
     outliers_df = config_to_dataframe(outliers_config, ensemble="Outliers")
@@ -1110,20 +1101,28 @@ if __name__ == "__main__":
                 total=len(observed_mankoff_basins_resampled_ds.basin),
             )
         ) as progress_bar:
-            result = Parallel(n_jobs=options.n_jobs)(
-                delayed(plot_obs_sims)(
-                    observed_mankoff_basins_resampled_ds.sel(basin=basin),
-                    sim_prior.sel(basin=basin),
-                    sim_posterior.sel(basin=basin),
-                    config=ragis_config,
-                    filtering_var=obs_mean_var,
-                    filter_range=[filter_start_year, filter_end_year],
-                    fig_dir=fig_dir,
-                    obs_alpha=obs_alpha,
-                    sim_alpha=sim_alpha,
-                )
-                for basin in observed_mankoff_basins_resampled_ds.basin
-            )
+
+            with ThreadPoolExecutor(max_workers=options.n_jobs) as executor:
+                futures = []
+                for basin in observed_mankoff_basins_resampled_ds.basin:
+                    futures.append(executor.submit(plot_obs_sims,
+                        observed_mankoff_basins_resampled_ds.sel(basin=basin),
+                        sim_prior.sel(basin=basin),
+                        sim_posterior.sel(basin=basin),
+                        config=ragis_config,
+                        filtering_var=obs_mean_var,
+                        filter_range=[filter_start_year, filter_end_year],
+                        fig_dir=fig_dir,
+                        obs_alpha=obs_alpha,
+                        sim_alpha=sim_alpha,
+    ))
+                for future in as_completed(futures):
+                    try:
+                        future.result()
+                    except Exception as e:
+                        print(f"An error occurred: {e}")
+
+            
 
     prior_posterior = pd.concat(prior_posterior_list).reset_index()
     prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)
@@ -1203,9 +1202,16 @@ if __name__ == "__main__":
         "calving.rate_scaling.file"
     ].map(calving_dict)
 
+    retreat_dict = {
+        v: k for k, v in enumerate(ensemble_df["geometry.front_retreat.prescribed.file"].unique())
+    }
+
+    ensemble_df["geometry.front_retreat.prescribed.file"] = ensemble_df[
+        "geometry.front_retreat.prescribed.file"
+    ].map(retreat_dict)
     to_analyze = simulated_ds.sel(time=slice("1980-01-01", "2020-01-01"))
     all_delta_indices = run_delta_analysis(
-        to_analyze, ensemble_df, list(flux_vars.values())[:2], notebook=notebook
+        to_analyze, ensemble_df, list(flux_vars.values())[1:2], notebook=notebook
     )
 
     # Extract the prefix from each coordinate value
