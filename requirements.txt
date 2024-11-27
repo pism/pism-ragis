@@ -1,4 +1,4 @@
-SALib
+SALib<1.5
 bokeh
 cartopy
 cf-xarray

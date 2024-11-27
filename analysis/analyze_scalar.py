@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Hashable, List, Mapping, Union
 
 import dask
+import matplotlib
 import numpy as np
 import pandas as pd
 import pylab as plt
@@ -53,7 +54,7 @@ from pism_ragis.logger import get_logger
 
 logger = get_logger("pism_ragis")
 
-
+matplotlib.use("Agg")
 xr.set_options(keep_attrs=True)
 plt.style.use("tableau-colorblind10")
 
@@ -334,7 +335,6 @@ def run_delta_analysis(
     print("Calculating Sensitivity Indices")
     print("===============================")
 
-    ds = ds.load()
     client = Client()
     print(f"Open client in browser: {client.dashboard_link}")
     all_delta_indices_list = []
@@ -353,7 +353,7 @@ def run_delta_analysis(
                 f"  ...sensitivity indices for basin {gdim} filtered by {filter_var} ",
             )
 
-            responses = ds.sel({"basin": gdim})[filter_var]
+            responses = ds.sel({"basin": gdim})[filter_var].load()
             responses_scattered = client.scatter(
                 [
                     responses.isel({"time": k}).to_numpy()
@@ -1095,12 +1095,12 @@ if __name__ == "__main__":
         sim_posterior = simulated_mankoff_basins_filtered_ds
         sim_posterior["Ensemble"] = "Posterior"
 
+        start_time = time.time()
         with tqdm(
             desc="Plotting basins",
             total=len(observed_mankoff_basins_resampled_ds.basin),
         ) as progress_bar:
-            # for basin in observed_mankoff_basins_resampled_ds.basin:
-            for basin in ["GIS"]:
+            for basin in observed_mankoff_basins_resampled_ds.basin:
                 plot_obs_sims(
                     observed_mankoff_basins_resampled_ds.sel(basin=basin),
                     sim_prior.sel(basin=basin),
@@ -1112,6 +1112,7 @@ if __name__ == "__main__":
                     obs_alpha=obs_alpha,
                     sim_alpha=sim_alpha,
                 )
+                progress_bar.update()
 
         # with ThreadPoolExecutor(max_workers=options.n_jobs) as executor:
         #     futures = []
@@ -1130,11 +1131,17 @@ if __name__ == "__main__":
         #                 sim_alpha=sim_alpha,
         #             )
         #         )
-        #     for future in as_completed(futures):
+        #     for future in tqdm(
+        #         as_completed(futures), total=len(futures), desc="Processing basins"
+        #     ):
         #         try:
         #             future.result()
         #         except Exception as e:
         #             print(f"An error occurred: {e}")
+
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print(f"...took {elapsed_time:.2f}s")
 
     prior_posterior = pd.concat(prior_posterior_list).reset_index()
     prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)
@@ -1262,7 +1269,6 @@ if __name__ == "__main__":
     )
 
     plt.rcParams["font.size"] = 6
-
     for indices_var, conf_var in zip(indices_vars, indices_conf):
         for basin in aggregated_indices.basin.values:
             for filter_var in aggregated_indices.filtered_by.values:
@@ -1274,14 +1280,19 @@ if __name__ == "__main__":
                     conf_da = aggregated_conf.sel(
                         filtered_by=filter_var, basin=basin, sensitivity_indices_group=g
                     )[conf_var]
+                    # indices_da.plot(
+                    #     hue="sensitivity_indices_group", ax=ax, lw=0.25, label=g.values
+                    # )
+                    rolling_conf_da = conf_da.rolling({"time": 13}).mean()
+                    rolling_indices_da = indices_da.rolling({"time": 13}).mean()
                     ax.fill_between(
                         indices_da.time,
-                        (indices_da - conf_da),
-                        (indices_da + conf_da),
+                        (rolling_indices_da - rolling_conf_da),
+                        (rolling_indices_da + rolling_conf_da),
                         alpha=0.25,
                     )
-                    indices_da.plot(
-                        hue="sensitivity_indices_group", ax=ax, lw=1, label=g.values
+                    rolling_indices_da.plot(
+                        hue="sensitivity_indices_group", ax=ax, lw=0.75, label=g.values
                     )
                 ax.legend()
                 ax.set_title(f"S1 for {basin} filtered by {filter_var}")

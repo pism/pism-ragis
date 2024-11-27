@@ -607,7 +607,6 @@ def load_ensemble(
     return ds
 
 
-@timeit
 def normalize_cumulative_variables(
     ds: xr.Dataset, variables, reference_date: str = "1992-01-01"
 ) -> xr.Dataset:
@@ -648,7 +647,6 @@ def normalize_cumulative_variables(
     return ds
 
 
-@timeit
 def standardize_variable_names(
     ds: xr.Dataset, name_dict: Union[Mapping[Any, Hashable], None]
 ) -> xr.Dataset:
