@@ -24,7 +24,7 @@ jobs:
       with:
         micromamba-version: "latest"
         generate-run-shell: true
-        environment-file: environment.yml
+        environment-file: environment-dev.yml
         cache-environment: true
         post-cleanup: 'all'
     - name: Run tests
