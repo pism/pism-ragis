@@ -396,7 +396,7 @@ def compute_basin(
     >>> ds = xr.Dataset({'var': (('x', 'y'), np.random.rand(5, 5))})
     >>> compute_basin(ds, 'new_basin')
     """
-    ds = ds.sum(dim=dim).expand_dims("basin", axis=1)
+    ds = ds.sum(dim=dim).expand_dims("basin", axis=-1)
     ds["basin"] = [name]
     return ds.compute()
 
@@ -577,13 +577,6 @@ class UtilsMethods:
         return self._obj.drop_vars(nonnumeric_vars, errors=errors)
 
 
-def sort_basin(ds):
-    """
-    Sort preprocessing.
-    """
-    return ds.sortby(["basin", "pism_config_axis"])
-
-
 @timeit
 def load_ensemble(
     filenames: List[Union[Path, str]], parallel: bool = True, engine: str = "h5netcdf"
@@ -607,9 +600,9 @@ def load_ensemble(
     ds = xr.open_mfdataset(
         filenames,
         parallel=parallel,
-        preprocess=sort_basin,
         engine=engine,
     ).drop_vars(["spatial_ref", "mapping"], errors="ignore")
+    ds = ds.dropna(dim="exp_id")
     print("Done.")
     return ds
 

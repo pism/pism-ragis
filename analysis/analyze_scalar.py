@@ -45,7 +45,7 @@ from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 
 import pism_ragis.processing as prp
-from pism_ragis.analysis import delta_analysis
+from pism_ragis.analyze import delta_analyze
 from pism_ragis.decorators import profileit, timeit
 from pism_ragis.filtering import filter_outliers, importance_sampling
 from pism_ragis.likelihood import log_normal
@@ -362,7 +362,7 @@ def run_delta_analysis(
             )
 
             futures = client.map(
-                delta_analysis,
+                delta_analyze,
                 responses_scattered,
                 problem=problem,
                 ensemble_df=df,
@@ -386,6 +386,7 @@ def run_delta_analysis(
     return all_delta_indices
 
 
+@timeit
 def plot_obs_sims(
     obs: xr.Dataset,
     sim_prior: xr.Dataset,
@@ -1094,17 +1095,16 @@ if __name__ == "__main__":
         sim_posterior = simulated_mankoff_basins_filtered_ds
         sim_posterior["Ensemble"] = "Posterior"
 
-        with prp.tqdm_joblib(
-            tqdm(
-                desc="Plotting basins",
-                total=len(observed_mankoff_basins_resampled_ds.basin),
-            )
+        with tqdm(
+            desc="Plotting basins",
+            total=len(observed_mankoff_basins_resampled_ds.basin),
         ) as progress_bar:
-            result = Parallel(n_jobs=options.n_jobs)(
-                delayed(plot_obs_sims)(
+            # for basin in observed_mankoff_basins_resampled_ds.basin:
+            for basin in ["GIS"]:
+                plot_obs_sims(
                     observed_mankoff_basins_resampled_ds.sel(basin=basin),
-                    sim_prior.sel(basin=basin, ensemble_id=ensemble),
-                    sim_posterior.sel(basin=basin, ensemble_id=ensemble),
+                    sim_prior.sel(basin=basin),
+                    sim_posterior.sel(basin=basin),
                     config=ragis_config,
                     filtering_var=obs_mean_var,
                     filter_range=[filter_start_year, filter_end_year],
@@ -1112,31 +1112,29 @@ if __name__ == "__main__":
                     obs_alpha=obs_alpha,
                     sim_alpha=sim_alpha,
                 )
-                for basin in observed_mankoff_basins_resampled_ds.basin
-            )
 
-            # with ThreadPoolExecutor(max_workers=options.n_jobs) as executor:
-            #     futures = []
-            #     for basin in observed_mankoff_basins_resampled_ds.basin:
-            #         futures.append(
-            #             executor.submit(
-            #                 plot_obs_sims,
-            #                 observed_mankoff_basins_resampled_ds.sel(basin=basin),
-            #                 sim_prior.sel(basin=basin),
-            #                 sim_posterior.sel(basin=basin),
-            #                 config=ragis_config,
-            #                 filtering_var=obs_mean_var,
-            #                 filter_range=[filter_start_year, filter_end_year],
-            #                 fig_dir=fig_dir,
-            #                 obs_alpha=obs_alpha,
-            #                 sim_alpha=sim_alpha,
-            #             )
-            #         )
-            #     for future in as_completed(futures):
-            #         try:
-            #             future.result()
-            #         except Exception as e:
-            #             print(f"An error occurred: {e}")
+        # with ThreadPoolExecutor(max_workers=options.n_jobs) as executor:
+        #     futures = []
+        #     for basin in observed_mankoff_basins_resampled_ds.basin:
+        #         futures.append(
+        #             executor.submit(
+        #                 plot_obs_sims,
+        #                 observed_mankoff_basins_resampled_ds.sel(basin=basin),
+        #                 sim_prior.sel(basin=basin),
+        #                 sim_posterior.sel(basin=basin),
+        #                 config=ragis_config,
+        #                 filtering_var=obs_mean_var,
+        #                 filter_range=[filter_start_year, filter_end_year],
+        #                 fig_dir=fig_dir,
+        #                 obs_alpha=obs_alpha,
+        #                 sim_alpha=sim_alpha,
+        #             )
+        #         )
+        #     for future in as_completed(futures):
+        #         try:
+        #             future.result()
+        #         except Exception as e:
+        #             print(f"An error occurred: {e}")
 
     prior_posterior = pd.concat(prior_posterior_list).reset_index()
     prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)
@@ -1248,25 +1246,49 @@ if __name__ == "__main__":
         sensitivity_indices_group=("pism_config_axis", si_prefixes)
     )
     # Group by the new coordinate and compute the sum for each group
-    aggregated_data = (
-        all_delta_indices.groupby("sensitivity_indices_group")
+    indices_vars = [v for v in all_delta_indices.data_vars if "_conf" not in v]
+    aggregated_indices = (
+        all_delta_indices[indices_vars].groupby("sensitivity_indices_group").sum()
+    )
+    # Group by the new coordinate and compute the sum the squares for each group
+    # then take the root.
+    indices_conf = [v for v in all_delta_indices.data_vars if "_conf" in v]
+    aggregated_conf = (
+        all_delta_indices[indices_conf]
+        .apply(np.square)
+        .groupby("sensitivity_indices_group")
         .sum()
-        .rolling(time=13)
-        .mean()
+        .apply(np.sqrt)
     )
 
-    for index in ["S1", "delta"]:
-        for basin in aggregated_data.basin.values:
-            for filter_var in aggregated_data.filtered_by.values:
-                fig, ax = plt.subplots(1, 1)
-                aggregated_data.sel(filtered_by=filter_var, basin=basin)[index].plot(
-                    hue="sensitivity_indices_group", ax=ax
-                )
+    plt.rcParams["font.size"] = 6
+
+    for indices_var, conf_var in zip(indices_vars, indices_conf):
+        for basin in aggregated_indices.basin.values:
+            for filter_var in aggregated_indices.filtered_by.values:
+                fig, ax = plt.subplots(1, 1, figsize=(6.2, 3.6))
+                for g in aggregated_indices.sensitivity_indices_group:
+                    indices_da = aggregated_indices.sel(
+                        filtered_by=filter_var, basin=basin, sensitivity_indices_group=g
+                    )[indices_var]
+                    conf_da = aggregated_conf.sel(
+                        filtered_by=filter_var, basin=basin, sensitivity_indices_group=g
+                    )[conf_var]
+                    ax.fill_between(
+                        indices_da.time,
+                        (indices_da - conf_da),
+                        (indices_da + conf_da),
+                        alpha=0.25,
+                    )
+                    indices_da.plot(
+                        hue="sensitivity_indices_group", ax=ax, lw=1, label=g.values
+                    )
+                ax.legend()
                 ax.set_title(f"S1 for {basin} filtered by {filter_var}")
                 fn = (
                     result_dir
                     / Path("figures")
-                    / Path(f"{basin}_{index}_filtered_by_{filter_var}.pdf")
+                    / Path(f"{basin}_{indices_var}_filtered_by_{filter_var}.pdf")
                 )
                 fig.savefig(fn)
                 plt.close()

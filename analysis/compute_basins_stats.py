@@ -131,7 +131,7 @@ if __name__ == "__main__":
             m_id = str(m_id_re.group(1))
 
         n_ensemble = len(ensemble)
-        ds = ds.expand_dims({"exp_id": [m_id]})
+        ds = ds.expand_dims({"exp_id": [m_id]}, axis=-1)
 
         if "ice_mass" in ds:
             ds["ice_mass"] /= 1e12
@@ -186,13 +186,13 @@ if __name__ == "__main__":
     pism_config = xr.DataArray(
         pc_vals,
         dims=["pism_config_axis"],
-        coords={"pism_config_axis": pc_keys, "exp_id": m_id, "ensemble_id": ensemble},
+        coords={"pism_config_axis": pc_keys, "exp_id": m_id},
         name="pism_config",
     )
     run_stats = xr.DataArray(
         rs_vals,
         dims=["run_stats_axis"],
-        coords={"run_stats_axis": rs_keys, "exp_id": m_id, "ensemble_id": ensemble},
+        coords={"run_stats_axis": rs_keys, "exp_id": m_id},
         name="run_stats",
     )
     ds = xr.merge(
@@ -221,7 +221,7 @@ if __name__ == "__main__":
     basin_sums = (
         xr.concat(client.gather(futures), dim="basin")
         .drop_vars(["mapping", "spatial_ref"])
-        .sortby(["basin", "pism_config_axis", "time"])
+        .sortby(["basin", "pism_config_axis"])
     )
     if cf:
         basin_sums["basin"] = basin_sums["basin"].astype(f"S{n_basins}")

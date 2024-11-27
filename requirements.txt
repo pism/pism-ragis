@@ -1,4 +1,5 @@
 SALib
+bokeh
 cartopy
 cf-xarray
 cf_units
@@ -12,7 +13,7 @@ h5netcdf
 joblib
 jupyter
 matplotlib
-numpy<2.0.0
+numpy<2.0
 netCDF4<1.7
 openpyxl
 pandas

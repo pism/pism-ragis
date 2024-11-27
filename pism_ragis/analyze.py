@@ -28,7 +28,7 @@ import xarray as xr
 from SALib.analyze import delta
 
 
-def delta_analysis(
+def delta_analyze(
     response: np.ndarray,
     problem: Dict[str, Any],
     ensemble_df: pd.DataFrame,
