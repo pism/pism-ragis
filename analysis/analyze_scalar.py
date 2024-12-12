@@ -81,7 +81,9 @@ def run_sampling(
     sim_vars: List = ["grounding_line_flux", "mass_balance"],
     filter_range: List[int] = [1990, 2019],
     fudge_factor: float = 3.0,
+    fig_dir: Union[str, Path] = "figures",
     params: List = [],
+    ragis_config: Dict = {},
 ):
     """
     Run sampling.
@@ -89,10 +91,13 @@ def run_sampling(
 
     filter_start_year, filter_end_year = filter_range
 
+    simulated_prior = simulated
+    simulated_prior["ensemble"] = "Prior"
+
     prior_config = filter_config(simulated.isel({"time": 0}), params)
     prior_df = config_to_dataframe(prior_config, ensemble="Prior")
-
     prior_posterior_list = []
+
     for obs_mean_var, obs_std_var, sim_var in zip(
         obs_mean_vars, obs_std_vars, sim_vars
     ):
@@ -130,6 +135,33 @@ def run_sampling(
         prior_posterior_f = pd.concat([prior_df, posterior_df]).reset_index(drop=True)
         prior_posterior_f["filtered_by"] = obs_mean_var
         prior_posterior_list.append(prior_posterior_f)
+
+        start_time = time.time()
+        with tqdm(
+            desc="Plotting basins",
+            total=len(observed.basin),
+        ) as progress_bar:
+            for basin in observed.basin:
+                plot_obs_sims(
+                    observed.sel(basin=basin).sel({"time": slice("1980", "2020")}),
+                    simulated_prior.sel(basin=basin).sel(
+                        {"time": slice("1980", "2020")}
+                    ),
+                    simulated_posterior.sel(basin=basin).sel(
+                        {"time": slice("1980", "2020")}
+                    ),
+                    config=ragis_config,
+                    filtering_var=obs_mean_var,
+                    filter_range=[filter_start_year, filter_end_year],
+                    fig_dir=fig_dir,
+                    obs_alpha=obs_alpha,
+                    sim_alpha=sim_alpha,
+                )
+                progress_bar.update()
+
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        print(f"...took {elapsed_time:.2f}s")
 
     prior_posterior = pd.concat(prior_posterior_list).reset_index(drop=True)
     prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)
@@ -583,7 +615,13 @@ def plot_obs_sims(
 
     plt.rcParams["font.size"] = fontsize
 
-    fig, axs = plt.subplots(2, 1, sharex=True, figsize=(6.2, 2.8), height_ratios=[2, 1])
+    fig, axs = plt.subplots(
+        2,
+        1,
+        sharex=True,
+        figsize=(6.2, 2.8),
+        height_ratios=[2, 1],
+    )
     fig.subplots_adjust(hspace=0.05, wspace=0.05)
 
     obs_ci = axs[0].fill_between(
@@ -656,7 +694,7 @@ def plot_obs_sims(
                 quantiles[percentiles[1]][m_var],
                 alpha=sim_alpha,
                 color=sim_cmap[1],
-                label=f"""{sim_posterior["snsemble"].values} ({percentile_range:.0f}% credibility interval)""",
+                label=f"""{sim_posterior["ensemble"].values} ({percentile_range:.0f}% credibility interval)""",
                 lw=0,
             )
             if k == 0:
@@ -732,6 +770,7 @@ def plot_obs_sims(
         )
     )
     plt.close()
+    del fig
 
 
 def plot_obs_sims_3(
@@ -1210,6 +1249,8 @@ if __name__ == "__main__":
         filter_range=filter_range,
         fudge_factor=fudge_factor,
         params=params,
+        ragis_config=ragis_config,
+        fig_dir=fig_dir,
     )
 
     prior_posterior_grace = run_sampling(
@@ -1218,115 +1259,16 @@ if __name__ == "__main__":
         obs_mean_vars=["mass_balance"],
         obs_std_vars=["mass_balance_uncertainty"],
         sim_vars=["mass_balance"],
-        fudge_factor=fudge_factor,
+        fudge_factor=10,
         filter_range=filter_range,
         params=params,
+        ragis_config=ragis_config,
+        fig_dir=fig_dir,
     )
 
     prior_posterior = pd.concat(
         [prior_posterior_mankoff, prior_posterior_grace]
     ).reset_index(drop=True)
-    # print("hi")
-
-    # observed_ds = observed_mankoff_basins_ds
-    # observed_resampled_ds = observed_mankoff_basins_resampled_ds
-
-    # simulated_ds = simulated_mankoff_basins_ds
-    # simulated_resampled_ds = simulated_mankoff_basins_resampled_ds
-
-    # # observed_ds = observed_grace_basins_ds
-    # # observed_resampled_ds = observed_grace_basins_resampled_ds
-
-    # # simulated_ds = simulated_grace_basins_ds
-    # # simulated_resampled_ds = simulated_grace_basins_resampled_ds
-
-    # sim_prior = simulated_resampled_ds
-    # sim_prior["Ensemble"] = "Prior"
-
-    # filtered_all = {}
-    # prior_posterior_list = []
-    # for obs_mean_var, obs_std_var, sim_var in zip(
-    #     list(flux_vars.values())[0:2],
-    #     list(flux_uncertainty_vars.values())[0:2],
-    #     list(flux_vars.values())[0:2],
-    # ):
-    #     # for obs_mean_var, obs_std_var, sim_var in zip(
-    #     #     ["cumulative_mass_balance"],
-    #     #     ["cumulative_mass_balance_uncertainty"],
-    #     #     ["cumulative_mass_balance"],
-    #     # ):
-    #     print(f"Importance sampling using {obs_mean_var}")
-    #     f = importance_sampling(
-    #         simulated=simulated_resampled_ds.sel(
-    #             time=slice(str(filter_start_year), str(filter_end_year))
-    #         ),
-    #         observed=observed_resampled_ds.sel(
-    #             time=slice(str(filter_start_year), str(filter_end_year))
-    #         ),
-    #         log_likelihood=log_normal,
-    #         fudge_factor=fudge_factor,
-    #         n_samples=len(simulated_resampled_ds.exp_id),
-    #         obs_mean_var=obs_mean_var,
-    #         obs_std_var=obs_std_var,
-    #         sim_var=sim_var,
-    #     )
-
-    #     with ProgressBar() as pbar:
-    #         result = f.compute()
-    #         logger.info(
-    #             "Importance Sampling: Finished in %2.2f seconds", pbar.last_duration
-    #         )
-
-    #     importance_sampled_ids = result["exp_id_sampled"]
-    #     importance_sampled_ids["basin"] = importance_sampled_ids["basin"].astype(str)
-
-    #     simulated_resampled_filtered_ds = simulated_resampled_ds.sel(
-    #         exp_id=importance_sampled_ids
-    #     )
-    #     simulated_resampled_filtered_ds["Ensemble"] = "Posterior"
-
-    #     sim_posterior = simulated_resampled_filtered_ds
-    #     sim_posterior["Ensemble"] = "Posterior"
-
-    #     posterior_config = filter_config(simulated_resampled_filtered_ds, params)
-    #     posterior_df = config_to_dataframe(posterior_config, ensemble="Posterior")
-
-    #     prior_posterior_f = pd.concat([prior_df, posterior_df]).reset_index(drop=True)
-    #     prior_posterior_f["filtered_by"] = obs_mean_var
-    #     prior_posterior_list.append(prior_posterior_f)
-
-    #     filtered_all[obs_mean_var] = pd.concat([prior_df, posterior_df]).rename(
-    #         columns=params_short_dict
-    #     )
-
-    #     start_time = time.time()
-    #     with tqdm(
-    #         desc="Plotting basins",
-    #         total=len(observed_resampled_ds.basin),
-    #     ) as progress_bar:
-    #         for basin in observed_resampled_ds.basin:
-    #             plot_obs_sims(
-    #                 observed_resampled_ds.sel(basin=basin).sel(
-    #                     {"time": slice("1980", "2020")}
-    #                 ),
-    #                 sim_prior.sel(basin=basin).sel({"time": slice("1980", "2020")}),
-    #                 sim_posterior.sel(basin=basin).sel({"time": slice("1980", "2020")}),
-    #                 config=ragis_config,
-    #                 filtering_var=obs_mean_var,
-    #                 filter_range=[filter_start_year, filter_end_year],
-    #                 fig_dir=fig_dir,
-    #                 obs_alpha=obs_alpha,
-    #                 sim_alpha=sim_alpha,
-    #             )
-    #             progress_bar.update()
-
-    #     end_time = time.time()
-    #     elapsed_time = end_time - start_time
-    #     print(f"...took {elapsed_time:.2f}s")
-
-    # prior_posterior = pd.concat(prior_posterior_list).reset_index()
-    # prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)
-    # # Define a mapping of columns to their corresponding functions
 
     column_function_mapping: Dict[str, List[Callable]] = {
         "surface.given.file": [prp.simplify_path, prp.simplify_climate],
