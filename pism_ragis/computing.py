@@ -145,7 +145,6 @@ spatial_ts_vars["paleo_tracer"] = [
 
 
 spatial_ts_vars["ragis"] = [
-    "flux",
     "dHdt",
     "ice_mass_transport_across_grounding_line",
     "ice_mass",
@@ -153,6 +152,8 @@ spatial_ts_vars["ragis"] = [
     "mass_fluxes",
     "thk",
     "usurf",
+    "velbase",
+    "velsurf",
     "velsurf_mag",
     "tendency_of_ice_mass_due_to_calving",
     "tendency_of_ice_mass_due_to_frontal_melt",

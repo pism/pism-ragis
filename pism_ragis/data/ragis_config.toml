@@ -25,7 +25,7 @@
 "atmosphere" = "Climate"
 "ocean" = "Ocean"
 "calving" = "Calving"
-"geometry" = "Calving"
+"geometry" = "Retreat"
 "frontal_melt" = "Frontal Melt"
 "basal_resistance" = "Flow"
 "basal_yield_stress" = "Flow"

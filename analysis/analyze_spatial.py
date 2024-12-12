@@ -43,7 +43,7 @@ from tqdm.auto import tqdm
 
 from pism_ragis.filtering import importance_sampling
 from pism_ragis.likelihood import log_normal, log_pseudo_huber
-from pism_ragis.processing import preprocess_nc
+from pism_ragis.processing import load_ensemble, preprocess_nc
 
 xr.set_options(keep_attrs=True)
 
@@ -74,21 +74,7 @@ if __name__ == "__main__":
         "--obs_url",
         help="""Path to "observed" mass balance.""",
         type=str,
-        default="data/itslive/GRE_G0240_1985.nc",
-    )
-    parser.add_argument(
-        "--filter_range",
-        help="""Time slice used for Importance Sampling. Default="1990 2019". """,
-        type=str,
-        nargs=2,
-        default="1986 2019",
-    )
-    parser.add_argument(
-        "--outlier_range",
-        help="""Ensemble members outside this range are removed. Default="-1_250 250". """,
-        type=str,
-        nargs=2,
-        default="-1250 -250",
+        default="data/itslive/ITS_LIVE_GRE_G0240_1985.nc",
     )
     parser.add_argument(
         "--outlier_variable",
@@ -144,43 +130,32 @@ if __name__ == "__main__":
 
     options = parser.parse_args()
     spatial_files = options.FILES
-    filter_start_year, filter_end_year = options.filter_range.split(" ")
     fudge_factor = options.fudge_factor
     notebook = options.notebook
     parallel = options.parallel
     reference_year = options.reference_year
     resampling_frequency = options.resampling_frequency
     outlier_variable = options.outlier_variable
-    outlier_range = [float(v) for v in options.outlier_range.split(" ")]
     ragis_config_file = Path(
         str(files("pism_ragis.data").joinpath("ragis_config.toml"))
     )
     ragis_config = toml.load(ragis_config_file)
+    sampling_year = 1985
 
-    ds = (
-        xr.open_mfdataset(
-            spatial_files,
-            parallel=True,
-            chunks="auto",
-            preprocess=preprocess_nc,
-            combine="nested",
-            concat_dim="exp_id",
-        )
-        .squeeze()
-        .sortby("exp_id")
-    )
+    ds = load_ensemble(spatial_files, preprocess=preprocess_nc)
+    sim_ds = ds.sel({"time": str(sampling_year)}).mean(dim="time")
 
-    observed = xr.open_dataset(options.obs_url)
+    observed = xr.open_dataset(options.obs_url, chunks="auto")
 
-    time = pd.date_range("1985-01-01", periods=1, freq="YS")
-    observed = observed[["v", "v_err", "ice"]].expand_dims({"time": time})
     observed = observed.where(observed["ice"])
-    observed_resampled = observed.interp_like(ds)
+    obs_ds = observed.interp_like(sim_ds)
 
+    obs_ds = obs_ds.where(obs_ds["v"] > 200)
+    sim_ds = sim_ds.where(obs_ds["v"] > 200)
     print("Importance sampling using v")
     f = importance_sampling(
-        observed=observed_resampled,
-        simulated=ds,
+        observed=obs_ds,
+        simulated=sim_ds,
         log_likelihood=log_pseudo_huber,
         n_samples=len(ds.exp_id),
         fudge_factor=5,

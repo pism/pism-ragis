@@ -29,6 +29,7 @@ import re
 import shutil
 import zipfile
 from calendar import isleap
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Dict, Hashable, List, Mapping, Union
 
@@ -579,7 +580,10 @@ class UtilsMethods:
 
 @timeit
 def load_ensemble(
-    filenames: List[Union[Path, str]], parallel: bool = True, engine: str = "h5netcdf"
+    filenames: List[Union[Path, str]],
+    parallel: bool = True,
+    engine: str = "h5netcdf",
+    preprocess: Callable | None = None,
 ) -> xr.Dataset:
     """
     Load an ensemble of NetCDF files into an xarray Dataset.
@@ -600,9 +604,9 @@ def load_ensemble(
     ds = xr.open_mfdataset(
         filenames,
         parallel=parallel,
+        preprocess=preprocess,
         engine=engine,
     ).drop_vars(["spatial_ref", "mapping"], errors="ignore")
-    ds = ds.dropna(dim="exp_id")
     print("Done.")
     return ds
 
@@ -819,14 +823,14 @@ def simplify_retreat(my_str: str) -> str:
     """
 
     if my_str in ("false", ""):
-        short_str = "Free Running"
+        short_str = "Free"
     else:
-        short_str = "Prescribed Retreat"
+        short_str = "Prescribed"
 
     return short_str
 
 
-def simplify_ocean(my_str: str) -> str:
+def simplify_ocean(my_str: str) -> int:
     """
     Simplify ocean string.
 
@@ -840,7 +844,22 @@ def simplify_ocean(my_str: str) -> str:
     str
         The simplified ocean string.
     """
-    return "-".join(my_str.split("_")[1:2])
+    gcms: Dict[str, int] = {
+        "ACCESS1-3_rcp85": 0,
+        "CNRM-CM6_ssp126": 1,
+        "CNRM-CM6_ssp585": 2,
+        "CNRM-ESM2_ssp585": 3,
+        "CSIRO-Mk3.6_rcp85": 4,
+        "HadGEM2-ES_rcp85": 5,
+        "IPSL-CM5-MR_rcp85": 6,
+        "MIROC-ESM-CHEM_rcp26": 7,
+        "MIROC-ESM-CHEM_rcp85": 8,
+        "NorESM1-M_rcp85": 9,
+        "UKESM1-CM6_ssp585": 10,
+    }
+
+    gcm = "_".join(my_str.split("_")[1:3])
+    return gcms[gcm]
 
 
 def simplify_calving(my_str: str) -> int:
