@@ -8,6 +8,10 @@
 
 Repository for work related to NASA ROSES award 80NSSC21K0748 (2021-24).
 
+## Synopsis
+
+The stability of the Greenland Ice Sheet in a warming climate is a critical societal concern. Predicting Greenland's contribution to sea level remains a challenge as historical simulations of the past decades show limited agreement with observations. In this project, we develop a data assimilation framework that combines sparse observations and the ice sheet model PISM to produce a reanalysis of the state of the Greenland Ice Sheet from 1980 to 2020 using probabilistic filtering methods.
+
 ## Installation
 
 Get pism-ragis source from GitHub:
@@ -30,12 +34,10 @@ Install pism-ragis:
     $ pip install .
 
 
+## Workflow
 
-### Synopsis
+We strive to make our workflow reproducible, however, perfect reproducability is hard to achieve. For example, third-party providers of input data sets may change their access patterns, breaking the workflow. PISM needs to be installed on an HPC system with ample disk space (10s of TB).
 
-The stability of the Greenland Ice Sheet in a warming climate is a critical societal concern. Predicting Greenland's contribution to sea level remains a challenge as historical simulations of the past decades show limited agreement with observations. In this project, we develop a data assimilation framework that combines sparse observations and the ice sheet model PISM to produce a reanalysis of the state of the Greenland Ice Sheet from 1980 to 2020 using probabilistic filtering methods.
+### PISM
 
-
-###
-
-This repository contains scripts and functions to generate and analyze hindcasts performed with the [![Parallel Ice Sheet Model (PISM)]](https://pism.io)
+Please install PISM [![Parallel Ice Sheet Model (PISM)]](https://pism.io)

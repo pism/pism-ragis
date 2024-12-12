@@ -62,11 +62,78 @@ sim_alpha = 0.5
 sim_cmap = sns.color_palette("crest", n_colors=4).as_hex()[0:3:2]
 sim_cmap = ["#a6cee3", "#1f78b4"]
 sim_cmap = ["#CC6677", "#882255"]
-sim_cmap = ["#43b1cb", "#216778"]
+# sim_cmap = ["#43b1cb", "#216778"]
 obs_alpha = 1.0
 obs_cmap = ["0.8", "0.7"]
 # obs_cmap = ["#88CCEE", "#44AA99"]
 hist_cmap = ["#a6cee3", "#1f78b4"]
+
+
+@timeit
+def run_sampling(
+    observed: xr.Dataset,
+    simulated: xr.Dataset,
+    obs_mean_vars: List = ["grounding_line_flux", "mass_balance"],
+    obs_std_vars: List = [
+        "grounding_line_flux_uncertainty",
+        "mass_balance_uncertainty",
+    ],
+    sim_vars: List = ["grounding_line_flux", "mass_balance"],
+    filter_range: List[int] = [1990, 2019],
+    fudge_factor: float = 3.0,
+    params: List = [],
+):
+    """
+    Run sampling.
+    """
+
+    filter_start_year, filter_end_year = filter_range
+
+    prior_config = filter_config(simulated.isel({"time": 0}), params)
+    prior_df = config_to_dataframe(prior_config, ensemble="Prior")
+
+    prior_posterior_list = []
+    for obs_mean_var, obs_std_var, sim_var in zip(
+        obs_mean_vars, obs_std_vars, sim_vars
+    ):
+        print(f"Importance sampling using {obs_mean_var}")
+        f = importance_sampling(
+            simulated=simulated.sel(
+                time=slice(str(filter_start_year), str(filter_end_year))
+            ),
+            observed=observed.sel(
+                time=slice(str(filter_start_year), str(filter_end_year))
+            ),
+            log_likelihood=log_normal,
+            fudge_factor=fudge_factor,
+            n_samples=len(simulated.exp_id),
+            obs_mean_var=obs_mean_var,
+            obs_std_var=obs_std_var,
+            sim_var=sim_var,
+        )
+
+        with ProgressBar() as pbar:
+            result = f.compute()
+            logger.info(
+                "Importance Sampling: Finished in %2.2f seconds", pbar.last_duration
+            )
+
+        importance_sampled_ids = result["exp_id_sampled"]
+        importance_sampled_ids["basin"] = importance_sampled_ids["basin"].astype(str)
+
+        simulated_posterior = simulated.sel(exp_id=importance_sampled_ids)
+        simulated_posterior["ensemble"] = "Posterior"
+
+        posterior_config = filter_config(simulated_posterior.isel({"time": 0}), params)
+        posterior_df = config_to_dataframe(posterior_config, ensemble="Posterior")
+
+        prior_posterior_f = pd.concat([prior_df, posterior_df]).reset_index(drop=True)
+        prior_posterior_f["filtered_by"] = obs_mean_var
+        prior_posterior_list.append(prior_posterior_f)
+
+    prior_posterior = pd.concat(prior_posterior_list).reset_index(drop=True)
+    prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)
+    return prior_posterior
 
 
 def filter_config(ds: xr.Dataset, params: List[str]) -> xr.DataArray:
@@ -258,7 +325,7 @@ def config_to_dataframe(
     config : xr.DataArray
         The input DataArray containing the configuration data.
     ensemble : Union[str, None], optional
-        An optional string to add as a column named 'Ensemble' in the DataFrame, by default None.
+        An optional string to add as a column named 'ensemble' in the DataFrame, by default None.
 
     Returns
     -------
@@ -279,18 +346,18 @@ def config_to_dataframe(
     0                   0       1       2       3
     1                   1       4       5       6
 
-    >>> df = config_to_dataframe(config, ensemble="Ensemble1")
+    >>> df = config_to_dataframe(config, ensemble="ensemble1")
     >>> print(df)
-    pism_config_axis  time  param1  param2  param3   Ensemble
-    0                   0       1       2       3  Ensemble1
-    1                   1       4       5       6  Ensemble1
+    pism_config_axis  time  param1  param2  param3   ensemble
+    0                   0       1       2       3  ensemble1
+    1                   1       4       5       6  ensemble1
     """
     dims = [dim for dim in config.dims if dim != "pism_config_axis"]
     df = config.to_dataframe().reset_index()
     df = df.pivot(index=dims, columns="pism_config_axis", values="pism_config")
     df.reset_index(inplace=True)
     if ensemble:
-        df["Ensemble"] = ensemble
+        df["ensemble"] = ensemble
     return df
 
 
@@ -544,7 +611,7 @@ def plot_obs_sims(
     sim_cis = []
     if sim_prior is not None:
         sim_prior = sim_prior[
-            [mass_cumulative_varname, grounding_line_flux_varname, "Ensemble"]
+            [mass_cumulative_varname, grounding_line_flux_varname, "ensemble"]
         ].load()
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
@@ -563,14 +630,14 @@ def plot_obs_sims(
                 quantiles[percentiles[1]][m_var],
                 alpha=sim_alpha,
                 color=sim_cmap[0],
-                label=f"""{sim_prior["Ensemble"].values} ({percentile_range:.0f}% credibility interval)""",
+                label=f"""{sim_prior["ensemble"].values} ({percentile_range:.0f}% credibility interval)""",
                 lw=0,
             )
             if k == 0:
                 sim_cis.append(sim_ci)
     if sim_posterior is not None:
         sim_posterior = sim_posterior[
-            [mass_cumulative_varname, grounding_line_flux_varname, "Ensemble"]
+            [mass_cumulative_varname, grounding_line_flux_varname, "ensemble"]
         ].load()
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
@@ -589,7 +656,7 @@ def plot_obs_sims(
                 quantiles[percentiles[1]][m_var],
                 alpha=sim_alpha,
                 color=sim_cmap[1],
-                label=f"""{sim_posterior["Ensemble"].values} ({percentile_range:.0f}% credibility interval)""",
+                label=f"""{sim_posterior["snsemble"].values} ({percentile_range:.0f}% credibility interval)""",
                 lw=0,
             )
             if k == 0:
@@ -790,7 +857,7 @@ def plot_obs_sims_3(
             quantiles[percentiles[1]][m_var],
             alpha=sim_alpha,
             color=sim_cmap[0],
-            label=f"""{sim_prior["Ensemble"].values} ({percentile_range:.0f}% c.i.)""",
+            label=f"""{sim_prior["snsemble"].values} ({percentile_range:.0f}% c.i.)""",
             lw=0,
         )
         if k == 0:
@@ -813,7 +880,7 @@ def plot_obs_sims_3(
             quantiles[percentiles[1]][m_var],
             alpha=sim_alpha,
             color=sim_cmap[1],
-            label=f"""{sim_posterior["Ensemble"].values} ({percentile_range:.0f}% c.i.)""",
+            label=f"""{sim_posterior["ensemble"].values} ({percentile_range:.0f}% c.i.)""",
             lw=0,
         )
         if k == 0:
@@ -994,10 +1061,14 @@ if __name__ == "__main__":
         help="Set the logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)",
     )
 
+    print("================================================================")
+    print("Analyze RAGIS Scalars")
+    print("================================================================\n\n")
+
     options, unknown = parser.parse_known_args()
     basin_files = options.FILES
     engine = options.engine
-    filter_start_year, filter_end_year = options.filter_range
+    filter_range = options.filter_range
     fudge_factor = options.fudge_factor
     notebook = options.notebook
     parallel = options.parallel
@@ -1094,9 +1165,6 @@ if __name__ == "__main__":
         Path(pdf_dir) / Path(f"{outlier_variable}_filtering.pdf"),
     )
 
-    prior_config = simulated_ds.sel(pism_config_axis=params).pism_config
-    prior_df = config_to_dataframe(prior_config, ensemble="Prior")
-
     outliers_config = filter_config(outliers_ds, params)
     outliers_df = config_to_dataframe(outliers_config, ensemble="Outliers")
 
@@ -1136,118 +1204,129 @@ if __name__ == "__main__":
         {"time": resampling_frequency}
     ).mean()
 
-    observed_ds = observed_mankoff_basins_ds
-    observed_resampled_ds = observed_mankoff_basins_resampled_ds
+    prior_posterior_mankoff = run_sampling(
+        observed=observed_mankoff_basins_resampled_ds,
+        simulated=simulated_mankoff_basins_resampled_ds,
+        filter_range=filter_range,
+        fudge_factor=fudge_factor,
+        params=params,
+    )
 
-    simulated_ds = simulated_mankoff_basins_ds
-    simulated_resampled_ds = simulated_mankoff_basins_resampled_ds
+    prior_posterior_grace = run_sampling(
+        observed=observed_grace_basins_resampled_ds,
+        simulated=simulated_grace_basins_resampled_ds,
+        obs_mean_vars=["mass_balance"],
+        obs_std_vars=["mass_balance_uncertainty"],
+        sim_vars=["mass_balance"],
+        fudge_factor=fudge_factor,
+        filter_range=filter_range,
+        params=params,
+    )
 
-    # observed_ds = observed_grace_basins_ds
-    # observed_resampled_ds = observed_grace_basins_resampled_ds
+    prior_posterior = pd.concat(
+        [prior_posterior_mankoff, prior_posterior_grace]
+    ).reset_index(drop=True)
+    # print("hi")
 
-    # simulated_ds = simulated_grace_basins_ds
-    # simulated_resampled_ds = simulated_grace_basins_resampled_ds
+    # observed_ds = observed_mankoff_basins_ds
+    # observed_resampled_ds = observed_mankoff_basins_resampled_ds
 
-    sim_prior = simulated_resampled_ds
-    sim_prior["Ensemble"] = "Prior"
+    # simulated_ds = simulated_mankoff_basins_ds
+    # simulated_resampled_ds = simulated_mankoff_basins_resampled_ds
 
-    filtered_all = {}
-    prior_posterior_list = []
-    for obs_mean_var, obs_std_var, sim_var in zip(
-        list(flux_vars.values())[0:2],
-        list(flux_uncertainty_vars.values())[0:2],
-        list(flux_vars.values())[0:2],
-    ):
-        # for obs_mean_var, obs_std_var, sim_var in zip(
-        #     ["cumulative_mass_balance"],
-        #     ["cumulative_mass_balance_uncertainty"],
-        #     ["cumulative_mass_balance"],
-        # ):
-        print(f"Importance sampling using {obs_mean_var}")
-        f = importance_sampling(
-            simulated=simulated_resampled_ds.sel(
-                time=slice(str(filter_start_year), str(filter_end_year))
-            ),
-            observed=observed_resampled_ds.sel(
-                time=slice(str(filter_start_year), str(filter_end_year))
-            ),
-            log_likelihood=log_normal,
-            fudge_factor=fudge_factor,
-            n_samples=len(simulated_resampled_ds.exp_id),
-            obs_mean_var=obs_mean_var,
-            obs_std_var=obs_std_var,
-            sim_var=sim_var,
-        )
+    # # observed_ds = observed_grace_basins_ds
+    # # observed_resampled_ds = observed_grace_basins_resampled_ds
 
-        with ProgressBar() as pbar:
-            result = f.compute()
-            logger.info(
-                "Importance Sampling: Finished in %2.2f seconds", pbar.last_duration
-            )
+    # # simulated_ds = simulated_grace_basins_ds
+    # # simulated_resampled_ds = simulated_grace_basins_resampled_ds
 
-        importance_sampled_ids = result["exp_id_sampled"]
-        importance_sampled_ids["basin"] = importance_sampled_ids["basin"].astype(str)
+    # sim_prior = simulated_resampled_ds
+    # sim_prior["Ensemble"] = "Prior"
 
-        simulated_resampled_filtered_ds = simulated_resampled_ds.sel(
-            exp_id=importance_sampled_ids
-        )
-        simulated_resampled_filtered_ds["Ensemble"] = "Posterior"
+    # filtered_all = {}
+    # prior_posterior_list = []
+    # for obs_mean_var, obs_std_var, sim_var in zip(
+    #     list(flux_vars.values())[0:2],
+    #     list(flux_uncertainty_vars.values())[0:2],
+    #     list(flux_vars.values())[0:2],
+    # ):
+    #     # for obs_mean_var, obs_std_var, sim_var in zip(
+    #     #     ["cumulative_mass_balance"],
+    #     #     ["cumulative_mass_balance_uncertainty"],
+    #     #     ["cumulative_mass_balance"],
+    #     # ):
+    #     print(f"Importance sampling using {obs_mean_var}")
+    #     f = importance_sampling(
+    #         simulated=simulated_resampled_ds.sel(
+    #             time=slice(str(filter_start_year), str(filter_end_year))
+    #         ),
+    #         observed=observed_resampled_ds.sel(
+    #             time=slice(str(filter_start_year), str(filter_end_year))
+    #         ),
+    #         log_likelihood=log_normal,
+    #         fudge_factor=fudge_factor,
+    #         n_samples=len(simulated_resampled_ds.exp_id),
+    #         obs_mean_var=obs_mean_var,
+    #         obs_std_var=obs_std_var,
+    #         sim_var=sim_var,
+    #     )
 
-        sim_posterior = simulated_resampled_filtered_ds
-        sim_posterior["Ensemble"] = "Posterior"
+    #     with ProgressBar() as pbar:
+    #         result = f.compute()
+    #         logger.info(
+    #             "Importance Sampling: Finished in %2.2f seconds", pbar.last_duration
+    #         )
 
-        posterior_config = filter_config(simulated_resampled_filtered_ds, params)
-        posterior_df = config_to_dataframe(posterior_config, ensemble="Posterior")
+    #     importance_sampled_ids = result["exp_id_sampled"]
+    #     importance_sampled_ids["basin"] = importance_sampled_ids["basin"].astype(str)
 
-        prior_posterior_f = pd.concat([prior_df, posterior_df]).reset_index(drop=True)
-        prior_posterior_f["filtered_by"] = obs_mean_var
-        prior_posterior_list.append(prior_posterior_f)
+    #     simulated_resampled_filtered_ds = simulated_resampled_ds.sel(
+    #         exp_id=importance_sampled_ids
+    #     )
+    #     simulated_resampled_filtered_ds["Ensemble"] = "Posterior"
 
-        filtered_all[obs_mean_var] = pd.concat([prior_df, posterior_df]).rename(
-            columns=params_short_dict
-        )
+    #     sim_posterior = simulated_resampled_filtered_ds
+    #     sim_posterior["Ensemble"] = "Posterior"
 
-        start_time = time.time()
-        with tqdm(
-            desc="Plotting basins",
-            total=len(observed_resampled_ds.basin),
-        ) as progress_bar:
-            for basin in observed_resampled_ds.basin:
-                plot_obs_sims(
-                    observed_resampled_ds.sel(basin=basin).sel(
-                        {"time": slice("1980", "2020")}
-                    ),
-                    sim_prior.sel(basin=basin).sel({"time": slice("1980", "2020")}),
-                    sim_posterior.sel(basin=basin).sel({"time": slice("1980", "2020")}),
-                    config=ragis_config,
-                    filtering_var=obs_mean_var,
-                    filter_range=[filter_start_year, filter_end_year],
-                    fig_dir=fig_dir,
-                    obs_alpha=obs_alpha,
-                    sim_alpha=sim_alpha,
-                )
-                plot_obs_sims(
-                    observed_resampled_ds.sel(basin=basin).sel(
-                        {"time": slice("1980", "2020")}
-                    ),
-                    sim_prior.sel(basin=basin).sel({"time": slice("1980", "2020")}),
-                    None,
-                    config=ragis_config,
-                    filtering_var=obs_mean_var,
-                    filter_range=[filter_start_year, filter_end_year],
-                    fig_dir=fig_dir,
-                    obs_alpha=obs_alpha,
-                    sim_alpha=sim_alpha,
-                )
-                progress_bar.update()
+    #     posterior_config = filter_config(simulated_resampled_filtered_ds, params)
+    #     posterior_df = config_to_dataframe(posterior_config, ensemble="Posterior")
 
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        print(f"...took {elapsed_time:.2f}s")
+    #     prior_posterior_f = pd.concat([prior_df, posterior_df]).reset_index(drop=True)
+    #     prior_posterior_f["filtered_by"] = obs_mean_var
+    #     prior_posterior_list.append(prior_posterior_f)
 
-    prior_posterior = pd.concat(prior_posterior_list).reset_index()
-    prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)
-    # Define a mapping of columns to their corresponding functions
+    #     filtered_all[obs_mean_var] = pd.concat([prior_df, posterior_df]).rename(
+    #         columns=params_short_dict
+    #     )
+
+    #     start_time = time.time()
+    #     with tqdm(
+    #         desc="Plotting basins",
+    #         total=len(observed_resampled_ds.basin),
+    #     ) as progress_bar:
+    #         for basin in observed_resampled_ds.basin:
+    #             plot_obs_sims(
+    #                 observed_resampled_ds.sel(basin=basin).sel(
+    #                     {"time": slice("1980", "2020")}
+    #                 ),
+    #                 sim_prior.sel(basin=basin).sel({"time": slice("1980", "2020")}),
+    #                 sim_posterior.sel(basin=basin).sel({"time": slice("1980", "2020")}),
+    #                 config=ragis_config,
+    #                 filtering_var=obs_mean_var,
+    #                 filter_range=[filter_start_year, filter_end_year],
+    #                 fig_dir=fig_dir,
+    #                 obs_alpha=obs_alpha,
+    #                 sim_alpha=sim_alpha,
+    #             )
+    #             progress_bar.update()
+
+    #     end_time = time.time()
+    #     elapsed_time = end_time - start_time
+    #     print(f"...took {elapsed_time:.2f}s")
+
+    # prior_posterior = pd.concat(prior_posterior_list).reset_index()
+    # prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)
+    # # Define a mapping of columns to their corresponding functions
 
     column_function_mapping: Dict[str, List[Callable]] = {
         "surface.given.file": [prp.simplify_path, prp.simplify_climate],
@@ -1299,7 +1378,7 @@ if __name__ == "__main__":
                 sns.histplot(
                     data=df,
                     x=v_s,
-                    hue="Ensemble",
+                    hue="ensemble",
                     hue_order=["Prior", "Posterior"],
                     bins=bins_dict[v],
                     palette=sim_cmap,
@@ -1318,49 +1397,42 @@ if __name__ == "__main__":
             ticklabels = ax.get_xticklabels()
             for tick in ticklabels:
                 tick.set_rotation(15)
-        fn = (
-            result_dir
-            / Path("figures")
-            / Path(f"{basin}_prior_posterior_filtered_by_{filtering_var}.pdf")
-        )
+        fn = pdf_dir / Path(f"{basin}_prior_posterior_filtered_by_{filtering_var}.pdf")
         fig.savefig(fn)
-        fn = (
-            result_dir
-            / Path("figures")
-            / Path(f"{basin}_prior_posterior_filtered_by_{filtering_var}.png")
-        )
+        fn = png_dir / Path(f"{basin}_prior_posterior_filtered_by_{filtering_var}.png")
         fig.savefig(fn, dpi=300)
         plt.close()
+        del fig
 
-    ensemble_df = prior_df.apply(prp.convert_column_to_numeric).drop(
-        columns=["Ensemble", "exp_id"], errors="ignore"
-    )
-    climate_dict = {
-        v: k for k, v in enumerate(ensemble_df["surface.given.file"].unique())
-    }
-    ensemble_df["surface.given.file"] = ensemble_df["surface.given.file"].map(
-        climate_dict
-    )
-    ocean_dict = {v: k for k, v in enumerate(ensemble_df["ocean.th.file"].unique())}
-    ensemble_df["ocean.th.file"] = ensemble_df["ocean.th.file"].map(ocean_dict)
-    calving_dict = {
-        v: k for k, v in enumerate(ensemble_df["calving.rate_scaling.file"].unique())
-    }
-    ensemble_df["calving.rate_scaling.file"] = ensemble_df[
-        "calving.rate_scaling.file"
-    ].map(calving_dict)
+    # ensemble_df = prior_df.apply(prp.convert_column_to_numeric).drop(
+    #     columns=["ensemble", "exp_id"], errors="ignore"
+    # )
+    # climate_dict = {
+    #     v: k for k, v in enumerate(ensemble_df["surface.given.file"].unique())
+    # }
+    # ensemble_df["surface.given.file"] = ensemble_df["surface.given.file"].map(
+    #     climate_dict
+    # )
+    # ocean_dict = {v: k for k, v in enumerate(ensemble_df["ocean.th.file"].unique())}
+    # ensemble_df["ocean.th.file"] = ensemble_df["ocean.th.file"].map(ocean_dict)
+    # calving_dict = {
+    #     v: k for k, v in enumerate(ensemble_df["calving.rate_scaling.file"].unique())
+    # }
+    # ensemble_df["calving.rate_scaling.file"] = ensemble_df[
+    #     "calving.rate_scaling.file"
+    # ].map(calving_dict)
 
-    retreat_dict = {
-        v: k
-        for k, v in enumerate(
-            ensemble_df["geometry.front_retreat.prescribed.file"].unique()
-        )
-    }
+    # retreat_dict = {
+    #     v: k
+    #     for k, v in enumerate(
+    #         ensemble_df["geometry.front_retreat.prescribed.file"].unique()
+    #     )
+    # }
 
-    ensemble_df["geometry.front_retreat.prescribed.file"] = ensemble_df[
-        "geometry.front_retreat.prescribed.file"
-    ].map(retreat_dict)
-    to_analyze = simulated_ds.sel(time=slice("1980-01-01", "2020-01-01"))
+    # ensemble_df["geometry.front_retreat.prescribed.file"] = ensemble_df[
+    #     "geometry.front_retreat.prescribed.file"
+    # ].map(retreat_dict)
+    # to_analyze = simulated_ds.sel(time=slice("1980-01-01", "2020-01-01"))
 
     # all_delta_indices = run_delta_analysis(
     #     to_analyze, ensemble_df, list(flux_vars.values())[1:2], notebook=notebook
