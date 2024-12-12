@@ -28,7 +28,6 @@ import pathlib
 import re
 import shutil
 import zipfile
-from calendar import isleap
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Dict, Hashable, List, Mapping, Union
@@ -71,56 +70,6 @@ def unzip_file(zip_path: str, extract_to: str, overwrite: bool = False) -> None:
             file_path = Path(extract_to) / file
             if not file_path.exists() or overwrite:
                 zip_ref.extract(member=file, path=extract_to)
-
-
-def decimal_year_to_datetime(decimal_year: float) -> datetime.datetime:
-    """
-    Convert a decimal year to a datetime object.
-
-    Parameters
-    ----------
-    decimal_year : float
-        The decimal year to be converted.
-
-    Returns
-    -------
-    datetime.datetime
-        The corresponding datetime object.
-
-    Notes
-    -----
-    The function calculates the date by determining the start of the year and adding
-    the fractional part of the year as days. If the resulting date has an hour value
-    of 12 or more, it rounds up to the next day and sets the time to midnight.
-    """
-    year = int(decimal_year)
-    remainder = decimal_year - year
-    start_of_year = datetime.datetime(year, 1, 1)
-    days_in_year = (datetime.datetime(year + 1, 1, 1) - start_of_year).days
-    date = start_of_year + datetime.timedelta(days=remainder * days_in_year)
-    if date.hour >= 12:
-        date = date + datetime.timedelta(days=1)
-    return date.replace(hour=0, minute=0, second=0, microsecond=0)
-
-
-def days_in_year(year: int) -> int:
-    """
-    Calculate the number of days in a given year.
-
-    Parameters
-    ----------
-    year : int
-        The year for which to calculate the number of days.
-
-    Returns
-    -------
-    int
-        The number of days in the specified year. Returns 366 if the year is a leap year, otherwise returns 365.
-    """
-    if isleap(year):
-        return 366
-    else:
-        return 365
 
 
 def calculate_area(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:

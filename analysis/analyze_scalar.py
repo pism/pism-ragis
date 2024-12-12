@@ -499,6 +499,10 @@ def plot_obs_sims(
     import pism_ragis.processing  # pylint: disable=import-outside-toplevel,reimported
 
     Path(fig_dir).mkdir(exist_ok=True)
+    pdf_dir = fig_dir / Path("pdfs")
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    png_dir = fig_dir / Path("pngs")
+    png_dir.mkdir(parents=True, exist_ok=True)
 
     percentile_range = (percentiles[1] - percentiles[0]) * 100
 
@@ -648,13 +652,13 @@ def plot_obs_sims(
     prior_posterior_str = prior_str + posterior_str
 
     fig.savefig(
-        fig_dir
+        pdf_dir
         / Path(
             f"{basin}_mass_accounting_{prior_posterior_str}_filtered_by_{filtering_var}.pdf"
         )
     )
     fig.savefig(
-        fig_dir
+        png_dir
         / Path(
             f"{basin}_mass_accounting_{prior_posterior_str}_filtered_by_{filtering_var}.png",
             dpi=300,
@@ -706,6 +710,10 @@ def plot_obs_sims_3(
     import pism_ragis.processing  # pylint: disable=import-outside-toplevel,reimported
 
     Path(fig_dir).mkdir(exist_ok=True)
+    pdf_dir = fig_dir / Path("pdfs")
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    png_dir = fig_dir / Path("pngs")
+    png_dir.mkdir(parents=True, exist_ok=True)
 
     percentile_range = (percentiles[1] - percentiles[0]) * 100
 
@@ -866,68 +874,12 @@ def plot_obs_sims_3(
         posterior_str = ""
     prior_posterior_str = prior_str + posterior_str
     fig.savefig(
-        fig_dir
+        pdf_dir
         / Path(
             f"{basin}_{prior_posterior_str}_mass_accounting_filtered_by_{filtering_var}.pdf"
         )
     )
     plt.close()
-
-
-# def plot_filtered_hist():
-#     outliers_filtered_df = pd.concat([outliers_df, filtered_df]).reset_index(drop=True)
-#     # Apply the conversion function to each column
-#     outliers_filtered_df = outliers_filtered_df.apply(prp.convert_column_to_numeric)
-#     for col in ["surface.given.file", "ocean.th.file", "calving.rate_scaling.file"]:
-#         outliers_filtered_df[col] = outliers_filtered_df[col].apply(prp.simplify_path)
-#     outliers_filtered_df["surface.given.file"] = outliers_filtered_df[
-#         "surface.given.file"
-#     ].apply(prp.simplify_climate)
-#     outliers_filtered_df["ocean.th.file"] = outliers_filtered_df["ocean.th.file"].apply(
-#         prp.simplify_ocean
-#     )
-#     outliers_filtered_df["calving.rate_scaling.file"] = outliers_filtered_df[
-#         "calving.rate_scaling.file"
-#     ].apply(prp.simplify_calving)
-
-#     df = outliers_filtered_df.rename(columns=params_short_dict)
-
-#     n_params = len(params_short_dict)
-#     plt.rcParams["font.size"] = 4
-#     fig, axs = plt.subplots(
-#         5,
-#         3,
-#         sharey=True,
-#         figsize=[6.2, 6.2],
-#     )
-#     fig.subplots_adjust(hspace=1.0, wspace=0.1)
-#     for k, v in enumerate(params_short_dict.values()):
-#         legend = bool(k == 0)
-#         try:
-#             sns.histplot(
-#                 data=df,
-#                 x=v,
-#                 hue="Ensemble",
-#                 hue_order=["Filtered", "Outliers"],
-#                 palette=sim_cmap,
-#                 common_norm=False,
-#                 stat="probability",
-#                 multiple="dodge",
-#                 alpha=0.8,
-#                 linewidth=0.2,
-#                 ax=axs.ravel()[k],
-#                 legend=legend,
-#             )
-#         except:
-#             pass
-#     for ax in axs.flatten():
-#         ax.set_ylabel("")
-#         ticklabels = ax.get_xticklabels()
-#         for tick in ticklabels:
-#             tick.set_rotation(45)
-#     fn = result_dir / Path("figures") / Path("outliers_hist.pdf")
-#     fig.savefig(fn)
-#     plt.close()
 
 
 if __name__ == "__main__":
@@ -1086,6 +1038,10 @@ if __name__ == "__main__":
     result_dir = Path(options.result_dir)
     fig_dir = result_dir / Path("figures")
     fig_dir.mkdir(parents=True, exist_ok=True)
+    pdf_dir = fig_dir / Path("pdfs")
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    png_dir = fig_dir / Path("pngs")
+    png_dir.mkdir(parents=True, exist_ok=True)
 
     plt.rcParams["font.size"] = 6
 
@@ -1105,12 +1061,6 @@ if __name__ == "__main__":
         reference_date,
         engine=engine,
     )
-
-    # fig, ax = plt.subplots(1, 1)
-    # ds.sel(time=slice(str(filter_start_year), str(filter_end_year))).sel(
-    #     basin="GIS", ensemble_id=ensemble
-    # ).grounding_line_flux.plot(hue="exp_id", add_legend=False, ax=ax, lw=0.5)
-    # fig.savefig("grounding_line_flux_unfiltered.pdf")
 
     # Select the relevant pism_config_axis
     retreat = simulated_ds.sel(
@@ -1141,7 +1091,7 @@ if __name__ == "__main__":
     plot_outliers(
         filtered_ds.sel(basin="GIS")[outlier_variable],
         outliers_ds.sel(basin="GIS")[outlier_variable],
-        Path(fig_dir) / Path(f"{outlier_variable}_filtering.pdf"),
+        Path(pdf_dir) / Path(f"{outlier_variable}_filtering.pdf"),
     )
 
     prior_config = simulated_ds.sel(pism_config_axis=params).pism_config

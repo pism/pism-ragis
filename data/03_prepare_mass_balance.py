@@ -34,8 +34,8 @@ import pint_xarray  # pylint: disable=unused-import
 import toml
 import xarray as xr
 
+from pism_ragis.datetools import decimal_year_to_datetime
 from pism_ragis.download import download_earthaccess, download_netcdf, save_netcdf
-from pism_ragis.processing import decimal_year_to_datetime
 
 xr.set_options(keep_attrs=True)
 
@@ -95,11 +95,11 @@ if __name__ == "__main__":
     )
     for v in basin_vars:
         ds[f"cumulative_{v}"] = (ds[v] * days_in_interval).cumsum(dim="time")
-        ds[v] = ds[v].pint.to("Gt year-1")
+        ds[v] = ds[v].pint.to("Gt year^-1")
 
     for v in basin_uncertainty_vars:
         ds[f"cumulative_{v}"] = (ds[v] * days_in_interval).cumsum(dim="time")
-        ds[v] = ds[v].pint.to("Gt year-1")
+        ds[v] = ds[v].pint.to("Gt year^-1")
 
     discharge_sign = xr.DataArray(-1).pint.quantify("1")
 
@@ -124,7 +124,7 @@ if __name__ == "__main__":
         names=[
             "year",
             "cumulative_mass_balance",
-            "cumulative_mass_balance_uncertainty",
+            "mass_balance_uncertainty",
         ],
     )
 
@@ -136,15 +136,16 @@ if __name__ == "__main__":
     df["time"] = date
 
     ds = xr.Dataset.from_dataframe(df.set_index(df["time"]))
-    ds = ds.expand_dims({"basin": ["GRACE"]}, axis=-1)
+    ds["mass_balance"] = ds["cumulative_mass_balance"].diff(dim="time")
+    ds["cumulative_mass_balance_uncertainty"] = np.sqrt(
+        (ds["mass_balance_uncertainty"] ** 2).cumsum(dim="time")
+    )
     ds["cumulative_mass_balance"].attrs.update({"units": "Gt"})
     ds["cumulative_mass_balance_uncertainty"].attrs.update({"units": "Gt"})
+    ds["mass_balance"].attrs.update({"units": "Gt year^-1"})
+    ds["mass_balance_uncertainty"].attrs.update({"units": "Gt year^-1"})
+    ds = ds.expand_dims({"basin": ["GRACE"]}, axis=-1)
     fn = "grace_greenland_mass_balance.nc"
     p_fn = p / fn
     grace_ds = ds
     save_netcdf(grace_ds, p_fn)
-
-    fn = "combined_greenland_mass_balance.nc"
-    p_fn = p / fn
-    combined_ds = xr.concat([grace_ds, mankoff_ds], dim="time").sortby("time")
-    save_netcdf(combined_ds, p_fn)
