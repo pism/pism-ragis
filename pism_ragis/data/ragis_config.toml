@@ -13,11 +13,32 @@
 'stress_balance.sia.enhancement_factor' = '$E_{\mathrm{SIA}}$ (1)'
 'stress_balance.ssa.Glen_exponent' = '$n_{\mathrm{SSA}}$ (1)'
 'basal_resistance.pseudo_plastic.q' = '$q$ (1)'
-'basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden' = '$\delta$'
-'basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min' = '$\phi_{\mathrm{min}}$'
-'basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max' = '$\phi_{\mathrm{max}}$'
-'basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min' = '$z_{\mathrm{min}}$'
-'basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max' = '$z_{\mathrm{min}}$'
+'basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden' = '$\delta$ (1)'
+'basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min' = '$\phi_{\mathrm{min}}^{\circ{}}$'
+'basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max' = '$\phi_{\mathrm{max}}^{\circ{}}$'
+'basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min' = '$z_{\mathrm{min}}^{\circ{}}$'
+'basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max' = '$z_{\mathrm{min}}^{\circ{}}$'
+
+['Posterior Bins']
+
+'calving.vonmises_calving.sigma_max' = 10
+'calving.rate_scaling.file' = 7
+'geometry.front_retreat.prescribed.file' = 2
+'ocean.th.gamma_T' = 5
+'surface.given.file' = 3
+'ocean.th.file' = 11
+'frontal_melt.routing.parameter_a' = 10
+'frontal_melt.routing.parameter_b' = 10
+'frontal_melt.routing.power_alpha' = 10
+'frontal_melt.routing.power_beta' = 10
+'stress_balance.sia.enhancement_factor' = 10
+'stress_balance.ssa.Glen_exponent' = 10
+'basal_resistance.pseudo_plastic.q' = 10
+'basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden' = 10
+'basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min' = 10
+'basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max' = 10
+'basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min' = 10
+'basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max' = 10
 
 ['Parameter Groups']
 

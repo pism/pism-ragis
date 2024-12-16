@@ -69,26 +69,119 @@ obs_cmap = ["0.8", "0.7"]
 hist_cmap = ["#a6cee3", "#1f78b4"]
 
 
+def prepare_input(
+    df: pd.DataFrame,
+    params: List[str] = [
+        "surface.given.file",
+        "ocean.th.file",
+        "calving.rate_scaling.file",
+        "geometry.front_retreat.prescribed.file",
+    ],
+) -> pd.DataFrame:
+    """
+    Prepare the input DataFrame by converting columns to numeric and mapping unique values to integers.
+
+    This function processes the input DataFrame by converting specified columns to numeric values,
+    dropping specified columns, and mapping unique values in the specified parameters to integers.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The input DataFrame to be processed.
+    params : List[str], optional
+        A list of column names to be processed. Unique values in these columns will be mapped to integers.
+        By default, the list includes:
+        ["surface.given.file", "ocean.th.file", "calving.rate_scaling.file", "geometry.front_retreat.prescribed.file"]
+
+    Returns
+    -------
+    pd.DataFrame
+        The processed DataFrame with specified columns converted to numeric and unique values mapped to integers.
+
+    Examples
+    --------
+    >>> df = pd.DataFrame({
+    ...     "surface.given.file": ["file1", "file2", "file1"],
+    ...     "ocean.th.file": ["fileA", "fileB", "fileA"],
+    ...     "calving.rate_scaling.file": ["fileX", "fileY", "fileX"],
+    ...     "geometry.front_retreat.prescribed.file": ["fileM", "fileN", "fileM"],
+    ...     "ensemble": [1, 2, 3],
+    ...     "exp_id": [101, 102, 103]
+    ... })
+    >>> prepare_input(df)
+       surface.given.file  ocean.th.file  calving.rate_scaling.file  geometry.front_retreat.prescribed.file
+    0                   0              0                          0                                      0
+    1                   1              1                          1                                      1
+    2                   0              0                          0                                      0
+    """
+    # Convert columns to numeric and drop specified columns
+    df = df.apply(prp.convert_column_to_numeric).drop(
+        columns=["ensemble", "exp_id"], errors="ignore"
+    )
+
+    # Map unique values in specified parameters to integers
+    for param in params:
+        m_dict: Dict[str, int] = {v: k for k, v in enumerate(df[param].unique())}
+        df[param] = df[param].map(m_dict)
+
+    return df
+
+
 @timeit
 def run_sampling(
     observed: xr.Dataset,
     simulated: xr.Dataset,
-    obs_mean_vars: List = ["grounding_line_flux", "mass_balance"],
-    obs_std_vars: List = [
+    obs_mean_vars: List[str] = ["grounding_line_flux", "mass_balance"],
+    obs_std_vars: List[str] = [
         "grounding_line_flux_uncertainty",
         "mass_balance_uncertainty",
     ],
-    sim_vars: List = ["grounding_line_flux", "mass_balance"],
+    sim_vars: List[str] = ["grounding_line_flux", "mass_balance"],
     filter_range: List[int] = [1990, 2019],
     fudge_factor: float = 3.0,
     fig_dir: Union[str, Path] = "figures",
-    params: List = [],
-    ragis_config: Dict = {},
-):
+    params: List[str] = [],
+) -> pd.DataFrame:
     """
-    Run sampling.
-    """
+    Run sampling to process observed and simulated datasets.
 
+    This function performs importance sampling using the specified observed and simulated datasets,
+    processes the results, and returns a DataFrame with the prior and posterior configurations.
+
+    Parameters
+    ----------
+    observed : xr.Dataset
+        The observed dataset.
+    simulated : xr.Dataset
+        The simulated dataset.
+    obs_mean_vars : List[str], optional
+        A list of variable names for the observed mean values, by default ["grounding_line_flux", "mass_balance"].
+    obs_std_vars : List[str], optional
+        A list of variable names for the observed standard deviation values, by default ["grounding_line_flux_uncertainty", "mass_balance_uncertainty"].
+    sim_vars : List[str], optional
+        A list of variable names for the simulated values, by default ["grounding_line_flux", "mass_balance"].
+    filter_range : List[int], optional
+        A list containing the start and end years for filtering, by default [1990, 2019].
+    fudge_factor : float, optional
+        A fudge factor for the importance sampling, by default 3.0.
+    fig_dir : Union[str, Path], optional
+        The directory where figures will be saved, by default "figures".
+    params : List[str], optional
+        A list of parameter names to be used for filtering configurations, by default [].
+    ragis_config : Dict, optional
+        A dictionary containing configuration settings for the RAGIS model, by default {}.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame containing the prior and posterior configurations.
+
+    Examples
+    --------
+    >>> observed = xr.Dataset(...)
+    >>> simulated = xr.Dataset(...)
+    >>> result = run_sampling(observed, simulated)
+    """
     filter_start_year, filter_end_year = filter_range
 
     simulated_prior = simulated
@@ -136,36 +229,159 @@ def run_sampling(
         prior_posterior_f["filtered_by"] = obs_mean_var
         prior_posterior_list.append(prior_posterior_f)
 
-        start_time = time.time()
-        with tqdm(
-            desc="Plotting basins",
-            total=len(observed.basin),
-        ) as progress_bar:
-            for basin in observed.basin:
-                plot_obs_sims(
-                    observed.sel(basin=basin).sel({"time": slice("1980", "2020")}),
-                    simulated_prior.sel(basin=basin).sel(
-                        {"time": slice("1980", "2020")}
-                    ),
-                    simulated_posterior.sel(basin=basin).sel(
-                        {"time": slice("1980", "2020")}
-                    ),
-                    config=ragis_config,
-                    filtering_var=obs_mean_var,
-                    filter_range=[filter_start_year, filter_end_year],
-                    fig_dir=fig_dir,
-                    obs_alpha=obs_alpha,
-                    sim_alpha=sim_alpha,
-                )
-                progress_bar.update()
-
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        print(f"...took {elapsed_time:.2f}s")
-
+        plot_basins(
+            observed,
+            simulated_prior,
+            simulated_posterior,
+            obs_mean_var,
+            filter_range=filter_range,
+            fig_dir=fig_dir,
+        )
     prior_posterior = pd.concat(prior_posterior_list).reset_index(drop=True)
     prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)
     return prior_posterior
+
+
+def plot_prior_posteriors(
+    df: pd.DataFrame,
+    bins_dict: Dict,
+    fig_dir: Union[str, Path] = "figures",
+    config: Dict = {},
+):
+    """
+    Plot histograms.
+    """
+
+    params_short_dict = config["Parameters"]
+
+    plot_dir = fig_dir / Path("basin_histograms")
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    pdf_dir = plot_dir / Path("pdfs")
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    png_dir = plot_dir / Path("pngs")
+    png_dir.mkdir(parents=True, exist_ok=True)
+
+    for (basin, filtering_var), m_df in df.groupby(by=["basin", "filtered_by"]):
+        plt.rcParams["font.size"] = 4
+        fig, axs = plt.subplots(
+            4,
+            4,
+            sharey=True,
+            figsize=[6.2, 4.2],
+        )
+        fig.subplots_adjust(hspace=0.75, wspace=0.1)
+        for k, (v, v_s) in enumerate(params_short_dict.items()):
+            legend = bool(k == 0)
+            try:
+                _ = sns.histplot(
+                    data=m_df,
+                    x=v_s,
+                    hue="ensemble",
+                    hue_order=["Prior", "Posterior"],
+                    bins=bins_dict[v],
+                    palette=sim_cmap,
+                    common_norm=False,
+                    stat="probability",
+                    multiple="dodge",
+                    alpha=0.8,
+                    linewidth=0.2,
+                    ax=axs.ravel()[k],
+                    legend=legend,
+                )
+            except:
+                pass
+            if legend:
+                axs.ravel()[k].get_legend().set_title(None)
+                axs.ravel()[k].get_legend().get_frame().set_linewidth(0.0)
+                axs.ravel()[k].get_legend().get_frame().set_alpha(0.0)
+
+        for ax in axs.flatten():
+            ax.set_ylabel("")
+            ax.set_ylim(0, 1)
+            ticklabels = ax.get_xticklabels()
+            for tick in ticklabels:
+                tick.set_rotation(15)
+        fn = pdf_dir / Path(f"{basin}_prior_posterior_filtered_by_{filtering_var}.pdf")
+        fig.savefig(fn)
+        fn = png_dir / Path(f"{basin}_prior_posterior_filtered_by_{filtering_var}.png")
+        fig.savefig(fn, dpi=300)
+        plt.close()
+        del fig
+
+
+def plot_basins(
+    observed: xr.Dataset,
+    prior: xr.Dataset,
+    posterior: xr.Dataset,
+    filtering_var: str,
+    filter_range: List[int] = [1990, 2019],
+    fig_dir: Union[str, Path] = "figures",
+    plot_range: List[int] = [1980, 2020],
+    config: Dict = {},
+):
+    """
+    Plot basins using observed, prior, and posterior datasets.
+
+    This function plots the observed, prior, and posterior datasets for each basin,
+    and saves the plots to the specified directory. It also displays a progress bar
+    to indicate the progress of the plotting process.
+
+    Parameters
+    ----------
+    observed : xr.Dataset
+        The observed dataset.
+    prior : xr.Dataset
+        The prior dataset.
+    posterior : xr.Dataset
+        The posterior dataset.
+    filtering_var : str
+        The variable used for filtering.
+    filter_range : List[Union[int, str]], optional
+        A list containing the start and end years for filtering, by default [1990, 2019].
+    fig_dir : Union[str, Path], optional
+        The directory where figures will be saved, by default "figures".
+    plot_range : List[Union[int, str]], optional
+        A list containing the start and end years for plotting, by default [1980, 2020].
+
+    Returns
+    -------
+    None
+
+    Examples
+    --------
+    >>> observed = xr.Dataset(...)
+    >>> prior = xr.Dataset(...)
+    >>> posterior = xr.Dataset(...)
+    >>> plot_basins(observed, prior, posterior, "grounding_line_flux")
+    """
+    start_time = time.time()
+    with tqdm(
+        desc="Plotting basins",
+        total=len(observed.basin),
+    ) as progress_bar:
+        for basin in observed.basin:
+            plot_obs_sims(
+                observed.sel(basin=basin).sel(
+                    {"time": slice(str(plot_range[0]), str(plot_range[1]))}
+                ),
+                prior.sel(basin=basin).sel(
+                    {"time": slice(str(plot_range[0]), str(plot_range[1]))}
+                ),
+                posterior.sel(basin=basin).sel(
+                    {"time": slice(str(plot_range[0]), str(plot_range[1]))}
+                ),
+                config=config,
+                filtering_var=filtering_var,
+                filter_range=filter_range,
+                fig_dir=fig_dir,
+                obs_alpha=obs_alpha,
+                sim_alpha=sim_alpha,
+            )
+            progress_bar.update()
+
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print(f"...took {elapsed_time:.2f}s")
 
 
 def filter_config(ds: xr.Dataset, params: List[str]) -> xr.DataArray:
@@ -464,8 +680,8 @@ def plot_outliers(
 
 @timeit
 def run_delta_analysis(
-    ds: xr.Dataset,
-    ensemble_df: pd.DataFrame,
+    input_df: pd.DataFrame,
+    response_ds: xr.Dataset,
     filter_vars: List[str],
     group_dim: str = "basin",
     iter_dim: str = "time",
@@ -480,10 +696,10 @@ def run_delta_analysis(
 
     Parameters
     ----------
-    ds : xr.Dataset
-        The input dataset containing the data to be analyzed.
-    ensemble_df : pd.DataFrame
+    input_df : pd.DataFrame
         DataFrame containing ensemble information, with a 'basin' column to group by.
+    response_ds : xr.Dataset
+        The input dataset containing the data to be analyzed.
     filter_vars : List[str]
         List of variables to filter by for sensitivity analysis.
 
@@ -505,7 +721,7 @@ def run_delta_analysis(
     client = Client()
     print(f"Open client in browser: {client.dashboard_link}")
     all_delta_indices_list = []
-    for gdim, df in ensemble_df.groupby(by=group_dim):
+    for gdim, df in input_df.groupby(by=group_dim):
         df = df.drop(columns=[group_dim])
         problem = {
             "num_vars": len(df.columns),
@@ -520,7 +736,7 @@ def run_delta_analysis(
                 f"  ...sensitivity indices for basin {gdim} filtered by {filter_var} ",
             )
 
-            responses = ds.sel({"basin": gdim})[filter_var].load()
+            responses = response_ds.sel({"basin": gdim})[filter_var].load()
             responses_scattered = client.scatter(
                 [
                     responses.isel({"time": k}).to_numpy()
@@ -598,9 +814,11 @@ def plot_obs_sims(
     import pism_ragis.processing  # pylint: disable=import-outside-toplevel,reimported
 
     Path(fig_dir).mkdir(exist_ok=True)
-    pdf_dir = fig_dir / Path("pdfs")
+    plot_dir = fig_dir / Path("basin_timeseries")
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    pdf_dir = plot_dir / Path("pdfs")
     pdf_dir.mkdir(parents=True, exist_ok=True)
-    png_dir = fig_dir / Path("pngs")
+    png_dir = plot_dir / Path("pngs")
     png_dir.mkdir(parents=True, exist_ok=True)
 
     percentile_range = (percentiles[1] - percentiles[0]) * 100
@@ -773,221 +991,6 @@ def plot_obs_sims(
     del fig
 
 
-def plot_obs_sims_3(
-    obs: xr.Dataset,
-    sim_prior: xr.Dataset,
-    sim_posterior: xr.Dataset,
-    config: dict,
-    filtering_var: str,
-    filter_range: List[int] = [1990, 2019],
-    fig_dir: Union[str, Path] = "figures",
-    reference_date: str = "1986-01-01",
-    sim_alpha: float = 0.4,
-    obs_alpha: float = 1.0,
-    sigma: float = 2,
-    percentiles: List[float] = [0.025, 0.975],
-) -> None:
-    """
-    Plot figure with cumulative mass balance and grounding line flux and climatic
-    mass balance fluxes.
-
-    Parameters
-    ----------
-    obs : xr.Dataset
-        Observational dataset.
-    sim_prior : xr.Dataset
-        Prior simulation dataset.
-    sim_posterior : xr.Dataset
-        Posterior simulation dataset.
-    config : dict
-        Configuration dictionary containing variable names.
-    filtering_var : str
-        Variable used for filtering.
-    filter_range : List[int], optional
-        Range of years for filtering, by default [1990, 2019].
-    fig_dir : Union[str, Path], optional
-        Directory to save the figures, by default "figures".
-    sim_alpha : float, optional
-        Alpha value for simulation plots, by default 0.4.
-    obs_alpha : float, optional
-        Alpha value for observation plots, by default 1.0.
-    """
-
-    import pism_ragis.processing  # pylint: disable=import-outside-toplevel,reimported
-
-    Path(fig_dir).mkdir(exist_ok=True)
-    pdf_dir = fig_dir / Path("pdfs")
-    pdf_dir.mkdir(parents=True, exist_ok=True)
-    png_dir = fig_dir / Path("pngs")
-    png_dir.mkdir(parents=True, exist_ok=True)
-
-    percentile_range = (percentiles[1] - percentiles[0]) * 100
-
-    basin = obs.basin.values
-    mass_cumulative_varname = config["Cumulative Variables"]["cumulative_mass_balance"]
-    mass_cumulative_uncertainty_varname = mass_cumulative_varname + "_uncertainty"
-    grounding_line_flux_varname = config["Flux Variables"]["grounding_line_flux"]
-    grounding_line_flux_uncertainty_varname = (
-        grounding_line_flux_varname + "_uncertainty"
-    )
-    smb_flux_varname = config["Flux Variables"]["smb_flux"]
-    smb_flux_uncertainty_varname = smb_flux_varname + "_uncertainty"
-
-    plt.rcParams["font.size"] = 6
-
-    fig, axs = plt.subplots(
-        3, 1, sharex=True, figsize=(6.2, 4.2), height_ratios=[2, 1, 1]
-    )
-    fig.subplots_adjust(hspace=0.05, wspace=0.05)
-
-    obs_ci = axs[0].fill_between(
-        obs["time"],
-        obs[mass_cumulative_varname] - sigma * obs[mass_cumulative_uncertainty_varname],
-        obs[mass_cumulative_varname] + sigma * obs[mass_cumulative_uncertainty_varname],
-        color=obs_cmap[0],
-        alpha=obs_alpha,
-        lw=0,
-        label=f"Observed ({sigma}-$\sigma$ uncertainty)",
-    )
-
-    axs[1].fill_between(
-        obs["time"],
-        obs[grounding_line_flux_varname]
-        - sigma * obs[grounding_line_flux_uncertainty_varname],
-        obs[grounding_line_flux_varname]
-        + sigma * obs[grounding_line_flux_uncertainty_varname],
-        color=obs_cmap[0],
-        alpha=obs_alpha,
-        lw=0,
-    )
-
-    axs[2].fill_between(
-        obs["time"],
-        obs[smb_flux_varname] - sigma * obs[smb_flux_uncertainty_varname],
-        obs[smb_flux_varname] + sigma * obs[smb_flux_uncertainty_varname],
-        color=obs_cmap[0],
-        alpha=obs_alpha,
-        lw=0,
-    )
-
-    sim_cis = []
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
-        quantiles = {}
-        for q in [percentiles[0], 0.5, percentiles[1]]:
-            quantiles[q] = sim_prior.utils.drop_nonnumeric_vars().quantile(
-                q, dim="exp_id", skipna=True
-            )
-
-    for k, m_var in enumerate(
-        [mass_cumulative_varname, grounding_line_flux_varname, smb_flux_varname]
-    ):
-        sim_posterior[m_var].plot(
-            hue="exp_id",
-            color=sim_cmap[1],
-            ax=axs[k],
-            lw=0.1,
-            alpha=sim_alpha,
-            add_legend=False,
-        )
-        sim_ci = axs[k].fill_between(
-            quantiles[0.5].time,
-            quantiles[percentiles[0]][m_var],
-            quantiles[percentiles[1]][m_var],
-            alpha=sim_alpha,
-            color=sim_cmap[0],
-            label=f"""{sim_prior["snsemble"].values} ({percentile_range:.0f}% c.i.)""",
-            lw=0,
-        )
-        if k == 0:
-            sim_cis.append(sim_ci)
-
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
-        quantiles = {}
-        for q in [percentiles[0], 0.5, percentiles[1]]:
-            quantiles[q] = sim_posterior.utils.drop_nonnumeric_vars().quantile(
-                q, dim="exp_id", skipna=True
-            )
-
-    for k, m_var in enumerate(
-        [mass_cumulative_varname, grounding_line_flux_varname, smb_flux_varname]
-    ):
-        sim_ci = axs[k].fill_between(
-            quantiles[0.5].time,
-            quantiles[percentiles[0]][m_var],
-            quantiles[percentiles[1]][m_var],
-            alpha=sim_alpha,
-            color=sim_cmap[1],
-            label=f"""{sim_posterior["ensemble"].values} ({percentile_range:.0f}% c.i.)""",
-            lw=0,
-        )
-        if k == 0:
-            sim_cis.append(sim_ci)
-        axs[k].plot(
-            quantiles[0.5].time, quantiles[0.5][m_var], lw=0.75, color=sim_cmap[1]
-        )
-
-    y_min, y_max = axs[0].get_ylim()
-    scaler = y_min + (y_max - y_min) * 0.05
-    obs_filtered = obs.sel(time=slice(filter_range[0], filter_range[-1]))
-    filter_range_ds = obs_filtered[mass_cumulative_varname]
-    filter_range_ds *= 0
-    filter_range_ds += scaler
-    _ = filter_range_ds.plot(
-        ax=axs[0], lw=1, ls="solid", color="k", label="Filtering Range"
-    )
-    x_s = (
-        filter_range_ds.time.values[0]
-        + (filter_range_ds.time.values[-1] - filter_range_ds.time.values[0]) / 2
-    )
-    y_s = scaler
-    axs[0].text(
-        x_s, y_s, "Filtering Range", horizontalalignment="center", fontweight="medium"
-    )
-    legend = axs[0].legend(
-        handles=[obs_ci, *sim_cis],
-    )
-    legend.get_frame().set_linewidth(0.0)
-    legend.get_frame().set_alpha(0.0)
-
-    axs[0].add_artist(legend)
-
-    # axs[0].set_ylim(-10_000, 5_000)
-    # axs[1].set_ylim(-750, -250)
-    # axs[2].set_ylim(-500, 1_000)
-
-    axs[0].xaxis.set_tick_params(labelbottom=False)
-    axs[1].xaxis.set_tick_params(labelbottom=False)
-
-    axs[0].set_ylabel(f"Cumulative mass\nloss since {reference_date} (Gt)")
-    axs[0].set_xlabel("")
-    axs[1].set_xlabel("")
-    axs[0].set_title(f"{basin} filtered by {filtering_var}")
-    axs[1].set_title("")
-    axs[2].set_title("")
-    axs[1].set_ylabel("Grounding Line\nFlux (Gt/yr)")
-    axs[2].set_ylabel("Climatic Mass\nBalance (Gt/yr)")
-    axs[-1].set_xlim(np.datetime64("1980-01-01"), np.datetime64("2021-01-01"))
-    fig.tight_layout()
-    if sim_prior is not None:
-        prior_str = "prior"
-    else:
-        prior_str = ""
-    if sim_posterior is not None:
-        posterior_str = "_posterior"
-    else:
-        posterior_str = ""
-    prior_posterior_str = prior_str + posterior_str
-    fig.savefig(
-        pdf_dir
-        / Path(
-            f"{basin}_{prior_posterior_str}_mass_accounting_filtered_by_{filtering_var}.pdf"
-        )
-    )
-    plt.close()
-
-
 if __name__ == "__main__":
     __spec__ = None
 
@@ -1121,36 +1124,19 @@ if __name__ == "__main__":
     )
     rolling_window = 13
     ragis_config = toml.load(ragis_config_file)
-    all_params_dict = ragis_config["Parameters"]
-    params = [
-        "calving.vonmises_calving.sigma_max",
-        "calving.rate_scaling.file",
-        "geometry.front_retreat.prescribed.file",
-        "ocean.th.gamma_T",
-        "surface.given.file",
-        "ocean.th.file",
-        "frontal_melt.routing.parameter_a",
-        "frontal_melt.routing.parameter_b",
-        "frontal_melt.routing.power_alpha",
-        "frontal_melt.routing.power_beta",
-        "stress_balance.sia.enhancement_factor",
-        "stress_balance.ssa.Glen_exponent",
-        "basal_resistance.pseudo_plastic.q",
-        "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden",
-        "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min",
-        "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max",
-        "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min",
-        "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max",
-    ]
-    params_short_dict = {key: all_params_dict[key] for key in params}
-    ensemble = "RAGIS"
+    params_short_dict = ragis_config["Parameters"]
+    params = list(params_short_dict.keys())
 
     result_dir = Path(options.result_dir)
+    data_dir = result_dir / Path("posteriors")
+    data_dir.mkdir(parents=True, exist_ok=True)
     fig_dir = result_dir / Path("figures")
     fig_dir.mkdir(parents=True, exist_ok=True)
-    pdf_dir = fig_dir / Path("pdfs")
+    plot_dir = fig_dir / Path("basin_timeseries")
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    pdf_dir = plot_dir / Path("pdfs")
     pdf_dir.mkdir(parents=True, exist_ok=True)
-    png_dir = fig_dir / Path("pngs")
+    png_dir = plot_dir / Path("pngs")
     png_dir.mkdir(parents=True, exist_ok=True)
 
     plt.rcParams["font.size"] = 6
@@ -1282,168 +1268,112 @@ if __name__ == "__main__":
         for func in functions:
             prior_posterior[col] = prior_posterior[col].apply(func)
 
-    bins_dict = {
-        "calving.vonmises_calving.sigma_max": 10,
-        "calving.rate_scaling.file": 7,
-        "geometry.front_retreat.prescribed.file": 2,
-        "ocean.th.gamma_T": 5,
-        "surface.given.file": 3,
-        "ocean.th.file": 11,
-        "frontal_melt.routing.parameter_a": 5,
-        "frontal_melt.routing.parameter_b": 5,
-        "frontal_melt.routing.power_alpha": 5,
-        "frontal_melt.routing.power_beta": 5,
-        "stress_balance.sia.enhancement_factor": 5,
-        "stress_balance.ssa.Glen_exponent": 5,
-        "basal_resistance.pseudo_plastic.q": 5,
-        "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden": 5,
-        "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min": 5,
-        "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max": 5,
-        "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min": 5,
-        "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max": 5,
-    }
-    for (basin, filtering_var), df in prior_posterior.rename(
-        columns=params_short_dict
-    ).groupby(by=["basin", "filtered_by"]):
-        n_params = len(params_short_dict)
-        plt.rcParams["font.size"] = 4
-        fig, axs = plt.subplots(
-            4,
-            4,
-            sharey=True,
-            figsize=[6.2, 4.2],
+    prior_posterior.to_parquet(
+        data_dir
+        / Path(f"""prior_posterior_{filter_range[0]}-{filter_range[1]}.parquet""")
+    )
+
+    bins_dict = ragis_config["Posterior Bins"]
+    plot_prior_posteriors(
+        prior_posterior.rename(columns=params_short_dict),
+        bins_dict,
+        fig_dir=fig_dir,
+        config=ragis_config,
+    )
+
+    prior_config = filter_config(simulated.isel({"time": 0}), params)
+    prior_df = config_to_dataframe(prior_config, ensemble="Prior")
+    params_df = prepare_input(prior_df)
+
+    all_delta_indices_list = []
+    for basin_group, intersection, filtering_vars in zip(
+        [simulated_grace_basins_ds, simulated_mankoff_basins_ds],
+        [intersection_grace, intersection_mankoff],
+        [["mass_balance"], ["mass_balance", "grounding_line_flux"]],
+    ):
+        sobol_response_ds = basin_group.sel(time=slice("1980-01-01", "2020-01-01"))
+        sobol_input_df = params_df[params_df["basin"].isin(intersection)]
+
+        all_delta_indices_list.append(
+            run_delta_analysis(
+                sobol_input_df,
+                sobol_response_ds,
+                filtering_vars,
+                notebook=notebook,
+            )
         )
-        fig.subplots_adjust(hspace=0.75, wspace=0.1)
-        for k, (v, v_s) in enumerate(params_short_dict.items()):
-            legend = bool(k == 0)
-            try:
-                sns.histplot(
-                    data=df,
-                    x=v_s,
-                    hue="ensemble",
-                    hue_order=["Prior", "Posterior"],
-                    bins=bins_dict[v],
-                    palette=sim_cmap,
-                    common_norm=False,
-                    stat="probability",
-                    multiple="dodge",
-                    alpha=0.8,
-                    linewidth=0.2,
-                    ax=axs.ravel()[k],
-                    legend=legend,
+
+    all_delta_indices = xr.concat(all_delta_indices_list, dim="basin")
+
+    # Extract the prefix from each coordinate value
+    prefixes = [
+        name.split(".")[0] for name in all_delta_indices.pism_config_axis.values
+    ]
+
+    # Add the prefixes as a new coordinate
+    all_delta_indices = all_delta_indices.assign_coords(
+        prefix=("pism_config_axis", prefixes)
+    )
+
+    parameter_groups = ragis_config["Parameter Groups"]
+    si_prefixes = [parameter_groups[name] for name in all_delta_indices.prefix.values]
+
+    all_delta_indices = all_delta_indices.assign_coords(
+        sensitivity_indices_group=("pism_config_axis", si_prefixes)
+    )
+    # Group by the new coordinate and compute the sum for each group
+    indices_vars = [v for v in all_delta_indices.data_vars if "_conf" not in v]
+    aggregated_indices = (
+        all_delta_indices[indices_vars].groupby("sensitivity_indices_group").sum()
+    )
+    # Group by the new coordinate and compute the sum the squares for each group
+    # then take the root.
+    indices_conf = [v for v in all_delta_indices.data_vars if "_conf" in v]
+    aggregated_conf = (
+        all_delta_indices[indices_conf]
+        .apply(np.square)
+        .groupby("sensitivity_indices_group")
+        .sum()
+        .apply(np.sqrt)
+    )
+
+    plot_dir = fig_dir / Path("sensitivity_indices")
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    pdf_dir = plot_dir / Path("pdfs")
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    png_dir = plot_dir / Path("pngs")
+    png_dir.mkdir(parents=True, exist_ok=True)
+
+    plt.rcParams["font.size"] = 6
+    for indices_var, conf_var in zip(indices_vars, indices_conf):
+        for basin in aggregated_indices.basin.values:
+            for filter_var in aggregated_indices.filtered_by.values:
+                fig, ax = plt.subplots(1, 1, figsize=(6.2, 3.6))
+                for g in aggregated_indices.sensitivity_indices_group:
+                    indices_da = aggregated_indices.sel(
+                        filtered_by=filter_var, basin=basin, sensitivity_indices_group=g
+                    )[indices_var]
+                    conf_da = aggregated_conf.sel(
+                        filtered_by=filter_var, basin=basin, sensitivity_indices_group=g
+                    )[conf_var]
+                    # indices_da.plot(
+                    #     hue="sensitivity_indices_group", ax=ax, lw=0.25, label=g.values
+                    # )
+                    rolling_conf_da = conf_da.rolling({"time": 13}).mean()
+                    rolling_indices_da = indices_da.rolling({"time": 13}).mean()
+                    ax.fill_between(
+                        indices_da.time,
+                        (rolling_indices_da - rolling_conf_da),
+                        (rolling_indices_da + rolling_conf_da),
+                        alpha=0.25,
+                    )
+                    rolling_indices_da.plot(
+                        hue="sensitivity_indices_group", ax=ax, lw=0.75, label=g.values
+                    )
+                ax.legend()
+                ax.set_title(f"{indices_var} for {basin} filtered by {filter_var}")
+                fn = pdf_dir / Path(
+                    f"{basin}_{indices_var}_filtered_by_{filter_var}.pdf"
                 )
-            except:
-                pass
-        for ax in axs.flatten():
-            ax.set_ylabel("")
-            ticklabels = ax.get_xticklabels()
-            for tick in ticklabels:
-                tick.set_rotation(15)
-        fn = pdf_dir / Path(f"{basin}_prior_posterior_filtered_by_{filtering_var}.pdf")
-        fig.savefig(fn)
-        fn = png_dir / Path(f"{basin}_prior_posterior_filtered_by_{filtering_var}.png")
-        fig.savefig(fn, dpi=300)
-        plt.close()
-        del fig
-
-    # ensemble_df = prior_df.apply(prp.convert_column_to_numeric).drop(
-    #     columns=["ensemble", "exp_id"], errors="ignore"
-    # )
-    # climate_dict = {
-    #     v: k for k, v in enumerate(ensemble_df["surface.given.file"].unique())
-    # }
-    # ensemble_df["surface.given.file"] = ensemble_df["surface.given.file"].map(
-    #     climate_dict
-    # )
-    # ocean_dict = {v: k for k, v in enumerate(ensemble_df["ocean.th.file"].unique())}
-    # ensemble_df["ocean.th.file"] = ensemble_df["ocean.th.file"].map(ocean_dict)
-    # calving_dict = {
-    #     v: k for k, v in enumerate(ensemble_df["calving.rate_scaling.file"].unique())
-    # }
-    # ensemble_df["calving.rate_scaling.file"] = ensemble_df[
-    #     "calving.rate_scaling.file"
-    # ].map(calving_dict)
-
-    # retreat_dict = {
-    #     v: k
-    #     for k, v in enumerate(
-    #         ensemble_df["geometry.front_retreat.prescribed.file"].unique()
-    #     )
-    # }
-
-    # ensemble_df["geometry.front_retreat.prescribed.file"] = ensemble_df[
-    #     "geometry.front_retreat.prescribed.file"
-    # ].map(retreat_dict)
-    # to_analyze = simulated_ds.sel(time=slice("1980-01-01", "2020-01-01"))
-
-    # all_delta_indices = run_delta_analysis(
-    #     to_analyze, ensemble_df, list(flux_vars.values())[1:2], notebook=notebook
-    # )
-
-    # # Extract the prefix from each coordinate value
-    # prefixes = [
-    #     name.split(".")[0] for name in all_delta_indices.pism_config_axis.values
-    # ]
-
-    # # Add the prefixes as a new coordinate
-    # all_delta_indices = all_delta_indices.assign_coords(
-    #     prefix=("pism_config_axis", prefixes)
-    # )
-
-    # parameter_groups = ragis_config["Parameter Groups"]
-    # si_prefixes = [parameter_groups[name] for name in all_delta_indices.prefix.values]
-
-    # all_delta_indices = all_delta_indices.assign_coords(
-    #     sensitivity_indices_group=("pism_config_axis", si_prefixes)
-    # )
-    # # Group by the new coordinate and compute the sum for each group
-    # indices_vars = [v for v in all_delta_indices.data_vars if "_conf" not in v]
-    # aggregated_indices = (
-    #     all_delta_indices[indices_vars].groupby("sensitivity_indices_group").sum()
-    # )
-    # # Group by the new coordinate and compute the sum the squares for each group
-    # # then take the root.
-    # indices_conf = [v for v in all_delta_indices.data_vars if "_conf" in v]
-    # aggregated_conf = (
-    #     all_delta_indices[indices_conf]
-    #     .apply(np.square)
-    #     .groupby("sensitivity_indices_group")
-    #     .sum()
-    #     .apply(np.sqrt)
-    # )
-
-    # plt.rcParams["font.size"] = 6
-    # for indices_var, conf_var in zip(indices_vars, indices_conf):
-    #     for basin in aggregated_indices.basin.values:
-    #         for filter_var in aggregated_indices.filtered_by.values:
-    #             fig, ax = plt.subplots(1, 1, figsize=(6.2, 3.6))
-    #             for g in aggregated_indices.sensitivity_indices_group:
-    #                 indices_da = aggregated_indices.sel(
-    #                     filtered_by=filter_var, basin=basin, sensitivity_indices_group=g
-    #                 )[indices_var]
-    #                 conf_da = aggregated_conf.sel(
-    #                     filtered_by=filter_var, basin=basin, sensitivity_indices_group=g
-    #                 )[conf_var]
-    #                 # indices_da.plot(
-    #                 #     hue="sensitivity_indices_group", ax=ax, lw=0.25, label=g.values
-    #                 # )
-    #                 rolling_conf_da = conf_da.rolling({"time": 13}).mean()
-    #                 rolling_indices_da = indices_da.rolling({"time": 13}).mean()
-    #                 ax.fill_between(
-    #                     indices_da.time,
-    #                     (rolling_indices_da - rolling_conf_da),
-    #                     (rolling_indices_da + rolling_conf_da),
-    #                     alpha=0.25,
-    #                 )
-    #                 rolling_indices_da.plot(
-    #                     hue="sensitivity_indices_group", ax=ax, lw=0.75, label=g.values
-    #                 )
-    #             ax.legend()
-    #             ax.set_title(f"{indices_var} for {basin} filtered by {filter_var}")
-    #             fn = (
-    #                 result_dir
-    #                 / Path("figures")
-    #                 / Path(f"{basin}_{indices_var}_filtered_by_{filter_var}.pdf")
-    #             )
-    #             fig.savefig(fn)
-    #             plt.close()
+                fig.savefig(fn)
+                plt.close()

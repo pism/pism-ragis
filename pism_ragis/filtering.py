@@ -251,5 +251,5 @@ def filter_outliers(
     n_members_filtered = len(filtered_exp_ids)
     filtered_ds = ds.sel(exp_id=filtered_exp_ids)
     outliers_ds = ds.sel(exp_id=outlier_exp_ids)
-    print(f"Ensemble size: {n_members}, outlier-filtered size: {n_members_filtered}")
+    print(f"Ensemble size: {n_members}, outlier-filtered size: {n_members_filtered}\n")
     return filtered_ds, outliers_ds
