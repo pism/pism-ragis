@@ -25,17 +25,61 @@ from typing import Any, Dict
 import numpy as np
 import pandas as pd
 import xarray as xr
-from SALib.analyze import delta
+from SALib.analyze import delta, sobol
 
 
-def delta_analyze(
+def delta_analysis(
+    Y: np.ndarray,
+    X: np.ndarray,
+    problem: Dict[str, Any],
+    dim: str = "pism_config_axis",
+) -> xr.Dataset:
+    """
+    Perform SALib delta analysis.
+
+    Parameters
+    ----------
+    Y : numpy.array
+       A NumPy array containing the model outputs.
+    X: numpy.ndarray
+        A NumPy matrix containing the model inputs.
+    problem : dict
+        A dictionary defining the problem for SALib analysis. It should contain keys like 'num_vars' and 'names'.
+    dim : str, optional
+        The name of the dimension to use for the configuration axis in the resulting Dataset (default is "pism_config_axis").
+
+    Returns
+    -------
+    xr.Dataset
+        An xarray Dataset containing the results of the delta analysis.
+    """
+    try:
+        delta_moments = delta.analyze(
+            problem,
+            X,
+            Y,
+            seed=42,
+            method="sobol",
+        )
+        df = delta_moments.to_df()[["S1", "S1_conf"]]  # pylint: disable=not-callable
+    except Exception:  # pylint: disable=broad-exception-caught
+        delta_df = {
+            key: np.empty(problem["num_vars"]) + np.nan for key in ["S1", "S1_conf"]
+        }
+        df = pd.DataFrame.from_dict(delta_df)
+        df[dim] = problem["names"]
+        df.set_index(dim, inplace=True)
+    return xr.Dataset.from_dataframe(df)
+
+
+def sobol_analysis(
     response: np.ndarray,
     problem: Dict[str, Any],
     ensemble_df: pd.DataFrame,
     dim: str = "pism_config_axis",
 ) -> xr.Dataset:
     """
-    Perform SALib delta analysis.
+    Perform SALib Sobol analysis.
 
     Parameters
     ----------
@@ -51,10 +95,10 @@ def delta_analyze(
     Returns
     -------
     xr.Dataset
-        An xarray Dataset containing the results of the delta analysis.
+        An xarray Dataset containing the results of the Sobol analysis.
     """
     try:
-        delta_moments = delta.analyze(
+        sobol_moments = sobol.analyze(
             problem,
             ensemble_df.values,
             response,
@@ -62,13 +106,12 @@ def delta_analyze(
             seed=0,
             print_to_console=False,
         )
-        df = delta_moments.to_df()
+        df = sobol_moments.to_df()  # pylint: disable=not-callable
     except Exception:  # pylint: disable=broad-exception-caught
-        delta_analysis = {
-            key: np.empty(problem["num_vars"]) + np.nan
-            for key in ["delta", "delta_conf", "S1", "S1_conf"]
+        sobol_df = {
+            key: np.empty(problem["num_vars"]) + np.nan for key in ["S1", "S1_conf"]
         }
-        df = pd.DataFrame.from_dict(delta_analysis)
+        df = pd.DataFrame.from_dict(sobol_df)
         df[dim] = problem["names"]
         df.set_index(dim, inplace=True)
     return xr.Dataset.from_dataframe(df)
