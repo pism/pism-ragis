@@ -23,8 +23,8 @@ Tests for interpolation module.
 import time
 from typing import Tuple
 
+import matplotlib.pyplot as plt
 import numpy as np
-import pylab as plt
 import xarray as xr
 
 from pism_ragis.interpolation import fill_missing_petsc, laplace

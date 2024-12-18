@@ -45,9 +45,9 @@
 "surface" = "Climate"
 "atmosphere" = "Climate"
 "ocean" = "Ocean"
-"calving" = "Calving"
-"geometry" = "Retreat"
-"frontal_melt" = "Frontal Melt"
+"calving" = "Frontal Ablation"
+"geometry" = "Frontal Ablation"
+"frontal_melt" = "Frontal Ablation"
 "basal_resistance" = "Flow"
 "basal_yield_stress" = "Flow"
 "stress_balance" = "Flow"
@@ -89,3 +89,11 @@ tendency_of_ice_mass_glacierized = "mass_balance"
 
 basin = {D_ROI = "grounding_line_flux", MB_ROI = "mass_balance", SMB_ROI = "surface_mass_balance", BMB_ROI = "basal_mass_balance", D_ROI_err = "grounding_line_flux_uncertainty", MB_ROI_err = "mass_balance_uncertainty", SMB_ROI_err = "surface_mass_balance_uncertainty", BMB_ROI_err = "basal_mass_balance_uncertainty"}
 gis = {D = "grounding_line_flux", MB = "mass_balance", SMB = "surface_mass_balance", BMB = "basal_mass_balance", D_err = "grounding_line_flux_uncertainty", MB_err = "mass_balance_uncertainty", SMB_err = "surface_mass_balance_uncertainty", BMB_err = "basal_mass_balance_uncertainty"}
+
+['Plotting']
+
+sim_alpha = 0.5
+sim_cmap = ["#CC6677", "#882255"]
+obs_alpha = 1.0
+obs_cmap = ["0.8", "0.7"]
+hist_cmap = ["#a6cee3", "#1f78b4"]

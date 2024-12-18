@@ -29,9 +29,9 @@ from pathlib import Path
 from typing import Any, Dict, Hashable, List, Mapping, Union
 
 import dask
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import pylab as plt
 import rioxarray as rxr
 import seaborn as sns
 import toml
