@@ -60,7 +60,7 @@ def idw_weights(distance: xr.DataArray, power: float = 1.0):
 
 
 if __name__ == "__main__":
-    __spec__ = None
+    __spec__ = None  # type: ignore
 
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)

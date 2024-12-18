@@ -39,7 +39,7 @@ from pism_ragis.processing import compute_basin
 xr.set_options(keep_attrs=True)
 
 if __name__ == "__main__":
-    __spec__ = None
+    __spec__ = None  # type: ignore
 
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)

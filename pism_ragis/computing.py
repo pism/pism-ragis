@@ -385,9 +385,9 @@ def generate_calving(calving, **kwargs):
     ):
         params_dict["calving.methods"] = f"{calving},thickness_calving"
     elif calving in ("hybrid_calving"):
-        params_dict[
-            "calving.methods"
-        ] = "eigen_calving,vonmises_calving,thickness_calving"
+        params_dict["calving.methods"] = (
+            "eigen_calving,vonmises_calving,thickness_calving"
+        )
 
     elif calving in ("float_kill",):
         params_dict["calving.models"] = calving

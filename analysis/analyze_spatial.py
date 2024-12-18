@@ -60,7 +60,8 @@ hist_cmap = ["#a6cee3", "#1f78b4"]
 
 
 if __name__ == "__main__":
-    __spec__ = None
+    __spec__ = None  # type: ignore
+
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Compute ensemble statistics."

@@ -13,13 +13,13 @@ repos:
 
   # Can run individually with `pre-commit run black --all-files`
   - repo: https://github.com/psf/black
-    rev: 23.10.1
+    rev: 24.10.0
     hooks:
       - id: black
 
   # Can run individually with `pre-commit run isort --all-files`
   - repo: https://github.com/timothycrosley/isort
-    rev: 5.12.0
+    rev: 5.13.2
     hooks:
       - id: isort
         args:
@@ -39,13 +39,13 @@ repos:
 
   # # Numpydoc
   # - repo: https://github.com/numpy/numpydoc
-  #   rev: v1.7.0
+  #   rev: v1.8.0
   #   hooks:
   #     - id: numpydoc-validation
 
   # Can run individually with `pre-commit run mypy --all-files`
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.8.0
+    rev: v1.13.0
     hooks:
       - id: mypy
         args: ["--config-file", "pyproject.toml", "--ignore-missing-imports"]
@@ -71,7 +71,7 @@ repos:
   #  hooks:
   #    - id: nb-clean
 
-  #- repo: local
+  # - repo: local
   #  hooks:
   #   - id: pytest # pytest is a pre-commit hook
   #     name: pytest

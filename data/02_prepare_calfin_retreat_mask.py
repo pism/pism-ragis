@@ -179,7 +179,7 @@ def create_ds(
 
 
 if __name__ == "__main__":
-    __spec__ = None
+    __spec__ = None  # type: ignore
 
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)

@@ -140,7 +140,7 @@ def test_fill_missing_xr():
 
 
 if __name__ == "__main__":
-    __spec__ = None
+    __spec__ = None  # type: ignore
 
     def profile_scipy(D):
         """
