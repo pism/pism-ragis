@@ -283,7 +283,7 @@ def run_sampling(
     return prior_posterior
 
 
-def filter_config(ds: xr.Dataset, params: List[str]) -> xr.DataArray:
+def filter_config(ds: xr.Dataset, params: list[str]) -> xr.DataArray:
     """
     Filter the configuration parameters from the dataset.
 
@@ -927,7 +927,7 @@ if __name__ == "__main__":
         [intersection_grace, intersection_mankoff],
         [["mass_balance"], ["mass_balance", "grounding_line_flux"]],
     ):
-        sobol_response_ds = basin_group.sel(time=slice("1980-01-01", "1990-01-01"))
+        sobol_response_ds = basin_group
         sobol_input_df = params_df[params_df["basin"].isin(intersection)]
 
         sensitivity_indices_list.append(
@@ -969,10 +969,13 @@ if __name__ == "__main__":
         for basin in aggregated_ds.basin.values:
             for filter_var in aggregated_ds.filtered_by.values:
                 plot_sensitivity_indices(
-                    aggregated_ds.sel(filtered_by=filter_var)
+                    aggregated_ds.sel(basin=basin, filtered_by=filter_var)
                     .rolling({"time": 13})
-                    .mean(),
+                    .mean()
+                    .sel(time=slice("1980-01-01", "2020-01-01")),
                     indices_var=indices_var,
                     indices_conf_var=indices_conf_var,
+                    basin=basin,
+                    filter_var=filter_var,
                     fig_dir=fig_dir,
                 )

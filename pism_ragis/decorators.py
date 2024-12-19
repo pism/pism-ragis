@@ -28,7 +28,7 @@ from functools import wraps
 
 from pism_ragis.logger import get_logger
 
-logger: logging.Logger = get_logger(__name__)
+logger: logging.Logger = get_logger("pism_ragis")
 
 
 def timeit(func):

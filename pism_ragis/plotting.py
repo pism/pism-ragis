@@ -200,6 +200,8 @@ def plot_sensitivity_indices(
     ds: xr.Dataset,
     indices_var: str = "S1",
     indices_conf_var: str = "S1_conf",
+    basin: str = "",
+    filter_var: str = "",
     fig_dir: Union[str, Path] = "figures",
     fontsize: float = 6,
 ):
@@ -214,6 +216,10 @@ def plot_sensitivity_indices(
         The variable name for sensitivity indices in the dataset, by default "S1".
     indices_conf_var : str, optional
         The variable name for confidence intervals of sensitivity indices in the dataset, by default "S1_conf".
+    basin : str, optional
+        The basin for which the sensitivity indices are plotted, by default None.
+    filter_var : str, optional
+        The variable used for filtering, by default "".
     fig_dir : Union[str, Path], optional
         The directory where the figures will be saved, by default "figures".
     fontsize : float, optional
@@ -242,8 +248,8 @@ def plot_sensitivity_indices(
     legend = ax.legend(loc="upper left")
     legend.get_frame().set_linewidth(0.0)
     legend.get_frame().set_alpha(0.0)
-    ax.set_title(f"{indices_var} filtered by sensitivity_indices_group")
-    fn = pdf_dir / f"{indices_var}_filtered_by_sensitivity_indices_group.pdf"
+    ax.set_title(f"{indices_var} for basin {basin} for {filter_var}")
+    fn = pdf_dir / f"basin_{basin}_{indices_var}_for_{filter_var}.pdf"
     fig.savefig(fn)
     plt.close()
 

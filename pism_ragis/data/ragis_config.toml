@@ -46,7 +46,7 @@
 "atmosphere" = "Climate"
 "ocean" = "Ocean"
 "calving" = "Frontal Ablation"
-"geometry" = "Frontal Ablation"
+"geometry" = "Retreat"
 "frontal_melt" = "Frontal Ablation"
 "basal_resistance" = "Flow"
 "basal_yield_stress" = "Flow"
