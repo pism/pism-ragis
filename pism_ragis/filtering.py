@@ -128,8 +128,14 @@ def importance_sampling(
         An xarray Dataset containing the simulated data.
     observed : xr.Dataset
         An xarray Dataset containing the observed data.
+    log_likelihood : Callable
+        The log-likelihood function to use for filtering.
+    likelihood_kwargs : dict, optional
+        Additional keyword arguments to pass to the log-likelihood function, by default {}.
     dim : str, optional
         The variable name in `simulated` that identifies each ensemble member, by default "exp_id".
+    sum_dim : list, optional
+        The dimensions to sum over when computing the log-likelihood, by default ["time"].
     fudge_factor : float, optional
         A multiplicative factor applied to the observed standard deviation to widen the likelihood function,
         allowing for greater tolerance in the matching process, by default 3.0.
@@ -210,15 +216,17 @@ def filter_outliers(
         A list containing the lower and upper bounds for the outlier range.
     outlier_variable : str
         The variable in the dataset to be used for outlier detection.
+    freq : str, optional
+        The frequency for resampling the data, by default "YS".
     subset : Dict[str, Union[str, int]], optional
         A dictionary specifying the subset of the dataset to apply the filter on, by default {"basin": "GIS", "ensemble_id": "RAGIS"}.
 
     Returns
     -------
-    Dict[str, xr.Dataset]
-        A dictionary with two keys:
-        - "filtered": The dataset with outliers.
-        - "outliers": The dataset containing only the outliers.
+    tuple
+        A tuple containing two xarray.Dataset objects:
+        - The filtered dataset without outliers.
+        - The dataset containing only the outliers.
     """
     lower_bound, upper_bound = outlier_range
     if hasattr(ds[outlier_variable], "units"):

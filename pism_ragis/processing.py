@@ -18,7 +18,7 @@
 # pylint: disable=too-many-positional-arguments
 
 """
-Module for data processing
+Module for data processing.
 """
 
 import contextlib
@@ -118,7 +118,7 @@ def preprocess_time(
     end_date: str | None = None,
     drop_vars: List[str] | None = None,
     drop_dims: List[str] = ["nv4"],
-):
+) -> xr.Dataset:
     """
     Add correct time and time_bounds to the dataset.
 
@@ -134,7 +134,13 @@ def preprocess_time(
         The regular expression pattern to extract the year from the filename, by default "ERA5-(.+?).nc".
     freq : str, optional
         The frequency string to create the time range, by default "MS".
-    drop_vars : Union[List[str], None], optional
+    periods : int or None, optional
+        The number of periods in the time range, by default None.
+    start_date : str or None, optional
+        The start date for the time range, by default None.
+    end_date : str or None, optional
+        The end date for the time range, by default None.
+    drop_vars : List[str] or None, optional
         A list of variable names to be dropped from the dataset, by default None.
     drop_dims : List[str], optional
         A list of dimension names to be dropped from the dataset, by default ["nv4"].
@@ -183,7 +189,7 @@ def preprocess_nc(
     dim: str = "exp_id",
     drop_vars: Union[List[str], None] = None,
     drop_dims: List[str] = ["nv4"],
-):
+) -> xr.Dataset:
     """
     Add experiment identifier to the dataset.
 
@@ -239,7 +245,7 @@ def preprocess_scalar_nc(
     basin: str = "GIS",
     drop_vars: Union[List[str], None] = None,
     drop_dims: List[str] = ["nv4"],
-):
+) -> xr.Dataset:
     """
     Add experiment identifier and additional dimensions to the dataset.
 
@@ -335,6 +341,8 @@ def compute_basin(
         The input dataset.
     name : str
         The name to assign to the new 'basin' dimension.
+    dim : List
+        The dimensions to sum over.
 
     Returns
     -------
@@ -353,12 +361,39 @@ def compute_basin(
 
 @contextlib.contextmanager
 def tqdm_joblib(tqdm_object):
-    """Context manager to patch joblib to report into tqdm progress bar given as argument"""
+    """
+    Context manager to patch joblib to report into tqdm progress bar given as argument.
+
+    Parameters
+    ----------
+    tqdm_object : tqdm.tqdm
+        The tqdm progress bar object to use for reporting progress.
+    """
+    # ...existing code...
 
     class TqdmBatchCompletionCallback(joblib.parallel.BatchCompletionCallBack):
-        """TQDM Callback"""
+        """
+        TQDM Callback.
+
+        This callback updates the tqdm progress bar with the batch size.
+        """
 
         def __call__(self, *args, **kwargs):
+            """
+            Call the TQDM callback.
+
+            Parameters
+            ----------
+            *args : tuple
+                Positional arguments.
+            **kwargs : dict
+                Keyword arguments.
+
+            Returns
+            -------
+            Any
+                The result of the super class __call__ method.
+            """
             tqdm_object.update(n=self.batch_size)
             return super().__call__(*args, **kwargs)
 
@@ -371,8 +406,20 @@ def tqdm_joblib(tqdm_object):
         tqdm_object.close()
 
 
-def to_decimal_year(date):
-    """Convert datetime date to decimal year"""
+def to_decimal_year(date: datetime.datetime) -> float:
+    """
+    Convert datetime date to decimal year.
+
+    Parameters
+    ----------
+    date : datetime.datetime
+        The date to convert.
+
+    Returns
+    -------
+    float
+        The decimal year representation of the date.
+    """
     year = date.year
     start_of_this_year = datetime.datetime(year=year, month=1, day=1)
     start_of_next_year = datetime.datetime(year=year + 1, month=1, day=1)
@@ -386,7 +433,21 @@ def to_decimal_year(date):
 def check_file(
     infile: Union[str, pathlib.Path], norm_year: Union[None, float] = None
 ) -> bool:
-    """Check netCDF file"""
+    """
+    Check netCDF file.
+
+    Parameters
+    ----------
+    infile : Union[str, pathlib.Path]
+        The path to the netCDF file.
+    norm_year : Union[None, float], optional
+        The normalization year, by default None.
+
+    Returns
+    -------
+    bool
+        True if the file is valid, False otherwise.
+    """
     with xr.open_dataset(infile) as ds:
         is_ok: bool = False
         if "time" in ds.indexes:
@@ -410,7 +471,21 @@ def check_file(
 def check_paleo_file(
     infile: Union[str, pathlib.Path], norm_year: Union[None, float] = None
 ) -> bool:
-    """Check netCDF file"""
+    """
+    Check netCDF file.
+
+    Parameters
+    ----------
+    infile : Union[str, pathlib.Path]
+        The path to the netCDF file.
+    norm_year : Union[None, float], optional
+        The normalization year, by default None.
+
+    Returns
+    -------
+    bool
+        True if the file is valid, False otherwise.
+    """
     with xr.open_dataset(infile) as ds:
         is_ok: bool = False
         if "time" in ds.indexes:
@@ -433,7 +508,14 @@ def copy_file(
     infile: Union[str, pathlib.Path], outdir: Union[str, pathlib.Path]
 ) -> None:
     """
-    Copy infile to outdir
+    Copy infile to outdir.
+
+    Parameters
+    ----------
+    infile : Union[str, pathlib.Path]
+        The input file path.
+    outdir : Union[str, pathlib.Path]
+        The output directory path.
     """
     if infile is not pathlib.Path:
         in_path = pathlib.Path(infile)
@@ -457,9 +539,8 @@ class UtilsMethods:
 
     Parameters
     ----------
-
     xarray_obj : xr.Dataset
-      The xarray Dataset to which to add the custom methods.
+        The xarray Dataset to which to add the custom methods.
     """
 
     def __init__(self, xarray_obj: xr.Dataset):
@@ -468,7 +549,6 @@ class UtilsMethods:
 
         Parameters
         ----------
-
         xarray_obj : xr.Dataset
             The xarray Dataset to which to add the custom methods.
         """
@@ -543,6 +623,10 @@ def load_ensemble(
         A list of file paths or strings representing the NetCDF files to be loaded.
     parallel : bool, optional
         Whether to load the files in parallel using Dask. Default is True.
+    engine : str, optional
+        The engine to use for loading the NetCDF files. Default is "h5netcdf".
+    preprocess : Callable or None, optional
+        A preprocessing function to apply to each dataset before concatenation. Default is None.
 
     Returns
     -------
@@ -561,7 +645,7 @@ def load_ensemble(
 
 
 def normalize_cumulative_variables(
-    ds: xr.Dataset, variables, reference_date: str = "1992-01-01"
+    ds: xr.Dataset, variables: Union[str, List[str]], reference_date: str = "1992-01-01"
 ) -> xr.Dataset:
     """
     Normalize cumulative variables in an xarray Dataset by subtracting their values at a reference year.
@@ -572,8 +656,8 @@ def normalize_cumulative_variables(
         The xarray Dataset containing the cumulative variables to be normalized.
     variables : str or list of str
         The name(s) of the cumulative variables to be normalized.
-    reference_year : float, optional
-        The reference year to use for normalization. Default is 1992.0.
+    reference_date : str, optional
+        The reference date to use for normalization. Default is "1992-01-01".
 
     Returns
     -------
@@ -588,7 +672,7 @@ def normalize_cumulative_variables(
     >>> data = xr.Dataset({
     ...     "cumulative_var": ("time", [10, 20, 30, 40, 50, 60]),
     ... }, coords={"time": time})
-    >>> normalize_cumulative_variables(data, "cumulative_var", reference_year=1992)
+    >>> normalize_cumulative_variables(data, "cumulative_var", reference_date="1992-01-01")
     <xarray.Dataset>
     Dimensions:         (time: 6)
     Coordinates:
@@ -624,7 +708,7 @@ def standardize_variable_names(
     >>> import xarray as xr
     >>> ds = xr.Dataset({'temp': ('x', [1, 2, 3]), 'precip': ('x', [4, 5, 6])})
     >>> name_dict = {'temp': 'temperature', 'precip': 'precipitation'}
-    >>> standarize_variable_names(ds, name_dict)
+    >>> standardize_variable_names(ds, name_dict)
     <xarray.Dataset>
     Dimensions:      (x: 3)
     Dimensions without coordinates: x
@@ -746,29 +830,27 @@ def simplify_climate(my_str: str) -> str:
 
 def simplify_retreat(my_str: str) -> str:
     """
-    Simplify climate string.
+    Simplify retreat string.
 
-    This function simplifies the input climate string by returning a standardized
-    climate model name based on the presence of specific substrings.
+    This function simplifies the input retreat string by returning a standardized
+    retreat model name based on the presence of specific substrings.
 
     Parameters
     ----------
     my_str : str
-        The input climate string.
+        The input retreat string.
 
     Returns
     -------
     str
-        The standardized climate model name based on the input string.
+        The standardized retreat model name based on the input string.
 
     Examples
     --------
-    >>> simplify_climate("MAR_2020")
-    'MAR'
-    >>> simplify_climate("RACMO_2020")
-    'RACMO'
-    >>> simplify_climate("Other_2020")
-    'HIRHAM'
+    >>> simplify_retreat("false")
+    'Free'
+    >>> simplify_retreat("true")
+    'Prescribed'
     """
 
     if my_str in ("false", ""):
@@ -790,8 +872,8 @@ def simplify_ocean(my_str: str) -> int:
 
     Returns
     -------
-    str
-        The simplified ocean string.
+    int
+        The simplified ocean value.
     """
     gcms: Dict[str, int] = {
         "ACCESS1-3_rcp85": 0,

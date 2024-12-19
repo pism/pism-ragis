@@ -18,7 +18,7 @@
 # pylint: disable=too-many-positional-arguments
 
 """
-Module for handling logging
+Module for handling logging.
 """
 
 import importlib.resources

@@ -37,6 +37,11 @@ from pism_ragis.analyze import delta_analysis
 def fixture_load_sensitivity_data() -> Tuple[pd.DataFrame, xr.Dataset]:
     """
     Load test data.
+
+    Returns
+    -------
+    Tuple[pd.DataFrame, xr.Dataset]
+        A tuple containing the input DataFrame and response Dataset.
     """
     input_df = pd.read_csv("tests/data/sensitivity_input.csv", index_col="param")
 
@@ -48,6 +53,11 @@ def fixture_load_sensitivity_data() -> Tuple[pd.DataFrame, xr.Dataset]:
 def test_delta_analyze(sensitivity_data):
     """
     Test delta analysis.
+
+    Parameters
+    ----------
+    sensitivity_data : Tuple[pd.DataFrame, xr.Dataset]
+        The sensitivity data for testing.
     """
     input_df, response_ds = sensitivity_data
 

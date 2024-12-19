@@ -18,7 +18,7 @@
 # pylint: disable=too-many-positional-arguments
 
 """
-Module for data processing
+Module for data processing.
 """
 
 import tarfile
@@ -47,8 +47,19 @@ def unzip_files(
 
     Parameters
     ----------
+    files : List[Union[str, Path]]
+        List of file paths to unzip.
+    output_dir : Union[str, Path], optional
+        The directory where the unzipped files will be saved, by default ".".
+    overwrite : bool, optional
+        Whether to overwrite existing files, by default False.
     max_workers : int, optional
-        The maximum number of threads to use for downloading, by default 4.
+        The maximum number of threads to use for unzipping, by default 4.
+
+    Returns
+    -------
+    List[Path]
+        List of paths to the unzipped files.
     """
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = []
@@ -110,10 +121,6 @@ def save_netcdf(
         The output filename for the NetCDF file, by default "GRE_G0240_1985_2018_IDW_EXP_1.nc".
     comp : dict, optional
         Compression settings for the NetCDF file, by default {"zlib": True, "complevel": 2}.
-
-    Returns
-    -------
-    None
     """
     encoding = {var: comp for var in ds.data_vars}
     with ProgressBar():

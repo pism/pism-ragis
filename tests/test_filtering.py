@@ -123,14 +123,6 @@ def test_filter_outliers():
     - The filtered dataset does not contain outliers.
     - The outliers dataset contains only outliers.
 
-    Parameters
-    ----------
-    None
-
-    Returns
-    -------
-    None
-
     Examples
     --------
     >>> test_filter_outliers()

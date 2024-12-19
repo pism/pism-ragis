@@ -132,7 +132,7 @@ def prepare_input(
     params : List[str], optional
         A list of column names to be processed. Unique values in these columns will be mapped to integers.
         By default, the list includes:
-        ["surface.given.file", "ocean.th.file", "calving.rate_scaling.file", "geometry.front_retreat.prescribed.file"]
+        ["surface.given.file", "ocean.th.file", "calving.rate_scaling.file", "geometry.front_retreat.prescribed.file"].
 
     Returns
     -------
@@ -552,6 +552,12 @@ def run_sensitivity_analysis(
         The input dataset containing the data to be analyzed.
     filter_vars : List[str]
         List of variables to filter by for sensitivity analysis.
+    group_dim : str, optional
+        The dimension to group by, by default "basin".
+    iter_dim : str, optional
+        The dimension to iterate over, by default "time".
+    notebook : bool, optional
+        Whether to display a nicer progress bar when running in a notebook, by default False.
 
     Returns
     -------

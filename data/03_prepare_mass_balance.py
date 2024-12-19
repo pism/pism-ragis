@@ -20,8 +20,7 @@
 # import-untyped
 
 """
-Prepare mass balance from Mankoff et at (2021).
-https://doi.org/10.5194/essd-13-5001-2021
+Prepare mass balance data from Mankoff et al. (2021).
 """
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from importlib.resources import files
@@ -45,7 +44,7 @@ if __name__ == "__main__":
 
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
-    parser.description = "Prepare Mass Balance from Mankoff et al (2021)."
+    parser.description = "Prepare Mass Balance from Mankoff et al. (2021)."
     url = "https://dataverse.geus.dk/api/access/datafile/:persistentId?persistentId=doi:10.22008/FK2/OHI23Z/MRSBQR"
     options = parser.parse_args()
     p = Path("mass_balance")

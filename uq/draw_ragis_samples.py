@@ -252,7 +252,21 @@ else:
 
 def add_default_values(df, dists, distribution_name):
     """
-    Add default values.
+    Add default values to the DataFrame.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The DataFrame to which default values will be added.
+    dists : dict
+        Dictionary containing the default values.
+    distribution_name : str
+        The name of the distribution set.
+
+    Returns
+    -------
+    pd.DataFrame
+        The DataFrame with default values added.
     """
     print("\nAdding default values\n")
     for key, val in dists[distribution_name]["default_values"].items():
@@ -265,7 +279,17 @@ def add_default_values(df, dists, distribution_name):
 
 def convert_samples(unif_sample):
     """
-    Convert samples.
+    Convert uniform samples to the specified distributions.
+
+    Parameters
+    ----------
+    unif_sample : np.ndarray
+        Array of uniform samples.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the converted samples and the number of samples.
     """
     n_samples = unif_sample.shape[0]
     # To hold the transformed variables

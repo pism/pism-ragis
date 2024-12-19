@@ -17,13 +17,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 """
-resources
-=========
-
-Provides:
-  - general resources such as grid constructors, calving, hydrology, etc.
-    for the Greenland Ice Sheet and sub-regions thereof
-
+Module for providing resources for the Greenland Ice Sheet and sub-regions.
 """
 
 import inspect
@@ -34,33 +28,53 @@ import shlex
 import subprocess
 import sys
 from collections import OrderedDict
+from typing import Callable
 
 
-def get_path_to_config():
+def get_path_to_config() -> str:
     """
-    Get path to pism_config
+    Get path to pism_config.
 
-    Returns: string
+    Returns
+    -------
+    str
+        The path to the pism_config file.
     """
 
     return os.path.join(os.environ.get("PISM_PREFIX", ""), "share/pism/pism_config.nc")
 
 
-def generate_prefix_str(pism_exec):
+def generate_prefix_str(pism_exec: str) -> str:
     """
     Generate prefix string.
 
-    Returns: string
+    Parameters
+    ----------
+    pism_exec : str
+        The PISM executable name.
+
+    Returns
+    -------
+    str
+        The generated prefix string.
     """
 
     return os.path.join(os.environ.get("PISM_PREFIX", ""), f"bin/{pism_exec}")
 
 
-def generate_domain(domain):
+def generate_domain(domain: str) -> str:
     """
-    Generate domain specific options
+    Generate domain specific options.
 
-    Returns: string
+    Parameters
+    ----------
+    domain : str
+        The domain name.
+
+    Returns
+    -------
+    str
+        The generated domain specific options.
     """
 
     if domain.lower() in ("greenland", "gris", "gris_ext"):
@@ -75,7 +89,7 @@ def generate_domain(domain):
     return pism_exec
 
 
-spatial_ts_vars = {}
+spatial_ts_vars: dict[str, list[str]] = {}
 
 spatial_ts_vars["basic"] = [
     "basal_melt_rate_grounded",
@@ -214,36 +228,62 @@ spatial_ts_vars["standard"] = [
 
 def generate_spatial_ts(
     outfile: str,
-    exvars: str,
+    exvars: list[str],
     step: str = "yearly",
     odir: str = ".",
-):
+) -> OrderedDict[str, str]:
     """
-    Return dict to generate spatial time series
+    Return dict to generate spatial time series.
 
-    Returns: OrderedDict
+    Parameters
+    ----------
+    outfile : str
+        The output file name.
+    exvars : list[str]
+        The extra variables to include in the time series.
+    step : str, optional
+        The time step for the time series, by default "yearly".
+    odir : str, optional
+        The output directory, by default ".".
+
+    Returns
+    -------
+    OrderedDict[str, str]
+        The parameters dictionary for generating spatial time series.
     """
 
     # check if list or comma-separated string is given.
-    exvars = ",".join(exvars)
+    extravars = ",".join(exvars)
 
     params_dict = OrderedDict()
     params_dict["output.extra.file"] = os.path.join(odir, "ex_" + outfile)
-    params_dict["output.extra.vars"] = exvars
+    params_dict["output.extra.vars"] = extravars
     params_dict["output.extra.times"] = step
 
     return params_dict
 
 
 def generate_scalar_ts(
-    outfile,
+    outfile: str,
     step: str = "yearly",
     odir: str = ".",
-):
+) -> OrderedDict[str, str]:
     """
-    Return dict to create scalar time series
+    Return dict to create scalar time series.
 
-    Returns: OrderedDict
+    Parameters
+    ----------
+    outfile : str
+        The output file name.
+    step : str, optional
+        The time step for the time series, by default "yearly".
+    odir : str, optional
+        The output directory, by default ".".
+
+    Returns
+    -------
+    OrderedDict[str, str]
+        The parameters dictionary for generating scalar time series.
     """
 
     params_dict = OrderedDict()
@@ -253,23 +293,41 @@ def generate_scalar_ts(
     return params_dict
 
 
-def merge_dicts(*dict_args):
+def merge_dicts(*dict_args: dict | OrderedDict) -> OrderedDict:
     """
-    Given any number of dicts, shallow copy and merge into a new dict,
-    precedence goes to key value pairs in latter dicts.
+    Merge multiple dictionaries into a new dictionary.
 
-    Returns: OrderedDict
+    Parameters
+    ----------
+    *dict_args : dict
+        The dictionaries to merge.
+
+    Returns
+    -------
+    OrderedDict
+        The merged dictionary.
     """
-    result = OrderedDict()
+    result: OrderedDict = OrderedDict()
     for dictionary in dict_args:
         result.update(dictionary)
     return result
 
 
-def uniquify_list(seq, idfun=None):
+def uniquify_list(seq: list, idfun: Callable | None = None) -> list:
     """
     Remove duplicates from a list, order preserving.
-    From http://www.peterbe.com/plog/uniqifiers-benchmark
+
+    Parameters
+    ----------
+    seq : list
+        The input list.
+    idfun : Callable, optional
+        A function to compute a key for each element, by default None.
+
+    Returns
+    -------
+    list
+        The list with duplicates removed.
     """
 
     if idfun is None:
@@ -288,11 +346,23 @@ def uniquify_list(seq, idfun=None):
     return result
 
 
-def generate_stress_balance(stress_balance, additional_params_dict):
+def generate_stress_balance(
+    stress_balance: str, additional_params_dict: dict
+) -> OrderedDict[str, str]:
     """
-    Generate stress balance params
+    Generate stress balance params.
 
-    Returns: OrderedDict
+    Parameters
+    ----------
+    stress_balance : str
+        The stress balance method.
+    additional_params_dict : dict
+        Additional parameters dictionary.
+
+    Returns
+    -------
+    OrderedDict[str, str]
+        The parameters dictionary for generating stress balance.
     """
 
     accepted_stress_balances = ("sia", "ssa+sia", "blatter")
@@ -313,14 +383,14 @@ def generate_stress_balance(stress_balance, additional_params_dict):
 
     if stress_balance == "ssa+sia":
         params_dict["time_stepping.skip.enabled"] = ""
-        params_dict["time_stepping.skip.max"] = 100
+        params_dict["time_stepping.skip.max"] = "100"
 
     if stress_balance == "blatter":
-        params_dict["stress_balance.blatter.coarsening_factor"] = 4
-        params_dict["blatter_Mz"] = 17
+        params_dict["stress_balance.blatter.coarsening_factor"] = "4"
+        params_dict["blatter_Mz"] = "17"
         params_dict["bp_ksp_type"] = "gmres"
         params_dict["bp_pc_type"] = "mg"
-        params_dict["bp_pc_mg_levels"] = 3
+        params_dict["bp_pc_mg_levels"] = "3"
         params_dict["bp_mg_levels_ksp_type"] = "richardson"
         params_dict["bp_mg_levels_pc_type"] = "sor"
         params_dict["bp_mg_coarse_ksp_type"] = "preonly"
@@ -328,18 +398,28 @@ def generate_stress_balance(stress_balance, additional_params_dict):
         params_dict["bp_snes_monitor_ratio"] = ""
         params_dict["bp_ksp_monitor"] = ""
         params_dict["bp_ksp_view_singularvalues"] = ""
-        params_dict["bp_snes_ksp_ew"] = 1
-        params_dict["bp_snes_ksp_ew_version"] = 3
-        params_dict["time_stepping.adaptive_ratio"] = 25
+        params_dict["bp_snes_ksp_ew"] = "1"
+        params_dict["bp_snes_ksp_ew_version"] = "3"
+        params_dict["time_stepping.adaptive_ratio"] = "25"
 
     return merge_dicts(additional_params_dict, params_dict)
 
 
-def generate_hydrology(hydro, **kwargs):
+def generate_hydrology(hydro: str, **kwargs: dict) -> OrderedDict[str, str]:
     """
-    Generate hydrology params
+    Generate hydrology params.
 
-    Returns: OrderedDict
+    Parameters
+    ----------
+    hydro : str
+        The hydrology model.
+    **kwargs : dict
+        Additional keyword arguments.
+
+    Returns
+    -------
+    OrderedDict[str, str]
+        The parameters dictionary for generating hydrology.
     """
 
     params_dict = OrderedDict()
@@ -368,11 +448,21 @@ def generate_hydrology(hydro, **kwargs):
     return merge_dicts(params_dict, kwargs)
 
 
-def generate_calving(calving, **kwargs):
+def generate_calving(calving: str, **kwargs: dict) -> OrderedDict[str, str]:
     """
-    Generate calving params
+    Generate calving params.
 
-    Returns: OrderedDict
+    Parameters
+    ----------
+    calving : str
+        The calving model.
+    **kwargs : dict
+        Additional keyword arguments.
+
+    Returns
+    -------
+    OrderedDict[str, str]
+        The parameters dictionary for generating calving.
     """
 
     params_dict = OrderedDict()
@@ -402,11 +492,21 @@ def generate_calving(calving, **kwargs):
     return merge_dicts(params_dict, kwargs)
 
 
-def generate_climate(climate, **kwargs):
+def generate_climate(climate: str, **kwargs: dict) -> OrderedDict[str, str]:
     """
-    Generate climate params
+    Generate climate params.
 
-    Returns: OrderedDict
+    Parameters
+    ----------
+    climate : str
+        The climate model.
+    **kwargs : dict
+        Additional keyword arguments.
+
+    Returns
+    -------
+    OrderedDict[str, str]
+        The parameters dictionary for generating climate.
     """
 
     climate_dict = {
@@ -423,18 +523,28 @@ def generate_climate(climate, **kwargs):
     }
 
     if climate in climate_dict:
-        params_dict = climate_dict.get(climate)
+        params_dict = OrderedDict(climate_dict[climate])
     else:
         params_dict = OrderedDict()
 
     return merge_dicts(params_dict, kwargs)
 
 
-def generate_ocean(ocean, **kwargs):
+def generate_ocean(ocean: str, **kwargs: dict) -> OrderedDict[str, str]:
     """
-    Generate ocean params
+    Generate ocean params.
 
-    Returns: OrderedDict
+    Parameters
+    ----------
+    ocean : str
+        The ocean model.
+    **kwargs : dict
+        Additional keyword arguments.
+
+    Returns
+    -------
+    OrderedDict[str, str]
+        The parameters dictionary for generating ocean.
     """
 
     ocean_dict = {
@@ -442,35 +552,50 @@ def generate_ocean(ocean, **kwargs):
         "constant": {"ocean.models": "constant"},
     }
     if ocean in ocean_dict:
-        params_dict = ocean_dict.get(ocean)
+        params_dict = OrderedDict(ocean_dict[ocean])
     else:
         params_dict = OrderedDict()
 
     return merge_dicts(params_dict, kwargs)
 
 
-def list_systems():
+def list_systems() -> list[str]:
     """
     Return a list of supported systems.
+
+    Returns
+    -------
+    list[str]
+        The list of supported systems.
     """
     return sorted(systems.keys())
 
 
-def list_queues():
+def list_queues() -> list[str]:
     """
     Return a list of supported queues.
+
+    Returns
+    -------
+    list[str]
+        The list of supported queues.
     """
     result = set()
     for s in list(systems.values()):
         for q in list(s["queue"].keys()):
             result.add(q)
 
-    return result
+    return list(result)
 
 
-def list_bed_types():
+def list_bed_types() -> list[str]:
     """
     Return a list of supported bed types.
+
+    Returns
+    -------
+    list[str]
+        The list of supported bed types.
     """
 
     bed_types = [
@@ -1074,11 +1199,29 @@ ulimit
 """
 
 
-def make_batch_header(system_name, n_cores, walltime, queue, gid="s2457"):
+def make_batch_header(
+    system_name: str, n_cores: int, walltime: str, queue: str, gid: str = "s2457"
+) -> tuple[str, dict]:
     """
     Generate header file for different HPC system.
 
-    Returns: String
+    Parameters
+    ----------
+    system_name : str
+        The name of the HPC system.
+    n_cores : int
+        The number of cores.
+    walltime : str
+        The walltime for the job.
+    queue : str
+        The queue name.
+    gid : str, optional
+        The group ID, by default "s2457".
+
+    Returns
+    -------
+    tuple[str, dict]
+        The header string and the system dictionary.
     """
 
     # get system info; use "debug" if the requested name was not found
@@ -1120,9 +1263,19 @@ def make_batch_header(system_name, n_cores, walltime, queue, gid="s2457"):
     return system["header"], system
 
 
-def make_batch_post_header(system):
+def make_batch_post_header(system: str) -> str:
     """
-    Make a post header
+    Make a post header.
+
+    Parameters
+    ----------
+    system : str
+        The system name.
+
+    Returns
+    -------
+    str
+        The post header string.
     """
     v = git_version_header()
 
@@ -1150,19 +1303,40 @@ def make_batch_post_header(system):
     return post_header
 
 
-def make_batch_header_test():
-    "print headers of all supported systems and queues (for testing)"
+def make_batch_header_test() -> None:
+    """
+    Print headers of all supported systems and queues (for testing).
+    """
     for s in list(systems.keys()):
         for q in list(systems[s]["queue"].keys()):
             print(f"# system: {s}, queue: {q}")
             print(make_batch_header(s, 100, "1:00:00", q)[0])
 
 
-def git_version():
-    """Return the path to the top directory of the Git repository
-    containing this script, the URL of the "origin" remote and the version."""
+def git_version() -> tuple[str, str, str]:
+    """
+    Return the path to the top directory of the Git repository, the URL of the "origin" remote, and the version.
+
+    Returns
+    -------
+    tuple[str, str, str]
+        The path, URL, and version of the Git repository.
+    """
 
     def output(command):
+        """
+        Execute a command and return its output.
+
+        Parameters
+        ----------
+        command : str
+            The command to execute.
+
+        Returns
+        -------
+        str
+            The output of the command.
+        """
         path = os.path.realpath(os.path.dirname(inspect.stack(0)[0][1]))
         return subprocess.check_output(shlex.split(command), cwd=path).strip()
 
@@ -1173,8 +1347,15 @@ def git_version():
     )
 
 
-def git_version_header():
-    "Return shell comments containing version info."
+def git_version_header() -> str:
+    """
+    Return shell comments containing version info.
+
+    Returns
+    -------
+    str
+        The shell comments with version info.
+    """
     version_info = git_version()
     script = os.path.realpath(sys.argv[0])
     command = " ".join(sys.argv)

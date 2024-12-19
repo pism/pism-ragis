@@ -18,7 +18,7 @@
 # pylint: disable=unused-import,too-many-positional-arguments
 
 """
-Module for data plotting
+Module for data plotting.
 """
 import json
 import warnings
@@ -54,7 +54,18 @@ def plot_prior_posteriors(
     config: Dict = {},
 ):
     """
-    Plot histograms.
+    Plot histograms of prior and posterior distributions.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing the data to plot.
+    bins_dict : Dict
+        Dictionary containing the number of bins for each variable.
+    fig_dir : Union[str, Path], optional
+        Directory to save the figures, by default "figures".
+    config : Dict, optional
+        Configuration dictionary, by default {}.
     """
 
     params_short_dict = config["Parameters"]
@@ -142,16 +153,14 @@ def plot_basins(
         The posterior dataset.
     filtering_var : str
         The variable used for filtering.
-    filter_range : List[Union[int, str]], optional
+    filter_range : List[int], optional
         A list containing the start and end years for filtering, by default [1990, 2019].
     fig_dir : Union[str, Path], optional
         The directory where figures will be saved, by default "figures".
-    plot_range : List[Union[int, str]], optional
+    plot_range : List[int], optional
         A list containing the start and end years for plotting, by default [1980, 2020].
-
-    Returns
-    -------
-    None
+    config : Dict, optional
+        Configuration dictionary, by default {}.
 
     Examples
     --------
@@ -209,10 +218,6 @@ def plot_sensitivity_indices(
         The directory where the figures will be saved, by default "figures".
     fontsize : float, optional
         The font size for the plot, by default 6.
-
-    Returns
-    -------
-    None
     """
     plot_dir = Path(fig_dir) / "sensitivity_indices"
     plot_dir.mkdir(parents=True, exist_ok=True)
@@ -260,8 +265,7 @@ def plot_obs_sims(
     fontsize: float = 6,
 ) -> None:
     """
-    Plot figure with cumulative mass balance and grounding line flux and climatic
-    mass balance fluxes.
+    Plot cumulative mass balance and grounding line flux.
 
     Parameters
     ----------
@@ -279,10 +283,18 @@ def plot_obs_sims(
         Range of years for filtering, by default [1990, 2019].
     fig_dir : Union[str, Path], optional
         Directory to save the figures, by default "figures".
+    reference_year : float, optional
+        Reference year for cumulative mass balance, by default 1986.0.
     sim_alpha : float, optional
         Alpha value for simulation plots, by default 0.4.
     obs_alpha : float, optional
         Alpha value for observation plots, by default 1.0.
+    sigma : float, optional
+        Sigma value for uncertainty, by default 2.
+    percentiles : List[float], optional
+        Percentiles for credibility interval, by default [0.025, 0.975].
+    fontsize : float, optional
+        Font size for the plot, by default 6.
     """
 
     import pism_ragis.processing  # pylint: disable=import-outside-toplevel,reimported
@@ -483,10 +495,6 @@ def plot_outliers(
         The DataArray containing the outliers.
     filename : Union[Path, str]
         The path or filename where the plot will be saved.
-
-    Returns
-    -------
-    None
 
     Examples
     --------

@@ -71,6 +71,20 @@ geom = {
 def dissolve(ds, date, crs: str = "EPSG:3413"):
     """
     Dissolve geometries.
+
+    Parameters
+    ----------
+    ds : geopandas.GeoDataFrame
+        The GeoDataFrame containing geometries to dissolve.
+    date : pd.Timestamp
+        The date associated with the geometries.
+    crs : str, optional
+        Coordinate reference system, by default "EPSG:3413".
+
+    Returns
+    -------
+    geopandas.GeoDataFrame
+        The dissolved GeoDataFrame with the date set as the index.
     """
     ds = gp.GeoDataFrame(ds, crs=crs)
     geom_valid = ds.geometry.make_valid()
@@ -84,6 +98,18 @@ def dissolve(ds, date, crs: str = "EPSG:3413"):
 def aggregate(n, df):
     """
     Aggregate geometries.
+
+    Parameters
+    ----------
+    n : int
+        The number of geometries to aggregate.
+    df : geopandas.GeoDataFrame
+        The GeoDataFrame containing geometries to aggregate.
+
+    Returns
+    -------
+    geopandas.GeoDataFrame
+        The aggregated GeoDataFrame.
     """
     if n == 0:
         return df.iloc[[n]]

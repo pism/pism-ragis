@@ -48,7 +48,7 @@ def process_year(
     year: int, output_dir: Path, vars_dict: Dict, start_date: str = "1975-01-01"
 ) -> Path:
     """
-    Process NetCDF files for a given year and generate a monthly averaged dataset.
+    Prepare and process NetCDF files for a given year and generate a monthly averaged dataset.
 
     Parameters
     ----------
@@ -56,6 +56,8 @@ def process_year(
         The year to process.
     output_dir : Path
         The directory where the output file will be saved.
+    vars_dict : Dict
+        Dictionary of variables to process with their attributes.
     start_date : str, optional
         The reference start date for the time encoding, by default "1975-01-01".
 
@@ -63,12 +65,6 @@ def process_year(
     -------
     Path
         The path to the generated NetCDF file.
-
-    Notes
-    -----
-    This function reads daily NetCDF files for the specified year, processes the data,
-    and generates a monthly averaged dataset. The output file is saved in the specified
-    output directory with the name format 'monthly_{year}.nc'.
     """
     output_file = output_dir / Path(f"monthly_{year}.nc")
     p = output_dir / Path(str(year))
@@ -142,18 +138,26 @@ def process_hirham_cdo(
     end_year: int = 2021,
 ) -> None:
     """
-    Process HIRHAM data and save the output to a NetCDF file.
+    Prepare and process HIRHAM data and save the output to a NetCDF file.
 
     Parameters
     ----------
-    data_dir : str
+    data_dir : Union[str, Path]
         Directory containing the input data.
-    output_file : str
+    output_file : Union[str, Path]
         Path to the output NetCDF file.
-
-    Returns
-    -------
-    None
+    base_url : str
+        Base URL for downloading HIRHAM data.
+    vars_dict : Dict
+        Dictionary of variables to process with their attributes.
+    overwrite : bool, optional
+        Whether to overwrite existing files, by default False.
+    max_workers : int, optional
+        Maximum number of parallel workers, by default 4.
+    start_year : int, optional
+        Starting year for processing, by default 1980.
+    end_year : int, optional
+        Ending year for processing, by default 2021.
     """
     print("Processing HIRHAM")
 
@@ -277,18 +281,22 @@ def process_racmo_cdo(
     max_workers: int = 4,
 ) -> None:
     """
-    Process RACMO data and save the output to a NetCDF file.
+    Prepare and process RACMO data and save the output to a NetCDF file.
 
     Parameters
     ----------
-    data_dir : str
+    data_dir : Union[str, Path]
         Directory containing the input data.
-    output_file : str
+    output_file : Union[str, Path]
         Path to the output NetCDF file.
-
-    Returns
-    -------
-    None
+    vars_dict : Dict
+        Dictionary of variables to process with their attributes.
+    start_year : int, optional
+        Starting year for processing, by default 1940.
+    end_year : int, optional
+        Ending year for processing, by default 2023.
+    max_workers : int, optional
+        Maximum number of parallel workers, by default 4.
     """
     print("Processing RACMO")
 
@@ -360,7 +368,7 @@ def process_mar_cdo(
     max_workers: int = 4,
 ) -> None:
     """
-    Process MAR data and save the output to a NetCDF file.
+    Prepeare and process MAR data and save the output to a NetCDF file.
 
     Parameters
     ----------
@@ -368,10 +376,14 @@ def process_mar_cdo(
         Directory containing the input data.
     output_file : str
         Path to the output NetCDF file.
-
-    Returns
-    -------
-    None
+    vars_dict : Dict
+        Dictionary of variables to process with their attributes.
+    start_year : int, optional
+        Starting year for processing, by default 1975.
+    end_year : int, optional
+        Ending year for processing, by default 2023.
+    max_workers : int, optional
+        Maximum number of parallel workers, by default 4.
     """
     print("Processing MAR")
 
@@ -416,11 +428,12 @@ def process_mar_cdo(
 def download_file(url: str, output_path: Path) -> None:
     """
     Download a file from a URL with a progress bar.
+
     Parameters
     ----------
     url : str
         The URL of the file to download.
-    output_path : str
+    output_path : Path
         The local path where the downloaded file will be saved.
     """
 
@@ -443,11 +456,19 @@ def download_racmo(
     max_workers: int = 4,
 ) -> List[Path]:
     """
-    Download files in parallel.
+    Download RACMO files in parallel.
+
     Parameters
     ----------
+    output_dir : Union[str, Path], optional
+        The directory where the downloaded files will be saved, by default ".".
     max_workers : int, optional
         The maximum number of threads to use for downloading, by default 4.
+
+    Returns
+    -------
+    List[Path]
+        List of paths to the downloaded files.
     """
 
     print("Downloading RACMO")
@@ -480,15 +501,25 @@ def download_mar(
     max_workers: int = 4,
 ) -> List[Path]:
     """
-    Download files in parallel.
+    Download MAR files in parallel.
+
     Parameters
     ----------
+    base_url : str
+        The base URL for downloading MAR data.
     start_year : int
         The starting year of the files to download.
     end_year : int
         The ending year of the files to download.
+    output_dir : Union[str, Path], optional
+        The directory where the downloaded files will be saved, by default ".".
     max_workers : int, optional
         The maximum number of threads to use for downloading, by default 4.
+
+    Returns
+    -------
+    List[Path]
+        List of paths to the downloaded files.
     """
 
     print(f"Downloading MAR from {base_url}")
@@ -518,15 +549,25 @@ def download_hirham(
     max_workers: int = 4,
 ) -> List[Path]:
     """
-    Download files in parallel.
+    Download HIRHAM files in parallel.
+
     Parameters
     ----------
+    base_url : str
+        The base URL for downloading HIRHAM data.
     start_year : int
         The starting year of the files to download.
     end_year : int
         The ending year of the files to download.
+    output_dir : Union[str, Path], optional
+        The directory where the downloaded files will be saved, by default ".".
     max_workers : int, optional
         The maximum number of threads to use for downloading, by default 4.
+
+    Returns
+    -------
+    List[Path]
+        List of paths to the downloaded files.
     """
     print(f"Downloading HIRHAM5 from {base_url}")
     responses = []

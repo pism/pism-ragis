@@ -39,9 +39,9 @@ def delta_analysis(
 
     Parameters
     ----------
-    Y : numpy.array
-       A NumPy array containing the model outputs.
-    X: numpy.ndarray
+    Y : numpy.ndarray
+        A NumPy array containing the model outputs.
+    X : numpy.ndarray
         A NumPy matrix containing the model inputs.
     problem : dict
         A dictionary defining the problem for SALib analysis. It should contain keys like 'num_vars' and 'names'.

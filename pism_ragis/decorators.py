@@ -18,7 +18,7 @@
 # pylint: disable=too-many-positional-arguments
 
 """
-Module for handling logging
+Module for handling logging.
 """
 
 import logging
@@ -61,6 +61,21 @@ def timeit(func):
 
     @wraps(func)
     def wrapper(*args, **kwargs):
+        """
+        Wrapper function that logs the execution time of the decorated function.
+
+        Parameters
+        ----------
+        *args : tuple
+            Positional arguments to pass to the decorated function.
+        **kwargs : dict
+            Keyword arguments to pass to the decorated function.
+
+        Returns
+        -------
+        Any
+            The result of the decorated function.
+        """
         start_time = time.time()
         logger.info("%s: Starting", func.__name__)
         result = func(*args, **kwargs)
@@ -104,6 +119,21 @@ def profileit(func):
 
     @wraps(func)
     def wrapper(*args, **kwargs):
+        """
+        Wrapper function that logs the execution time and memory usage of the decorated function.
+
+        Parameters
+        ----------
+        *args : tuple
+            Positional arguments to pass to the decorated function.
+        **kwargs : dict
+            Keyword arguments to pass to the decorated function.
+
+        Returns
+        -------
+        Any
+            The result of the decorated function.
+        """
         tracemalloc.start()
         start_time = time.time()
         logger.info("Starting %s", func.__name__)

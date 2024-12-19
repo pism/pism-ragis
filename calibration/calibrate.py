@@ -17,7 +17,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 """
-Generate scrips to calibrate initial states of the Greenland Ice Sheet using the Parallel Ice Sheet Model (PISM)
+Generate scrips to calibrate initial states of the Greenland Ice Sheet using the Parallel Ice Sheet Model (PISM).
 """
 
 import inspect
@@ -35,7 +35,12 @@ import xarray as xr
 
 def current_script_directory() -> str:
     """
-    Return the current directory
+    Return the current directory of the current script.
+
+    Returns
+    -------
+    str
+        The absolute path of the directory containing the current script.
     """
 
     m_filename = inspect.stack(0)[0][1]
@@ -51,7 +56,16 @@ from systems import Systems  # pylint: disable=C0413
 
 def create_offset_file(file_name: str, delta_T: float = 0.0, frac_P: float = 1.0):
     """
-    Generate offset file using xarray
+    Generate an offset file using xarray.
+
+    Parameters
+    ----------
+    file_name : str
+        The name of the file to save the offset data.
+    delta_T : float, optional
+        Temperature offset, by default 0.0.
+    frac_P : float, optional
+        Precipitation fraction, by default 1.0.
     """
     dT = [delta_T]
     fP = [frac_P]

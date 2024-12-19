@@ -18,7 +18,7 @@
 # pylint: disable=too-many-positional-arguments
 
 """
-Module for date processing
+Module for date processing.
 """
 
 import datetime
