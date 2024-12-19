@@ -73,16 +73,32 @@ warnings.filterwarnings(
 )
 
 
-def add_prefix_coord(sensitivity_indices: xr.Dataset, parameter_groups: Dict):
+def add_prefix_coord(
+    sensitivity_indices: xr.Dataset, parameter_groups: Dict
+) -> xr.Dataset:
     """
-    Add prefix coordinates to xr.Dataset.
+    Add prefix coordinates to an xarray Dataset.
+
+    This function extracts the prefix from each coordinate value in the 'pism_config_axis'
+    and adds it as a new coordinate. It also maps the prefixes to their corresponding
+    sensitivity indices groups.
+
+    Parameters
+    ----------
+    sensitivity_indices : xr.Dataset
+        The input dataset containing sensitivity indices.
+    parameter_groups : Dict
+        A dictionary mapping parameter names to their corresponding groups.
+
+    Returns
+    -------
+    xr.Dataset
+        The dataset with added prefix coordinates and sensitivity indices groups.
     """
-    # Extract the prefix from each coordinate value
     prefixes = [
         name.split(".")[0] for name in sensitivity_indices.pism_config_axis.values
     ]
 
-    # Add the prefixes as a new coordinate
     sensitivity_indices = sensitivity_indices.assign_coords(
         prefix=("pism_config_axis", prefixes)
     )
@@ -139,12 +155,10 @@ def prepare_input(
     1                   1              1                          1                                      1
     2                   0              0                          0                                      0
     """
-    # Convert columns to numeric and drop specified columns
     df = df.apply(prp.convert_column_to_numeric).drop(
         columns=["ensemble", "exp_id"], errors="ignore"
     )
 
-    # Map unique values in specified parameters to integers
     for param in params:
         m_dict: Dict[str, int] = {v: k for k, v in enumerate(df[param].unique())}
         df[param] = df[param].map(m_dict)

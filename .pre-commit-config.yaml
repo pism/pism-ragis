@@ -72,7 +72,7 @@ repos:
   #    - id: nb-clean
 
   # - repo: local
-  #  hooks:
+  #   hooks:
   #   - id: pytest # pytest is a pre-commit hook
   #     name: pytest
   #     entry: pytest tests
