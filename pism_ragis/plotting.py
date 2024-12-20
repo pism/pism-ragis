@@ -216,8 +216,8 @@ def plot_sensitivity_indices(
         The variable name for sensitivity indices in the dataset, by default "S1".
     indices_conf_var : str, optional
         The variable name for confidence intervals of sensitivity indices in the dataset, by default "S1_conf".
-    basin : str, optional
-        The basin for which the sensitivity indices are plotted, by default None.
+    basin : str
+        The basin parameter to be used in the plot.
     filter_var : str, optional
         The variable used for filtering, by default "".
     fig_dir : Union[str, Path], optional

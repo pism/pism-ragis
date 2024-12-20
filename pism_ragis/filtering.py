@@ -22,6 +22,7 @@
 Module for filtering (calibration).
 """
 
+import logging
 import warnings
 from typing import Callable, Dict, List
 
@@ -31,7 +32,7 @@ import xarray as xr
 from pism_ragis.decorators import timeit
 from pism_ragis.logger import get_logger
 
-logger = get_logger(__name__)
+logger: logging.Logger = get_logger("pism_ragis")
 
 
 def sample_with_replacement(
