@@ -16,18 +16,7 @@ from pyDOE2 import lhs
 from SALib.sample import sobol
 from scipy.stats.distributions import randint, uniform
 
-short2long: Dict[str, str] = {
-    "SIAE": "sia_e",
-    "SSAN": "ssa_n",
-    "PPQ": "pseudo_plastic_q",
-    "TEFO": "till_effective_fraction_overburden",
-    "PHIMIN": "phi_min",
-    "PHIMAX": "phi_max",
-    "ZMIN": "z_min",
-    "ZMAX": "z_max",
-}
-
-climate: Dict[int, str] = {
+rcms: Dict[int, str] = {
     0: "HIRHAM5-monthly-ERA5_1975_2021.nc",
     1: "MARv3.14-monthly-ERA5_1940_2023.nc",
     2: "RACMO2.3p2_ERA5_FGRN055_1940_2023.nc",
@@ -35,21 +24,13 @@ climate: Dict[int, str] = {
 gcms: Dict[int, str] = {
     0: "ACCESS1-3_rcp85",
     1: "CNRM-CM6_ssp126",
-    2: "CNRM-CM6_ssp585",
-    3: "CNRM-ESM2_ssp585",
-    4: "CSIRO-Mk3.6_rcp85",
-    5: "HadGEM2-ES_rcp85",
-    6: "IPSL-CM5-MR_rcp85",
-    7: "MIROC-ESM-CHEM_rcp26",
-    8: "MIROC-ESM-CHEM_rcp85",
-    9: "NorESM1-M_rcp85",
-    10: "UKESM1-CM6_ssp585",
-}
-
-tcts: Dict[int, str] = {
-    0: "tct_forcing_200myr_74n_50myr_76n.nc",
-    1: "tct_forcing_300myr_74n_50myr_76n.nc",
-    2: "tct_forcing_400myr_74n_50myr_76n.nc",
+    2: "CNRM-ESM2_ssp585",
+    3: "CSIRO-Mk3.6_rcp85",
+    4: "HadGEM2-ES_rcp85",
+    5: "IPSL-CM5-MR_rcp85",
+    6: "MIROC-ESM-CHEM_rcp26",
+    7: "NorESM1-M_rcp85",
+    8: "UKESM1-CM6_ssp585",
 }
 
 initialstates: Dict[int, str] = {
@@ -76,7 +57,7 @@ dists: Dict[str, Any] = {
             "calving.rate_scaling.file": randint(0, 7),
             "ocean.th.gamma_T": uniform(loc=0.75e-4, scale=0.75e-4),
             "ocean_file": randint(0, len(gcms)),
-            "climate_file": randint(0, len(climate)),
+            "climate_file": randint(0, len(rcms)),
             "frontal_melt.routing.parameter_a": uniform(loc=2.4e-4, scale=1.2e-4),
             "frontal_melt.routing.parameter_b": uniform(loc=1.0, scale=0.70),
             "frontal_melt.routing.power_alpha": uniform(loc=0.3, scale=0.55),
@@ -308,11 +289,7 @@ def convert_samples(unif_sample):
             ]
         elif key == "climate_file":
             dist_sample[:, i] = [
-                climate[id] for id in distributions[key].ppf(unif_sample[:, i])
-            ]
-        elif key == "calving.thickness_calving.file":
-            dist_sample[:, i] = [
-                tcts[id] for id in distributions[key].ppf(unif_sample[:, i])
+                rcms[id] for id in distributions[key].ppf(unif_sample[:, i])
             ]
         elif key == "input.regrid.file":
             dist_sample[:, i] = [
