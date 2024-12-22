@@ -30,11 +30,12 @@ from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from functools import wraps
 from importlib.resources import files
+from itertools import chain
 from pathlib import Path
 from typing import Any, Callable, Dict, Hashable, List, Mapping, Union
 
 import dask
-import matplotlib
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -49,8 +50,7 @@ from tqdm.auto import tqdm
 import pism_ragis.processing as prp
 from pism_ragis.analyze import delta_analysis, sobol_analysis
 from pism_ragis.decorators import profileit, timeit
-from pism_ragis.filtering import filter_outliers, importance_sampling
-from pism_ragis.likelihood import log_normal
+from pism_ragis.filtering import filter_outliers, run_importance_sampling
 from pism_ragis.logger import get_logger
 from pism_ragis.plotting import (
     plot_basins,
@@ -58,10 +58,11 @@ from pism_ragis.plotting import (
     plot_prior_posteriors,
     plot_sensitivity_indices,
 )
+from pism_ragis.processing import config_to_dataframe, filter_config
 
 logger = get_logger("pism_ragis")
 
-matplotlib.use("Agg")
+# mpl.use("Agg")
 xr.set_options(keep_attrs=True)
 plt.style.use("tableau-colorblind10")
 # Ignore specific RuntimeWarnings
@@ -71,6 +72,36 @@ warnings.filterwarnings(
 warnings.filterwarnings(
     "ignore", category=RuntimeWarning, message="invalid value encountered in divide"
 )
+
+
+def sort_columns(df: pd.DataFrame, sorted_columns: list) -> pd.DataFrame:
+    """
+    Sort columns of a DataFrame.
+
+    This function sorts the columns of a DataFrame such that the columns specified in
+    `sorted_columns` appear in the specified order, while all other columns appear before
+    the sorted columns in their original order.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The input DataFrame to be sorted.
+    sorted_columns : list
+        A list of column names to be sorted.
+
+    Returns
+    -------
+    pd.DataFrame
+        The DataFrame with columns sorted as specified.
+    """
+    # Identify columns that are not in the list
+    other_columns = [col for col in df.columns if col not in sorted_columns]
+
+    # Concatenate other columns with the sorted columns
+    new_column_order = other_columns + sorted_columns
+
+    # Reindex the DataFrame
+    return df.reindex(columns=new_column_order)
 
 
 def add_prefix_coord(
@@ -164,156 +195,6 @@ def prepare_input(
         df[param] = df[param].map(m_dict)
 
     return df
-
-
-@timeit
-def run_sampling(
-    observed: xr.Dataset,
-    simulated: xr.Dataset,
-    obs_mean_vars: List[str] = ["grounding_line_flux", "mass_balance"],
-    obs_std_vars: List[str] = [
-        "grounding_line_flux_uncertainty",
-        "mass_balance_uncertainty",
-    ],
-    sim_vars: List[str] = ["grounding_line_flux", "mass_balance"],
-    filter_range: List[int] = [1990, 2019],
-    fudge_factor: float = 3.0,
-    fig_dir: Union[str, Path] = "figures",
-    params: List[str] = [],
-    config: Dict = {},
-) -> pd.DataFrame:
-    """
-    Run sampling to process observed and simulated datasets.
-
-    This function performs importance sampling using the specified observed and simulated datasets,
-    processes the results, and returns a DataFrame with the prior and posterior configurations.
-
-    Parameters
-    ----------
-    observed : xr.Dataset
-        The observed dataset.
-    simulated : xr.Dataset
-        The simulated dataset.
-    obs_mean_vars : List[str], optional
-        A list of variable names for the observed mean values, by default ["grounding_line_flux", "mass_balance"].
-    obs_std_vars : List[str], optional
-        A list of variable names for the observed standard deviation values, by default ["grounding_line_flux_uncertainty", "mass_balance_uncertainty"].
-    sim_vars : List[str], optional
-        A list of variable names for the simulated values, by default ["grounding_line_flux", "mass_balance"].
-    filter_range : List[int], optional
-        A list containing the start and end years for filtering, by default [1990, 2019].
-    fudge_factor : float, optional
-        A fudge factor for the importance sampling, by default 3.0.
-    fig_dir : Union[str, Path], optional
-        The directory where figures will be saved, by default "figures".
-    params : List[str], optional
-        A list of parameter names to be used for filtering configurations, by default [].
-    config : Dict, optional
-        A dictionary containing configuration settings for the RAGIS model, by default {}.
-
-    Returns
-    -------
-    pd.DataFrame
-        A DataFrame containing the prior and posterior configurations.
-
-    Examples
-    --------
-    >>> observed = xr.Dataset(...)
-    >>> simulated = xr.Dataset(...)
-    >>> result = run_sampling(observed, simulated)
-    """
-    filter_start_year, filter_end_year = filter_range
-
-    simulated_prior = simulated
-    simulated_prior["ensemble"] = "Prior"
-
-    prior_config = filter_config(simulated.isel({"time": 0}), params)
-    prior_df = config_to_dataframe(prior_config, ensemble="Prior")
-    prior_posterior_list = []
-
-    for obs_mean_var, obs_std_var, sim_var in zip(
-        obs_mean_vars, obs_std_vars, sim_vars
-    ):
-        print(f"Importance sampling using {obs_mean_var}")
-        f = importance_sampling(
-            simulated=simulated.sel(
-                time=slice(str(filter_start_year), str(filter_end_year))
-            ),
-            observed=observed.sel(
-                time=slice(str(filter_start_year), str(filter_end_year))
-            ),
-            log_likelihood=log_normal,
-            fudge_factor=fudge_factor,
-            n_samples=len(simulated.exp_id),
-            obs_mean_var=obs_mean_var,
-            obs_std_var=obs_std_var,
-            sim_var=sim_var,
-        )
-
-        with ProgressBar() as pbar:
-            result = f.compute()
-            logger.info(
-                "Importance Sampling: Finished in %2.2f seconds", pbar.last_duration
-            )
-
-        importance_sampled_ids = result["exp_id_sampled"]
-        importance_sampled_ids["basin"] = importance_sampled_ids["basin"].astype(str)
-
-        simulated_posterior = simulated.sel(exp_id=importance_sampled_ids)
-        simulated_posterior["ensemble"] = "Posterior"
-
-        posterior_config = filter_config(simulated_posterior.isel({"time": 0}), params)
-        posterior_df = config_to_dataframe(posterior_config, ensemble="Posterior")
-
-        prior_posterior_f = pd.concat([prior_df, posterior_df]).reset_index(drop=True)
-        prior_posterior_f["filtered_by"] = obs_mean_var
-        prior_posterior_list.append(prior_posterior_f)
-
-        plot_basins(
-            observed,
-            simulated_prior,
-            simulated_posterior,
-            obs_mean_var,
-            filter_range=filter_range,
-            fig_dir=fig_dir,
-            config=config,
-        )
-    prior_posterior = pd.concat(prior_posterior_list).reset_index(drop=True)
-    prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)
-    return prior_posterior
-
-
-def filter_config(ds: xr.Dataset, params: list[str]) -> xr.DataArray:
-    """
-    Filter the configuration parameters from the dataset.
-
-    This function selects the specified configuration parameters from the dataset
-    and returns them as a DataArray.
-
-    Parameters
-    ----------
-    ds : xr.Dataset
-        The input dataset containing the configuration parameters.
-    params : List[str]
-        A list of configuration parameter names to be selected.
-
-    Returns
-    -------
-    xr.DataArray
-        The selected configuration parameters as a DataArray.
-
-    Examples
-    --------
-    >>> ds = xr.Dataset({'pism_config': (('pism_config_axis',), [1, 2, 3])},
-                        coords={'pism_config_axis': ['param1', 'param2', 'param3']})
-    >>> filter_config(ds, ['param1', 'param3'])
-    <xarray.DataArray 'pism_config' (pism_config_axis: 2)>
-    array([1, 3])
-    Coordinates:
-      * pism_config_axis  (pism_config_axis) <U6 'param1' 'param3'
-    """
-    config = ds.sel(pism_config_axis=params).pism_config
-    return config
 
 
 @timeit
@@ -454,58 +335,6 @@ def prepare_observations(
     )
 
     return obs_basin, obs_grace
-
-
-@timeit
-def config_to_dataframe(
-    config: xr.DataArray, ensemble: Union[str, None] = None
-) -> pd.DataFrame:
-    """
-    Convert an xarray DataArray configuration to a pandas DataFrame.
-
-    This function converts the input DataArray containing configuration data into a
-    pandas DataFrame. The dimensions of the DataArray (excluding 'pism_config_axis')
-    are used as the index, and the 'pism_config_axis' values are used as columns.
-
-    Parameters
-    ----------
-    config : xr.DataArray
-        The input DataArray containing the configuration data.
-    ensemble : Union[str, None], optional
-        An optional string to add as a column named 'ensemble' in the DataFrame, by default None.
-
-    Returns
-    -------
-    pd.DataFrame
-        A DataFrame where the dimensions of the DataArray (excluding 'pism_config_axis')
-        are used as the index, and the 'pism_config_axis' values are used as columns.
-
-    Examples
-    --------
-    >>> config = xr.DataArray(
-    ...     data=[[1, 2, 3], [4, 5, 6]],
-    ...     dims=["time", "pism_config_axis"],
-    ...     coords={"time": [0, 1], "pism_config_axis": ["param1", "param2", "param3"]}
-    ... )
-    >>> df = config_to_dataframe(config)
-    >>> print(df)
-    pism_config_axis  time  param1  param2  param3
-    0                   0       1       2       3
-    1                   1       4       5       6
-
-    >>> df = config_to_dataframe(config, ensemble="ensemble1")
-    >>> print(df)
-    pism_config_axis  time  param1  param2  param3   ensemble
-    0                   0       1       2       3  ensemble1
-    1                   1       4       5       6  ensemble1
-    """
-    dims = [dim for dim in config.dims if dim != "pism_config_axis"]
-    df = config.to_dataframe().reset_index()
-    df = df.pivot(index=dims, columns="pism_config_axis", values="pism_config")
-    df.reset_index(inplace=True)
-    if ensemble:
-        df["ensemble"] = ensemble
-    return df
 
 
 def convert_bstrings_to_str(element: Any) -> Any:
@@ -775,12 +604,18 @@ if __name__ == "__main__":
     png_dir = plot_dir / Path("pngs")
     png_dir.mkdir(parents=True, exist_ok=True)
 
-    plt.rcParams["font.size"] = 6
-
-    flux_vars = config["Flux Variables"]
-    flux_uncertainty_vars = {
-        k + "_uncertainty": v + "_uncertainty" for k, v in flux_vars.items()
+    rcparams = {
+        "axes.linewidth": 0.25,
+        "xtick.direction": "in",
+        "xtick.major.size": 2.5,
+        "xtick.major.width": 0.25,
+        "ytick.direction": "in",
+        "ytick.major.size": 2.5,
+        "ytick.major.width": 0.25,
+        "hatch.linewidth": 0.25,
     }
+
+    plt.rcParams.update(rcparams)
 
     simulated_ds = prepare_simulations(
         basin_files, config, reference_date, parallel=parallel, engine=engine
@@ -865,28 +700,72 @@ if __name__ == "__main__":
         {"time": resampling_frequency}
     ).mean()
 
-    prior_posterior_mankoff = run_sampling(
-        observed=observed_mankoff_basins_resampled_ds,
-        simulated=simulated_mankoff_basins_resampled_ds,
-        filter_range=filter_range,
-        fudge_factor=fudge_factor,
-        params=params,
-        config=config,
-        fig_dir=fig_dir,
+    obs_mean_vars_mankoff: List[str] = ["grounding_line_flux", "mass_balance"]
+    obs_std_vars_mankoff: List[str] = [
+        "grounding_line_flux_uncertainty",
+        "mass_balance_uncertainty",
+    ]
+    sim_vars_mankoff: List[str] = ["grounding_line_flux", "mass_balance"]
+
+    sim_plot_vars = (
+        [ragis_config["Cumulative Variables"]["cumulative_mass_balance"]]
+        + list(ragis_config["Flux Variables"].values())
+        + ["ensemble"]
     )
 
-    prior_posterior_grace = run_sampling(
-        observed=observed_grace_basins_resampled_ds,
-        simulated=simulated_grace_basins_resampled_ds,
-        obs_mean_vars=["mass_balance"],
-        obs_std_vars=["mass_balance_uncertainty"],
-        sim_vars=["mass_balance"],
-        fudge_factor=10,
-        filter_range=filter_range,
-        params=params,
-        config=config,
-        fig_dir=fig_dir,
+    prior_posterior_mankoff, simulated_prior_mankoff, simulated_posterior_mankoff = (
+        run_importance_sampling(
+            observed=observed_mankoff_basins_resampled_ds,
+            simulated=simulated_mankoff_basins_resampled_ds,
+            obs_mean_vars=obs_mean_vars_mankoff,
+            obs_std_vars=obs_std_vars_mankoff,
+            sim_vars=sim_vars_mankoff,
+            filter_range=filter_range,
+            fudge_factor=fudge_factor,
+            params=params,
+        )
     )
+
+    for filter_var in obs_mean_vars_mankoff:
+        plot_basins(
+            observed_mankoff_basins_resampled_ds,
+            simulated_prior_mankoff[sim_plot_vars],
+            simulated_posterior_mankoff.sel({"filtered_by": filter_var})[sim_plot_vars],
+            filter_var=filter_var,
+            filter_range=filter_range,
+            fig_dir=fig_dir,
+            config=config,
+        )
+
+    obs_mean_vars_grace: List[str] = ["mass_balance"]
+    obs_std_vars_grace: List[str] = [
+        "mass_balance_uncertainty",
+    ]
+    sim_vars_grace: List[str] = ["mass_balance"]
+
+    prior_posterior_grace, simulated_prior_grace, simulated_posterior_grace = (
+        run_importance_sampling(
+            observed=observed_grace_basins_resampled_ds,
+            simulated=simulated_grace_basins_resampled_ds,
+            obs_mean_vars=obs_mean_vars_grace,
+            obs_std_vars=obs_std_vars_grace,
+            sim_vars=sim_vars_grace,
+            fudge_factor=fudge_factor,
+            filter_range=filter_range,
+            params=params,
+        )
+    )
+
+    for filter_var in obs_mean_vars_grace:
+        plot_basins(
+            observed_grace_basins_resampled_ds,
+            simulated_prior_grace[sim_plot_vars],
+            simulated_posterior_grace.sel({"filtered_by": filter_var})[sim_plot_vars],
+            filter_var=filter_var,
+            filter_range=filter_range,
+            fig_dir=fig_dir,
+            config=config,
+        )
 
     prior_posterior = pd.concat(
         [prior_posterior_mankoff, prior_posterior_grace]
@@ -910,11 +789,31 @@ if __name__ == "__main__":
     )
 
     bins_dict = config["Posterior Bins"]
+    parameter_catetories = config["Parameter Categories"]
+
+    params_sorted_by_category: dict = {
+        group: [] for group in sorted(parameter_catetories.values())
+    }
+    for param in params:
+        prefix = param.split(".")[0]
+        if prefix in parameter_catetories:
+            group = parameter_catetories[prefix]
+            if param not in params_sorted_by_category[group]:
+                params_sorted_by_category[group].append(param)
+
+    params_sorted_list = list(chain(*params_sorted_by_category.values()))
+    if "frontal_melt.routing.parameter_a" in prior_posterior.columns:
+        prior_posterior["frontal_melt.routing.parameter_a"] *= 10**4
+    if "ocean.th.gamma_T" in prior_posterior.columns:
+        prior_posterior["ocean.th.gamma_T"] *= 10**5
+    if "calving.vonmises_calving.sigma_max" in prior_posterior.columns:
+        prior_posterior["calving.vonmises_calving.sigma_max"] *= 10**-3
+    prior_posterior_sorted = sort_columns(prior_posterior, params_sorted_list)
+
+    params_sorted_dict = {k: params_short_dict[k] for k in params_sorted_list}
     plot_prior_posteriors(
-        prior_posterior.rename(columns=params_short_dict),
-        bins_dict,
+        prior_posterior_sorted.rename(columns=params_sorted_dict),
         fig_dir=fig_dir,
-        config=config,
     )
 
     prior_config = filter_config(simulated.isel({"time": 0}), params)
@@ -944,8 +843,7 @@ if __name__ == "__main__":
     si_dir.mkdir(parents=True, exist_ok=True)
     sensitivity_indices.to_netcdf(si_dir / Path("sensitivity_indices.nc"))
 
-    parameter_groups = config["Parameter Groups"]
-    sensitivity_indices = add_prefix_coord(sensitivity_indices, parameter_groups)
+    sensitivity_indices = add_prefix_coord(sensitivity_indices, parameter_catetories)
 
     # Group by the new coordinate and compute the sum for each group
     indices_vars = [v for v in sensitivity_indices.data_vars if "_conf" not in v]

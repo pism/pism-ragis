@@ -1,23 +1,23 @@
 [Parameters]
 
-'calving.vonmises_calving.sigma_max' = '$\sigma_{\mathrm{max}}$ (Pa)'
+'calving.vonmises_calving.sigma_max' = '$\sigma_{\mathrm{max}}$ (kPa)'
 'calving.rate_scaling.file' = 'Calving'
-'geometry.front_retreat.prescribed.file' = 'Retreat'
-'ocean.th.gamma_T' = '$\gamma$'
-'surface.given.file' = 'Climate'
-'ocean.th.file' = 'Ocean'
-'frontal_melt.routing.parameter_a' = '$a$'
-'frontal_melt.routing.parameter_b' = '$b$'
+'geometry.front_retreat.prescribed.file' = 'Retreat Method'
+'ocean.th.gamma_T' = '$\gamma$ (10$^{-5}$ 1)'
+'surface.given.file' = 'Climate Forcing'
+'ocean.th.file' = 'Ocean Forcing'
+'frontal_melt.routing.parameter_a' = '$a$ (10$^{-4}$ m$^{-\alpha}$ day$^{\alpha-1}$ Celsius$^{-\beta}$)'
+'frontal_melt.routing.parameter_b' = '$b$ (day$^{\alpha-1)}$ Celsius$^{-\beta}$)'
 'frontal_melt.routing.power_alpha' = '$\alpha$ (1)'
 'frontal_melt.routing.power_beta' = '$\beta$ (1)'
 'stress_balance.sia.enhancement_factor' = '$E_{\mathrm{SIA}}$ (1)'
 'stress_balance.ssa.Glen_exponent' = '$n_{\mathrm{SSA}}$ (1)'
 'basal_resistance.pseudo_plastic.q' = '$q$ (1)'
 'basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden' = '$\delta$ (1)'
-'basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min' = '$\phi_{\mathrm{min}}^{\circ{}}$'
-'basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max' = '$\phi_{\mathrm{max}}^{\circ{}}$'
-'basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min' = '$z_{\mathrm{min}}^{\circ{}}$'
-'basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max' = '$z_{\mathrm{min}}^{\circ{}}$'
+'basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min' = '$\phi_{\mathrm{min}} (^{\circ{}})$'
+'basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max' = '$\phi_{\mathrm{max}} (^{\circ{}})$'
+'basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min' = '$z_{\mathrm{min}}$ (m)'
+'basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max' = '$z_{\mathrm{max}}$ (m)'
 
 ['Posterior Bins']
 
@@ -40,7 +40,7 @@
 'basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min' = 10
 'basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max' = 10
 
-['Parameter Groups']
+['Parameter Categories']
 
 "surface" = "Climate"
 "atmosphere" = "Climate"
@@ -58,6 +58,12 @@
 mass_flux = "mass_balance"
 grounding_line_flux = "grounding_line_flux"
 smb_flux = "surface_mass_balance"
+
+['Flux Uncertainty Variables']
+
+mass_flux_uncertainty = "mass_balance_uncertainty"
+grounding_line_flux_uncertainty = "grounding_line_flux_uncertainty"
+smb_flux_uncertainty = "surface_mass_balance_uncertainty"
 
 ['Cumulative Variables']
 

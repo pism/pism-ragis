@@ -114,10 +114,10 @@ if __name__ == "__main__":
 
     short_name = "GREENLAND_MASS_TELLUS_MASCON_CRI_TIME_SERIES_RL06.1_V3"
     results = download_earthaccess(result_dir=p, short_name=short_name)
-
+    grace_file = results[0]
     # Read the data into a pandas DataFrame
     df = pd.read_csv(
-        results[0],
+        grace_file,
         header=32,  # Skip the header lines
         sep="\s+",
         names=[
@@ -135,16 +135,25 @@ if __name__ == "__main__":
     df["time"] = date
 
     ds = xr.Dataset.from_dataframe(df.set_index(df["time"]))
-    ds["mass_balance"] = ds["cumulative_mass_balance"].diff(dim="time")
+    ds["cumulative_mass_balance"].attrs.update({"units": "Gt"})
     ds["cumulative_mass_balance_uncertainty"] = np.sqrt(
         (ds["mass_balance_uncertainty"] ** 2).cumsum(dim="time")
     )
-    ds["cumulative_mass_balance"].attrs.update({"units": "Gt"})
     ds["cumulative_mass_balance_uncertainty"].attrs.update({"units": "Gt"})
-    ds["mass_balance"].attrs.update({"units": "Gt year^-1"})
-    ds["mass_balance_uncertainty"].attrs.update({"units": "Gt year^-1"})
-    ds = ds.expand_dims({"basin": ["GRACE"]}, axis=-1)
+
+    ds = ds.pint.quantify()
+
+    days_in_interval = (
+        (ds.time.diff(dim="time") / np.timedelta64(1, "s"))
+        .pint.quantify("s")
+        .pint.to("year")
+    )
+
+    ds["mass_balance"] = (
+        ds["cumulative_mass_balance"].diff(dim="time") / days_in_interval
+    )
+    ds = ds.expand_dims({"basin": ["GRACE"]})
     fn = "grace_greenland_mass_balance.nc"
     p_fn = p / fn
-    grace_ds = ds
+    grace_ds = ds.pint.dequantify()
     save_netcdf(grace_ds, p_fn)

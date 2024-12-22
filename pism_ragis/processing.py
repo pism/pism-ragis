@@ -951,3 +951,88 @@ def transpose_dataframe(df: pd.DataFrame, exp_id: str) -> pd.DataFrame:
     df.columns = param_names
     df["exp_id"] = exp_id
     return df
+
+
+def filter_config(ds: xr.Dataset, params: list[str]) -> xr.DataArray:
+    """
+    Filter the configuration parameters from the dataset.
+
+    This function selects the specified configuration parameters from the dataset
+    and returns them as a DataArray.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        The input dataset containing the configuration parameters.
+    params : List[str]
+        A list of configuration parameter names to be selected.
+
+    Returns
+    -------
+    xr.DataArray
+        The selected configuration parameters as a DataArray.
+
+    Examples
+    --------
+    >>> ds = xr.Dataset({'pism_config': (('pism_config_axis',), [1, 2, 3])},
+                        coords={'pism_config_axis': ['param1', 'param2', 'param3']})
+    >>> filter_config(ds, ['param1', 'param3'])
+    <xarray.DataArray 'pism_config' (pism_config_axis: 2)>
+    array([1, 3])
+    Coordinates:
+      * pism_config_axis  (pism_config_axis) <U6 'param1' 'param3'
+    """
+    config = ds.sel(pism_config_axis=params).pism_config
+    return config
+
+
+@timeit
+def config_to_dataframe(
+    config: xr.DataArray, ensemble: Union[str, None] = None
+) -> pd.DataFrame:
+    """
+    Convert an xarray DataArray configuration to a pandas DataFrame.
+
+    This function converts the input DataArray containing configuration data into a
+    pandas DataFrame. The dimensions of the DataArray (excluding 'pism_config_axis')
+    are used as the index, and the 'pism_config_axis' values are used as columns.
+
+    Parameters
+    ----------
+    config : xr.DataArray
+        The input DataArray containing the configuration data.
+    ensemble : Union[str, None], optional
+        An optional string to add as a column named 'ensemble' in the DataFrame, by default None.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame where the dimensions of the DataArray (excluding 'pism_config_axis')
+        are used as the index, and the 'pism_config_axis' values are used as columns.
+
+    Examples
+    --------
+    >>> config = xr.DataArray(
+    ...     data=[[1, 2, 3], [4, 5, 6]],
+    ...     dims=["time", "pism_config_axis"],
+    ...     coords={"time": [0, 1], "pism_config_axis": ["param1", "param2", "param3"]}
+    ... )
+    >>> df = config_to_dataframe(config)
+    >>> print(df)
+    pism_config_axis  time  param1  param2  param3
+    0                   0       1       2       3
+    1                   1       4       5       6
+
+    >>> df = config_to_dataframe(config, ensemble="ensemble1")
+    >>> print(df)
+    pism_config_axis  time  param1  param2  param3   ensemble
+    0                   0       1       2       3  ensemble1
+    1                   1       4       5       6  ensemble1
+    """
+    dims = [dim for dim in config.dims if dim != "pism_config_axis"]
+    df = config.to_dataframe().reset_index()
+    df = df.pivot(index=dims, columns="pism_config_axis", values="pism_config")
+    df.reset_index(inplace=True)
+    if ensemble:
+        df["ensemble"] = ensemble
+    return df

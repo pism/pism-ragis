@@ -24,13 +24,18 @@ Module for filtering (calibration).
 
 import logging
 import warnings
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Tuple
 
 import numpy as np
+import pandas as pd
 import xarray as xr
+from dask.diagnostics import ProgressBar
 
+import pism_ragis.processing as prp
 from pism_ragis.decorators import timeit
+from pism_ragis.likelihood import log_normal
 from pism_ragis.logger import get_logger
+from pism_ragis.processing import config_to_dataframe, filter_config
 
 logger: logging.Logger = get_logger("pism_ragis")
 
@@ -262,3 +267,113 @@ def filter_outliers(
     outliers_ds = ds.sel(exp_id=outlier_exp_ids)
     print(f"Ensemble size: {n_members}, outlier-filtered size: {n_members_filtered}\n")
     return filtered_ds, outliers_ds
+
+
+@timeit
+def run_importance_sampling(
+    observed: xr.Dataset,
+    simulated: xr.Dataset,
+    obs_mean_vars: List[str] = ["grounding_line_flux", "mass_balance"],
+    obs_std_vars: List[str] = [
+        "grounding_line_flux_uncertainty",
+        "mass_balance_uncertainty",
+    ],
+    sim_vars: List[str] = ["grounding_line_flux", "mass_balance"],
+    filter_range: List[int] = [1990, 2019],
+    fudge_factor: float = 3.0,
+    params: List[str] = [],
+) -> Tuple[pd.DataFrame, xr.Dataset, xr.Dataset]:
+    """
+    Run sampling to process observed and simulated datasets.
+
+    This function performs importance sampling using the specified observed and simulated datasets,
+    processes the results, and returns a DataFrame with the prior and posterior configurations.
+
+    Parameters
+    ----------
+    observed : xr.Dataset
+        The observed dataset.
+    simulated : xr.Dataset
+        The simulated dataset.
+    obs_mean_vars : List[str], optional
+        A list of variable names for the observed mean values, by default ["grounding_line_flux", "mass_balance"].
+    obs_std_vars : List[str], optional
+        A list of variable names for the observed standard deviation values, by default ["grounding_line_flux_uncertainty", "mass_balance_uncertainty"].
+    sim_vars : List[str], optional
+        A list of variable names for the simulated values, by default ["grounding_line_flux", "mass_balance"].
+    filter_range : List[int], optional
+        A list containing the start and end years for filtering, by default [1990, 2019].
+    fudge_factor : float, optional
+        A fudge factor for the importance sampling, by default 3.0.
+    params : List[str], optional
+        A list of parameter names to be used for filtering configurations, by default [].
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame containing the prior and posterior configurations.
+
+    Examples
+    --------
+    >>> observed = xr.Dataset(...)
+    >>> simulated = xr.Dataset(...)
+    >>> result = run_sampling(observed, simulated)
+    """
+    filter_start_year, filter_end_year = filter_range
+
+    simulated_prior = simulated
+    simulated_prior["ensemble"] = "Prior"
+
+    prior_config = filter_config(simulated.isel({"time": 0}), params)
+    prior_df = config_to_dataframe(prior_config, ensemble="Prior")
+
+    prior_posterior_list = []
+    posterior_list = []
+    for obs_mean_var, obs_std_var, sim_var in zip(
+        obs_mean_vars, obs_std_vars, sim_vars
+    ):
+        print(f"Importance sampling using {obs_mean_var}")
+        f = importance_sampling(
+            simulated=simulated.sel(
+                time=slice(str(filter_start_year), str(filter_end_year))
+            ),
+            observed=observed.sel(
+                time=slice(str(filter_start_year), str(filter_end_year))
+            ),
+            log_likelihood=log_normal,
+            fudge_factor=fudge_factor,
+            n_samples=len(simulated.exp_id),
+            obs_mean_var=obs_mean_var,
+            obs_std_var=obs_std_var,
+            sim_var=sim_var,
+        )
+
+        with ProgressBar() as pbar:
+            result = f.compute()
+            logger.info(
+                "Importance Sampling: Finished in %2.2f seconds", pbar.last_duration
+            )
+
+        importance_sampled_ids = result["exp_id_sampled"]
+        importance_sampled_ids["basin"] = importance_sampled_ids["basin"].astype(str)
+
+        simulated_posterior = simulated.sel(exp_id=importance_sampled_ids)
+        simulated_posterior["ensemble"] = "Posterior"
+        simulated_posterior = simulated_posterior.expand_dims(
+            {"filtered_by": [obs_mean_var]}
+        )
+
+        posterior_config = filter_config(simulated_posterior.isel({"time": 0}), params)
+        posterior_df = config_to_dataframe(posterior_config, ensemble="Posterior")
+
+        prior_posterior_f = pd.concat([prior_df, posterior_df]).reset_index(drop=True)
+        prior_posterior_f["filtered_by"] = obs_mean_var
+        prior_posterior_list.append(prior_posterior_f)
+
+        posterior_list.append(simulated_posterior)
+
+    prior_posterior = pd.concat(prior_posterior_list).reset_index(drop=True)
+    prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)
+    prior = simulated_prior
+    posterior = xr.concat(posterior_list, dim="filtered_by")
+    return prior_posterior, prior, posterior
