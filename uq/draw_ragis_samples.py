@@ -54,7 +54,7 @@ dists: Dict[str, Any] = {
     "ragis": {
         "uq": {
             "calving.vonmises_calving.sigma_max": uniform(loc=350_000, scale=300_000),
-            "calving.rate_scaling.file": randint(0, 7),
+            "calving.rate_scaling.file": randint(0, 5),
             "ocean.th.gamma_T": uniform(loc=0.75e-4, scale=0.75e-4),
             "ocean_file": randint(0, len(gcms)),
             "climate_file": randint(0, len(rcms)),
@@ -316,7 +316,7 @@ def convert_samples(unif_sample):
 
 
 dist_sample, n_samples = convert_samples(unif_sample)
-dist_median_sample = convert_samples(np.median(unif_sample, axis=0, keepdims=True))
+dist_median_sample, _ = convert_samples(np.median(unif_sample, axis=0, keepdims=True))
 
 dist_median_sample[0, 1] = "seasonal_calving_id_2_1900_2025.nc"
 dist_median_sample[0, 3] = gcms[0]
@@ -356,7 +356,7 @@ ensemble_df.to_csv(ensemble_outfile, index=True, index_label="id")
 
 median_outfile = outfile.parent / Path(f"median_{outfile.name}")
 median_df = pd.DataFrame(
-    dist_median_sample, columns=keys, index=["MEDIAN-FREE", "MEDIAN-PRESCRIBED"]
+    dist_median_sample, columns=keys_prior, index=["MEDIAN-FREE", "MEDIAN-PRESCRIBED"]
 )
 median_df.to_csv(median_outfile, index=True, index_label="id")
 

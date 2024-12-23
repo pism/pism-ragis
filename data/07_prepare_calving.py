@@ -22,7 +22,7 @@
 Seasonal calving.
 """
 
-from argparse import ArgumentParser
+
 from pathlib import Path
 from typing import Union
 
@@ -32,7 +32,9 @@ import pandas as pd
 import xarray as xr
 
 
-def smoothed_step_function(time, amplification_factor: float = 1.0):
+def smoothed_step_function(
+    time: pd.DatetimeIndex, amplification_factor: float = 1.0, step_year: int = 2000
+) -> np.ndarray:
     """
     Generate a smoothed step function based on the day of the year.
 
@@ -45,6 +47,8 @@ def smoothed_step_function(time, amplification_factor: float = 1.0):
         A pandas DatetimeIndex representing the time series.
     amplification_factor : float, optional
         The factor by which the function value is amplified during the stay-at-one period, by default 1.0.
+    step_year : int, optional
+        The year at which the amplification factor is applied, by default 2000.
 
     Returns
     -------
@@ -77,7 +81,11 @@ def smoothed_step_function(time, amplification_factor: float = 1.0):
             & (day_of_year > end_ramp_up)
             & (day_of_year < start_ramp_down)
         )
-        values[stay_at_one_mask] = amplification_factor
+        if year >= step_year:
+            values[stay_at_one_mask] = amplification_factor
+        else:
+            values[stay_at_one_mask] = 1
+
         # Ramp down from 1 to 0
         ramp_down_mask = (
             (years == year)
@@ -90,33 +98,10 @@ def smoothed_step_function(time, amplification_factor: float = 1.0):
     return values
 
 
-# set up the option parser
-parser = ArgumentParser()
-parser.add_argument("FILE", nargs="*")
-parser.add_argument(
-    "--year_high",
-    type=float,
-    help="Start when high values are applied.",
-    default=2001,
-)
-parser.add_argument(
-    "--calving_low",
-    type=float,
-    help="Low value.",
-    default=1.0,
-)
-parser.add_argument(
-    "--calving_high",
-    type=float,
-    help="High value.",
-    default=1.5,
-)
-
-options = parser.parse_args()
-amplification_factors = [-1.0, 1.0, 1.05, 1.10, 1.20, 1.50, 2.00]
+amplification_factors = [-1.0, 1.0, 1.05, 1.10, 1.20]
 start_year = 1900
 end_year = 2025
-year_high = 2000
+step_year = 2000
 
 time = xr.date_range(str(start_year), str(end_year), freq="D")
 time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
@@ -133,7 +118,9 @@ for k, amplification_factor in enumerate(amplification_factors):
     print(f"Processing {filename}")
     # Apply the smoothed step function to the time coordinate
     ds = da.to_dataset().copy()
-    data = smoothed_step_function(time_centered)
+    data = smoothed_step_function(
+        time_centered, amplification_factor=amplification_factor, step_year=step_year
+    )
     if amplification_factor == -1.0:
         data *= 0
     ds["frac_calving_rate"].values = data

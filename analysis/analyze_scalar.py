@@ -505,12 +505,6 @@ if __name__ == "__main__":
         default="grounding_line_flux",
     )
     parser.add_argument(
-        "--fudge_factor",
-        help="""Observational uncertainty multiplier. Default=3""",
-        type=float,
-        default=3.0,
-    )
-    parser.add_argument(
         "--notebook",
         help="""Use when running in a notebook to display a nicer progress bar. Default=False.""",
         action="store_true",
@@ -574,7 +568,6 @@ if __name__ == "__main__":
     basin_files = options.FILES
     engine = options.engine
     filter_range = options.filter_range
-    fudge_factor = options.fudge_factor
     notebook = options.notebook
     parallel = options.parallel
     reference_date = options.reference_date
@@ -591,6 +584,8 @@ if __name__ == "__main__":
     params = list(params_short_dict.keys())
     obs_cmap = config["Plotting"]["obs_cmap"]
     sim_cmap = config["Plotting"]["sim_cmap"]
+    grace_fudge_factor = config["Importance Sampling"]["grace_fudge_factor"]
+    mankoff_fudge_factor = config["Importance Sampling"]["mankoff_fudge_factor"]
 
     result_dir = Path(options.result_dir)
     data_dir = result_dir / Path("posteriors")
@@ -615,7 +610,7 @@ if __name__ == "__main__":
         "hatch.linewidth": 0.25,
     }
 
-    plt.rcParams.update(rcparams)
+    mpl.rcParams.update(rcparams)
 
     simulated_ds = prepare_simulations(
         basin_files, config, reference_date, parallel=parallel, engine=engine
@@ -721,7 +716,7 @@ if __name__ == "__main__":
             obs_std_vars=obs_std_vars_mankoff,
             sim_vars=sim_vars_mankoff,
             filter_range=filter_range,
-            fudge_factor=fudge_factor,
+            fudge_factor=mankoff_fudge_factor,
             params=params,
         )
     )
@@ -734,6 +729,7 @@ if __name__ == "__main__":
             filter_var=filter_var,
             filter_range=filter_range,
             fig_dir=fig_dir,
+            fudge_factor=mankoff_fudge_factor,
             config=config,
         )
 
@@ -750,7 +746,7 @@ if __name__ == "__main__":
             obs_mean_vars=obs_mean_vars_grace,
             obs_std_vars=obs_std_vars_grace,
             sim_vars=sim_vars_grace,
-            fudge_factor=fudge_factor,
+            fudge_factor=grace_fudge_factor,
             filter_range=filter_range,
             params=params,
         )
@@ -763,6 +759,7 @@ if __name__ == "__main__":
             simulated_posterior_grace.sel({"filtered_by": filter_var})[sim_plot_vars],
             filter_var=filter_var,
             filter_range=filter_range,
+            fudge_factor=grace_fudge_factor,
             fig_dir=fig_dir,
             config=config,
         )
@@ -805,7 +802,7 @@ if __name__ == "__main__":
     if "frontal_melt.routing.parameter_a" in prior_posterior.columns:
         prior_posterior["frontal_melt.routing.parameter_a"] *= 10**4
     if "ocean.th.gamma_T" in prior_posterior.columns:
-        prior_posterior["ocean.th.gamma_T"] *= 10**5
+        prior_posterior["ocean.th.gamma_T"] *= 10**4
     if "calving.vonmises_calving.sigma_max" in prior_posterior.columns:
         prior_posterior["calving.vonmises_calving.sigma_max"] *= 10**-3
     prior_posterior_sorted = sort_columns(prior_posterior, params_sorted_list)

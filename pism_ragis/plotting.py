@@ -136,6 +136,7 @@ def plot_basins(
     filter_var: str,
     filter_range: List[int] = [1990, 2019],
     fig_dir: Union[str, Path] = "figures",
+    fudge_factor: float = 3.0,
     plot_range: List[int] = [1980, 2020],
     config: Dict = {},
 ):
@@ -160,6 +161,9 @@ def plot_basins(
         A list containing the start and end years for filtering, by default [1990, 2019].
     fig_dir : Union[str, Path], optional
         The directory where figures will be saved, by default "figures".
+    fudge_factor : float, optional
+        A multiplicative factor applied to the observed standard deviation to widen the likelihood function,
+        allowing for greater tolerance in the matching process, by default 3.0.
     plot_range : List[int], optional
         A list containing the start and end years for plotting, by default [1980, 2020].
     config : Dict, optional
@@ -192,6 +196,7 @@ def plot_basins(
                 filter_var=filter_var,
                 filter_range=filter_range,
                 fig_dir=fig_dir,
+                fudge_factor=fudge_factor,
                 obs_alpha=obs_alpha,
                 sim_alpha=sim_alpha,
             )
@@ -268,6 +273,7 @@ def plot_obs_sims(
     filter_var: str,
     filter_range: List[int] = [1990, 2019],
     fig_dir: Union[str, Path] = "figures",
+    fudge_factor: float = 3.0,
     reference_year: float = 1986.0,
     sim_alpha: float = 0.4,
     obs_alpha: float = 1.0,
@@ -294,6 +300,9 @@ def plot_obs_sims(
         Range of years for filtering, by default [1990, 2019].
     fig_dir : Union[str, Path], optional
         Directory to save the figures, by default "figures".
+    fudge_factor : float, optional
+        A multiplicative factor applied to the observed standard deviation to widen the likelihood function,
+        allowing for greater tolerance in the matching process, by default 3.0.
     reference_year : float, optional
         Reference year for cumulative mass balance, by default 1986.0.
     sim_alpha : float, optional
@@ -333,6 +342,11 @@ def plot_obs_sims(
     mass_flux_uncertainty_varname = config["Flux Uncertainty Variables"][
         "mass_flux_uncertainty"
     ]
+
+    if filter_var == "grounding_line_flux":
+        m = -1
+    else:
+        m = 1
 
     with mpl.rc_context({"font.size": fontsize}):
 
@@ -377,6 +391,18 @@ def plot_obs_sims(
                 color=obs_cmap[0],
                 alpha=obs_alpha,
                 lw=0,
+            )
+
+        if filter_var in obs.data_vars:
+            axs[m].fill_between(
+                obs["time"],
+                obs[filter_var] - fudge_factor * obs[filter_var + "_uncertainty"],
+                obs[filter_var] + fudge_factor * obs[filter_var + "_uncertainty"],
+                alpha=0.5,
+                edgecolor="k",
+                facecolor="w",
+                hatch="//",
+                lw=0.25,
             )
 
         sim_cis = []
@@ -459,7 +485,7 @@ def plot_obs_sims(
 
         if sim_posterior is not None:
             y_min, y_max = axs[-1].get_ylim()
-            scaler = y_min + (y_max - y_min) * 0.05
+            scaler = y_min + (y_max - y_min) * 0.0505
             obs_filtered = obs.sel(
                 time=slice(f"{filter_range[0]}", f"{filter_range[-1]}")
             )
@@ -467,14 +493,14 @@ def plot_obs_sims(
             filter_range_ds *= 0
             filter_range_ds += scaler
             _ = filter_range_ds.plot(
-                ax=axs[-1], lw=1, ls="solid", color="k", label="Filtering Range"
+                ax=axs[m], lw=1, ls="solid", color="k", label="Filtering Range"
             )
             x_s = (
                 filter_range_ds.time.values[0]
                 + (filter_range_ds.time.values[-1] - filter_range_ds.time.values[0]) / 2
             )
             y_s = scaler
-            axs[-1].text(
+            axs[m].text(
                 x_s,
                 y_s,
                 "Filtering Range",

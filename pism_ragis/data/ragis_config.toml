@@ -3,7 +3,7 @@
 'calving.vonmises_calving.sigma_max' = '$\sigma_{\mathrm{max}}$ (kPa)'
 'calving.rate_scaling.file' = 'Calving'
 'geometry.front_retreat.prescribed.file' = 'Retreat Method'
-'ocean.th.gamma_T' = '$\gamma$ (10$^{-5}$ 1)'
+'ocean.th.gamma_T' = '$\gamma$ (10$^{-4}$ 1)'
 'surface.given.file' = 'Climate Forcing'
 'ocean.th.file' = 'Ocean Forcing'
 'frontal_melt.routing.parameter_a' = '$a$ (10$^{-4}$ m$^{-\alpha}$ day$^{\alpha-1}$ Celsius$^{-\beta}$)'
@@ -101,5 +101,10 @@ gis = {D = "grounding_line_flux", MB = "mass_balance", SMB = "surface_mass_balan
 sim_alpha = 0.5
 sim_cmap = ["#CC6677", "#882255"]
 obs_alpha = 1.0
-obs_cmap = ["0.8", "0.7"]
+obs_cmap = ["0.8", "0.9"]
 hist_cmap = ["#a6cee3", "#1f78b4"]
+
+['Importance Sampling']
+
+grace_fudge_factor = 10
+mankoff_fudge_factor = 3
