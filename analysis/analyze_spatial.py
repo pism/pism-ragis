@@ -147,24 +147,30 @@ if __name__ == "__main__":
     sim_ds = ds.sel({"time": str(sampling_year)}).mean(dim="time")
 
     observed = xr.open_dataset(options.obs_url, chunks="auto")
-
     observed = observed.where(observed["ice"])
+
     obs_ds = observed.interp_like(sim_ds)
 
-    obs_ds = obs_ds.where(obs_ds["v"] > 200)
-    sim_ds = sim_ds.where(obs_ds["v"] > 200)
+    sim_mask = sim_ds.isnull().sum(dim="exp_id") == 0
+    sim_ds = sim_ds.where(sim_mask)
+    # obs_ds = obs_ds.sel(
+    #     {"x": slice(-225_000, -80_000), "y": slice(-2_350_000, -2_222_000)}
+    # )
+    # sim_ds = sim_ds.sel(
+    #     {"x": slice(-225_000, -80_000), "y": slice(-2_350_000, -2_222_000)}
+    # )
+
     print("Importance sampling using v")
     f = importance_sampling(
         observed=obs_ds,
         simulated=sim_ds,
-        log_likelihood=log_pseudo_huber,
+        log_likelihood=log_normal,
         n_samples=len(ds.exp_id),
-        fudge_factor=5,
+        fudge_factor=10,
         obs_mean_var="v",
         obs_std_var="v_err",
         sim_var="velsurf_mag",
         sum_dim=["x", "y"],
-        likelihood_kwargs={"delta": 1.35},
     )
     with ProgressBar():
         filtered_ids = f.compute()

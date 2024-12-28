@@ -185,6 +185,7 @@ def importance_sampling(
     # Compute the log-likelihood of each simulated data point
     n = np.prod([observed.sizes[d] for d in sum_dim])
     log_likes = log_likelihood(sim, obs_mean, obs_std, n=n, **likelihood_kwargs)
+    log_likes = log_likes.where(log_likes != 0, np.nan)
     log_likes.name = "log_likes"
     log_likes_sum = log_likes.sum(dim=sum_dim)
     log_likes_scaled = log_likes_sum - log_likes_sum.mean(dim=dim)
@@ -206,7 +207,7 @@ def filter_outliers(
     outlier_variable: str,
     freq: str = "YS",
     subset: Dict[str, str | int] = {"basin": "GIS", "ensemble_id": "RAGIS"},
-):
+) -> Tuple[xr.Dataset, xr.Dataset]:
     """
     Filter outliers from a dataset based on a specified variable and range.
 
@@ -229,7 +230,7 @@ def filter_outliers(
 
     Returns
     -------
-    tuple
+    Tuple[xr.Dataset, xr.Dataset]
         A tuple containing two xarray.Dataset objects:
         - The filtered dataset without outliers.
         - The dataset containing only the outliers.
@@ -310,14 +311,11 @@ def run_importance_sampling(
 
     Returns
     -------
-    pd.DataFrame
-        A DataFrame containing the prior and posterior configurations.
-
-    Examples
-    --------
-    >>> observed = xr.Dataset(...)
-    >>> simulated = xr.Dataset(...)
-    >>> result = run_sampling(observed, simulated)
+    Tuple[pd.DataFrame, xr.Dataset, xr.Dataset]
+        A tuple containing:
+        - A DataFrame with the prior and posterior configurations.
+        - The prior simulated dataset.
+        - The posterior simulated dataset.
     """
     filter_start_year, filter_end_year = filter_range
 

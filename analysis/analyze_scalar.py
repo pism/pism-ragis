@@ -16,49 +16,45 @@
 # along with PISM; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-# pylint: disable=unused-import,too-many-positional-arguments
+# pylint: disable=too-many-positional-arguments
 
 """
 Analyze RAGIS ensemble.
 """
 
-import copy
 import json
-import time
 import warnings
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
-from functools import wraps
 from importlib.resources import files
 from itertools import chain
 from pathlib import Path
-from typing import Any, Callable, Dict, Hashable, List, Mapping, Union
+from typing import Any, Callable, Dict, List, Union
 
-import dask
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
 import toml
 import xarray as xr
-from dask.diagnostics import ProgressBar
 from dask.distributed import Client, progress
-from joblib import Parallel, delayed
-from tqdm.auto import tqdm
 
 import pism_ragis.processing as prp
-from pism_ragis.analyze import delta_analysis, sobol_analysis
-from pism_ragis.decorators import profileit, timeit
+from pism_ragis.analyze import delta_analysis
+from pism_ragis.decorators import timeit
 from pism_ragis.filtering import filter_outliers, run_importance_sampling
 from pism_ragis.logger import get_logger
 from pism_ragis.plotting import (
     plot_basins,
     plot_outliers,
+    plot_posteriors,
     plot_prior_posteriors,
     plot_sensitivity_indices,
 )
-from pism_ragis.processing import config_to_dataframe, filter_config
+from pism_ragis.processing import (
+    config_to_dataframe,
+    filter_config,
+    filter_retreat_experiments,
+)
 
 logger = get_logger("pism_ragis")
 
@@ -74,7 +70,7 @@ warnings.filterwarnings(
 )
 
 
-def sort_columns(df: pd.DataFrame, sorted_columns: list) -> pd.DataFrame:
+def sort_columns(df: pd.DataFrame, sorted_columns: List[str]) -> pd.DataFrame:
     """
     Sort columns of a DataFrame.
 
@@ -86,7 +82,7 @@ def sort_columns(df: pd.DataFrame, sorted_columns: list) -> pd.DataFrame:
     ----------
     df : pd.DataFrame
         The input DataFrame to be sorted.
-    sorted_columns : list
+    sorted_columns : List[str]
         A list of column names to be sorted.
 
     Returns
@@ -105,7 +101,7 @@ def sort_columns(df: pd.DataFrame, sorted_columns: list) -> pd.DataFrame:
 
 
 def add_prefix_coord(
-    sensitivity_indices: xr.Dataset, parameter_groups: Dict
+    sensitivity_indices: xr.Dataset, parameter_groups: Dict[str, str]
 ) -> xr.Dataset:
     """
     Add prefix coordinates to an xarray Dataset.
@@ -118,7 +114,7 @@ def add_prefix_coord(
     ----------
     sensitivity_indices : xr.Dataset
         The input dataset containing sensitivity indices.
-    parameter_groups : Dict
+    parameter_groups : Dict[str, str]
         A dictionary mapping parameter names to their corresponding groups.
 
     Returns
@@ -200,7 +196,7 @@ def prepare_input(
 @timeit
 def prepare_simulations(
     filenames: List[Union[Path, str]],
-    config: Dict,
+    config: Dict[str, Any],
     reference_date: str,
     parallel: bool = True,
     engine: str = "h5netcdf",
@@ -218,7 +214,7 @@ def prepare_simulations(
     ----------
     filenames : List[Union[Path, str]]
         A list of file paths to the ensemble datasets.
-    config : Dict
+    config : Dict[str, Any]
         A dictionary containing configuration settings for processing the datasets.
     reference_date : str
         The reference date for normalizing cumulative variables.
@@ -271,10 +267,10 @@ def prepare_simulations(
 def prepare_observations(
     basin_url: Union[Path, str],
     grace_url: Union[Path, str],
-    config: Dict,
+    config: Dict[str, Any],
     reference_date: str,
     engine: str = "h5netcdf",
-) -> tuple:
+) -> tuple[xr.Dataset, xr.Dataset]:
     """
     Prepare observation datasets by normalizing cumulative variables.
 
@@ -287,7 +283,7 @@ def prepare_observations(
         The URL or path to the basin observation dataset.
     grace_url : Union[Path, str]
         The URL or path to the GRACE observation dataset.
-    config : Dict
+    config : Dict[str, Any]
         A dictionary containing configuration settings for processing the datasets.
     reference_date : str
         The reference date for normalizing cumulative variables.
@@ -296,7 +292,7 @@ def prepare_observations(
 
     Returns
     -------
-    tuple
+    tuple[xr.Dataset, xr.Dataset]
         A tuple containing the processed basin and GRACE observation datasets.
 
     Examples
@@ -399,7 +395,6 @@ def run_sensitivity_analysis(
     to avoid each Dask worker loading the dataset separately, which would
     significantly slow down the computation.
     """
-
     print("Calculating Sensitivity Indices")
     print("===============================")
 
@@ -624,24 +619,7 @@ if __name__ == "__main__":
         engine=engine,
     )
 
-    # Select the relevant pism_config_axis
-    retreat = simulated_ds.sel(
-        pism_config_axis="geometry.front_retreat.prescribed.file"
-    ).compute()
-
-    if retreat_method == "free":
-        retreat_exp_ids = retreat.where(
-            retreat["pism_config"] == "false", drop=True
-        ).exp_id.values
-    elif retreat_method == "prescribed":
-        retreat_exp_ids = retreat.where(
-            retreat["pism_config"] != "false", drop=True
-        ).exp_id.values
-    else:
-        retreat_exp_ids = simulated_ds.exp_id
-
-    # Select the Dataset with the filtered exp_ids
-    simulated_ds = simulated_ds.sel(exp_id=retreat_exp_ids)
+    simulated_ds = filter_retreat_experiments(simulated_ds, retreat_method)
 
     filtered_ds, outliers_ds = filter_outliers(
         simulated_ds,
@@ -764,10 +742,6 @@ if __name__ == "__main__":
             config=config,
         )
 
-    prior_posterior = pd.concat(
-        [prior_posterior_mankoff, prior_posterior_grace]
-    ).reset_index(drop=True)
-
     column_function_mapping: Dict[str, List[Callable]] = {
         "surface.given.file": [prp.simplify_path, prp.simplify_climate],
         "ocean.th.file": [prp.simplify_path, prp.simplify_ocean],
@@ -778,16 +752,11 @@ if __name__ == "__main__":
     # Apply the functions to the corresponding columns
     for col, functions in column_function_mapping.items():
         for func in functions:
-            prior_posterior[col] = prior_posterior[col].apply(func)
-
-    prior_posterior.to_parquet(
-        data_dir
-        / Path(f"""prior_posterior_{filter_range[0]}-{filter_range[1]}.parquet""")
-    )
+            prior_posterior_mankoff[col] = prior_posterior_mankoff[col].apply(func)
+            prior_posterior_grace[col] = prior_posterior_grace[col].apply(func)
 
     bins_dict = config["Posterior Bins"]
     parameter_catetories = config["Parameter Categories"]
-
     params_sorted_by_category: dict = {
         group: [] for group in sorted(parameter_catetories.values())
     }
@@ -799,17 +768,54 @@ if __name__ == "__main__":
                 params_sorted_by_category[group].append(param)
 
     params_sorted_list = list(chain(*params_sorted_by_category.values()))
-    if "frontal_melt.routing.parameter_a" in prior_posterior.columns:
-        prior_posterior["frontal_melt.routing.parameter_a"] *= 10**4
-    if "ocean.th.gamma_T" in prior_posterior.columns:
-        prior_posterior["ocean.th.gamma_T"] *= 10**4
-    if "calving.vonmises_calving.sigma_max" in prior_posterior.columns:
-        prior_posterior["calving.vonmises_calving.sigma_max"] *= 10**-3
+    if "frontal_melt.routing.parameter_a" in prior_posterior_mankoff.columns:
+        prior_posterior_mankoff["frontal_melt.routing.parameter_a"] *= 10**4
+    if "frontal_melt.routing.parameter_a" in prior_posterior_grace.columns:
+        prior_posterior_grace["frontal_melt.routing.parameter_a"] *= 10**4
+    if "ocean.th.gamma_T" in prior_posterior_mankoff.columns:
+        prior_posterior_mankoff["ocean.th.gamma_T"] *= 10**4
+    if "ocean.th.gamma_T" in prior_posterior_grace.columns:
+        prior_posterior_grace["ocean.th.gamma_T"] *= 10**4
+    if "calving.vonmises_calving.sigma_max" in prior_posterior_mankoff.columns:
+        prior_posterior_mankoff["calving.vonmises_calving.sigma_max"] *= 10**-3
+    if "calving.vonmises_calving.sigma_max" in prior_posterior_grace.columns:
+        prior_posterior_mankoff["calving.vonmises_calving.sigma_max"] *= 10**-3
+
+    prior_posterior = pd.concat(
+        [prior_posterior_mankoff, prior_posterior_grace]
+    ).reset_index(drop=True)
+
+    prior_posterior.to_parquet(
+        data_dir
+        / Path(f"""prior_posterior_{filter_range[0]}-{filter_range[1]}.parquet""")
+    )
+
     prior_posterior_sorted = sort_columns(prior_posterior, params_sorted_list)
+    prior_posterior_mankoff_sorted = sort_columns(
+        prior_posterior_mankoff, params_sorted_list
+    )
+    prior_posterior_grace = _sorted = sort_columns(
+        prior_posterior_grace, params_sorted_list
+    )
 
     params_sorted_dict = {k: params_short_dict[k] for k in params_sorted_list}
+    bins_sorted_dict = {params_short_dict[k]: bins_dict[k] for k in params_sorted_list}
     plot_prior_posteriors(
         prior_posterior_sorted.rename(columns=params_sorted_dict),
+        fig_dir=fig_dir,
+        bins_dict=bins_sorted_dict,
+    )
+
+    da = observed_mankoff_basins_resampled_ds.sel(
+        time=slice(f"{filter_range[0]}", f"{filter_range[-1]}")
+    ).grounding_line_flux.mean(dim="time")
+    posterior_basins_sorted = observed_mankoff_basins_resampled_ds.basin.sortby(
+        da
+    ).values
+
+    plot_posteriors(
+        prior_posterior_mankoff_sorted.rename(columns=params_sorted_dict),
+        order=posterior_basins_sorted,
         fig_dir=fig_dir,
     )
 

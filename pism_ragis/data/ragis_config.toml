@@ -22,11 +22,11 @@
 ['Posterior Bins']
 
 'calving.vonmises_calving.sigma_max' = 10
-'calving.rate_scaling.file' = 7
+'calving.rate_scaling.file' = 5
 'geometry.front_retreat.prescribed.file' = 2
 'ocean.th.gamma_T' = 5
 'surface.given.file' = 3
-'ocean.th.file' = 11
+'ocean.th.file' = 9
 'frontal_melt.routing.parameter_a' = 10
 'frontal_melt.routing.parameter_b' = 10
 'frontal_melt.routing.power_alpha' = 10
@@ -106,5 +106,5 @@ hist_cmap = ["#a6cee3", "#1f78b4"]
 
 ['Importance Sampling']
 
-grace_fudge_factor = 10
+grace_fudge_factor = 5
 mankoff_fudge_factor = 3

@@ -30,7 +30,7 @@ import shutil
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Dict, Hashable, List, Mapping, Union
+from typing import Any, Dict, Hashable, List, Literal, Mapping, Union
 
 import joblib
 import numpy as np
@@ -634,12 +634,16 @@ def load_ensemble(
         The loaded xarray Dataset containing the ensemble data.
     """
     print("Loading ensemble files... ", end="", flush=True)
-    ds = xr.open_mfdataset(
-        filenames,
-        parallel=parallel,
-        preprocess=preprocess,
-        engine=engine,
-    ).drop_vars(["spatial_ref", "mapping"], errors="ignore")
+    ds = (
+        xr.open_mfdataset(
+            filenames,
+            parallel=parallel,
+            preprocess=preprocess,
+            engine=engine,
+        )
+        .drop_vars(["spatial_ref", "mapping"], errors="ignore")
+        .dropna(dim="exp_id")
+    )
     print("Done.")
     return ds
 
@@ -878,15 +882,14 @@ def simplify_ocean(my_str: str) -> int:
     gcms: Dict[str, int] = {
         "ACCESS1-3_rcp85": 0,
         "CNRM-CM6_ssp126": 1,
-        "CNRM-CM6_ssp585": 2,
-        "CNRM-ESM2_ssp585": 3,
-        "CSIRO-Mk3.6_rcp85": 4,
-        "HadGEM2-ES_rcp85": 5,
-        "IPSL-CM5-MR_rcp85": 6,
-        "MIROC-ESM-CHEM_rcp26": 7,
-        "MIROC-ESM-CHEM_rcp85": 8,
-        "NorESM1-M_rcp85": 9,
-        "UKESM1-CM6_ssp585": 10,
+        "CNRM-ESM2_ssp585": 2,
+        "CSIRO-Mk3.6_rcp85": 3,
+        "HadGEM2-ES_rcp85": 4,
+        "IPSL-CM5-MR_rcp85": 5,
+        "MIROC-ESM-CHEM_rcp26": 6,
+        "MIROC-ESM-CHEM_rcp85": 7,
+        "NorESM1-M_rcp85": 8,
+        "UKESM1-CM6_ssp585": 9,
     }
 
     gcm = "_".join(my_str.split("_")[1:3])
@@ -1036,3 +1039,61 @@ def config_to_dataframe(
     if ensemble:
         df["ensemble"] = ensemble
     return df
+
+
+@timeit
+def filter_retreat_experiments(
+    ds: xr.Dataset, retreat_method: Literal["free", "prescribed", "all"]
+) -> xr.Dataset:
+    """
+    Filter retreat experiments based on the retreat method.
+
+    This function filters the dataset to include only the experiments that match the specified
+    retreat method. The retreat method can be "free", "prescribed", or "all".
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        The input dataset containing the retreat experiments.
+    retreat_method : {"free", "prescribed", "all"}
+        The retreat method to filter by. "free" selects experiments with no prescribed retreat,
+        "prescribed" selects experiments with a prescribed retreat, and "all" selects all experiments.
+
+    Returns
+    -------
+    xr.Dataset
+        The filtered dataset containing only the experiments that match the specified retreat method.
+
+    Examples
+    --------
+    >>> ds = xr.Dataset({'pism_config': (('exp_id', 'pism_config_axis'), [[1, 2], [3, 4]])},
+    ...                 coords={'exp_id': [0, 1], 'pism_config_axis': ['param1', 'geometry.front_retreat.prescribed.file']})
+    >>> filter_retreat_experiments(ds, 'free')
+    <xarray.Dataset>
+    Dimensions:         (exp_id: 1, pism_config_axis: 2)
+    Coordinates:
+      * exp_id          (exp_id) int64 0
+      * pism_config_axis (pism_config_axis) <U36 'param1' 'geometry.front_retreat.prescribed.file'
+    Data variables:
+        pism_config     (exp_id, pism_config_axis) int64 1 2
+    """
+    # Select the relevant pism_config_axis
+    retreat = ds.sel(
+        pism_config_axis="geometry.front_retreat.prescribed.file"
+    ).compute()
+
+    if retreat_method == "free":
+        retreat_exp_ids = retreat.where(
+            retreat["pism_config"] == "false", drop=True
+        ).exp_id.values
+    elif retreat_method == "prescribed":
+        retreat_exp_ids = retreat.where(
+            retreat["pism_config"] != "false", drop=True
+        ).exp_id.values
+    else:
+        retreat_exp_ids = ds.exp_id
+
+    # Select the Dataset with the filtered exp_ids
+    ds = ds.sel(exp_id=retreat_exp_ids)
+
+    return ds

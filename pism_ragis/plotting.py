@@ -48,10 +48,96 @@ sim_cmap = config["Plotting"]["sim_cmap"]
 
 
 @timeit
+def plot_posteriors(
+    df: pd.DataFrame,
+    order: List[str] | None = None,
+    fig_dir: Union[str, Path] = "figures",
+    fontsize: float = 4,
+):
+    """
+    Plot violin plots of posterior distributions.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing the data to plot.
+    order : List[str] or None, optional
+        Order of the basins for the y-axis, by default None.
+    fig_dir : Union[str, Path], optional
+        Directory to save the figures, by default "figures".
+    fontsize : float, optional
+        Font size for the plot, by default 4.
+    """
+
+    plot_dir = fig_dir / Path("basin_histograms")
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    pdf_dir = plot_dir / Path("pdfs")
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    png_dir = plot_dir / Path("pngs")
+    png_dir.mkdir(parents=True, exist_ok=True)
+
+    rc_params = {
+        "font.size": fontsize,
+        # Add other rcParams settings if needed
+    }
+
+    with mpl.rc_context(rc=rc_params):
+        m_df = df.drop(columns=["exp_id"])
+        fig, axs = plt.subplots(
+            3,
+            6,
+            sharey=True,
+            figsize=[6.4, 5.2],
+        )
+        fig.subplots_adjust(hspace=0.1, wspace=0.1)
+        for k, v in enumerate(
+            m_df.drop(columns=["ensemble", "basin", "filtered_by"]).columns
+        ):
+            legend = bool(k == 0)
+            ax = axs.ravel()[k]
+            try:
+                _ = sns.violinplot(
+                    data=m_df,
+                    x=v,
+                    y="basin",
+                    order=order,
+                    linewidth=0.25,
+                    cut=0,
+                    gap=0.1,
+                    split=True,
+                    inner="quart",
+                    hue="filtered_by",
+                    orient="h",
+                    palette=["#DDCC77", "#CC6677"],
+                    ax=ax,
+                    legend=legend,
+                )
+            except:
+                pass
+
+            if legend:
+                ax.get_legend().set_title(None)
+                ax.get_legend().get_frame().set_linewidth(0.0)
+                ax.get_legend().get_frame().set_alpha(0.0)
+
+            if k > len(m_df.drop(columns=["ensemble", "basin", "filtered_by"]).columns):
+                ax.set_visible(False)
+
+        fig.tight_layout()
+        fn = pdf_dir / Path("posteriors_violinplots.pdf")
+        fig.savefig(fn)
+        fn = png_dir / Path("posteriors_violinplots.png")
+        fig.savefig(fn, dpi=300)
+        plt.close()
+        del fig
+
+
+@timeit
 def plot_prior_posteriors(
     df: pd.DataFrame,
     fig_dir: Union[str, Path] = "figures",
     fontsize: float = 4,
+    bins_dict: dict = {},
 ):
     """
     Plot histograms of prior and posterior distributions.
@@ -64,6 +150,8 @@ def plot_prior_posteriors(
         Directory to save the figures, by default "figures".
     fontsize : float, optional
         Font size for the plot, by default 4.
+    bins_dict : dict, optional
+        Dictionary specifying the number of bins for each variable, by default {}.
     """
 
     plot_dir = fig_dir / Path("basin_histograms")
@@ -81,51 +169,64 @@ def plot_prior_posteriors(
     }
 
     with mpl.rc_context(rc=rc_params):
-        for (basin, filter_var), m_df in df.groupby(by=group_columns):
-            m_df = m_df.drop(columns=group_columns + ["exp_id"])
-            fig, axs = plt.subplots(
-                3,
-                6,
-                sharey=False,
-                figsize=[6.2, 3.2],
-            )
-            fig.subplots_adjust(hspace=0.5, wspace=0.22)
-            for k, v in enumerate(m_df.drop(columns=["ensemble"]).columns):
-                legend = bool(k == 1)
-                try:
-                    _ = sns.histplot(
-                        data=m_df,
-                        x=v,
-                        hue="ensemble",
-                        hue_order=["Prior", "Posterior"],
-                        palette=sim_cmap,
-                        common_norm=False,
-                        stat="count",
-                        multiple="dodge",
-                        alpha=0.8,
-                        linewidth=0.2,
-                        ax=axs.ravel()[k],
-                        legend=legend,
-                    )
-                except:
-                    pass
-                if legend:
-                    axs.ravel()[k].get_legend().set_title(None)
-                    axs.ravel()[k].get_legend().get_frame().set_linewidth(0.0)
-                    axs.ravel()[k].get_legend().get_frame().set_alpha(0.0)
+        with tqdm(
+            desc="Plotting prior and posterior histograms",
+            total=len(df["basin"].unique()),
+        ) as progress_bar:
+            for (basin, filter_var), m_df in df.groupby(by=group_columns):
+                m_df = m_df.drop(columns=group_columns + ["exp_id"])
+                fig, axs = plt.subplots(
+                    3,
+                    6,
+                    sharey=True,
+                    figsize=[6.4, 3.2],
+                )
+                fig.subplots_adjust(hspace=0.5, wspace=0.1)
+                for k, v in enumerate(m_df.drop(columns=["ensemble"]).columns):
+                    legend = bool(k == 1)
+                    try:
+                        ax = axs.ravel()[k]
+                        _ = sns.histplot(
+                            data=m_df,
+                            x=v,
+                            hue="ensemble",
+                            hue_order=["Prior", "Posterior"],
+                            palette=sim_cmap,
+                            bins=bins_dict[v],
+                            common_norm=False,
+                            stat="probability",
+                            multiple="dodge",
+                            alpha=0.8,
+                            linewidth=0.2,
+                            ax=axs.ravel()[k],
+                            legend=legend,
+                        )
+                    except:
+                        ax.set_visible(False)
+                    if legend:
+                        ax.get_legend().set_title(None)
+                        ax.get_legend().get_frame().set_linewidth(0.0)
+                        ax.get_legend().get_frame().set_alpha(0.0)
 
-            for ax in axs.flatten():
-                ax.set_ylabel("")
-                # ax.set_ylim(0, 1)
-                ticklabels = ax.get_xticklabels()
-                for tick in ticklabels:
-                    tick.set_rotation(15)
-            fn = pdf_dir / Path(f"{basin}_prior_posterior_filtered_by_{filter_var}.pdf")
-            fig.savefig(fn)
-            fn = png_dir / Path(f"{basin}_prior_posterior_filtered_by_{filter_var}.png")
-            fig.savefig(fn, dpi=300)
-            plt.close()
-            del fig
+                for ax in axs.flatten():
+                    ax.set_ylabel("")
+                    ax.set_ylim(0, 1)
+                    ticklabels = ax.get_xticklabels()
+                    for tick in ticklabels:
+                        tick.set_rotation(15)
+
+                fig.tight_layout()
+                fn = pdf_dir / Path(
+                    f"{basin}_prior_posterior_filtered_by_{filter_var}.pdf"
+                )
+                fig.savefig(fn)
+                fn = png_dir / Path(
+                    f"{basin}_prior_posterior_filtered_by_{filter_var}.png"
+                )
+                fig.savefig(fn, dpi=300)
+                plt.close()
+                del fig
+                progress_bar.update()
 
 
 @timeit
@@ -206,6 +307,7 @@ def plot_basins(
 @timeit
 def plot_sensitivity_indices(
     ds: xr.Dataset,
+    dim: str = "sensitivity_indices_group",
     indices_var: str = "S1",
     indices_conf_var: str = "S1_conf",
     basin: str = "",
@@ -220,12 +322,14 @@ def plot_sensitivity_indices(
     ----------
     ds : xr.Dataset
         The dataset containing sensitivity indices and confidence intervals.
+    dim : str, optional
+        The dimension name for sensitivity indices groups, by default "sensitivity_indices_group".
     indices_var : str, optional
         The variable name for sensitivity indices in the dataset, by default "S1".
     indices_conf_var : str, optional
         The variable name for confidence intervals of sensitivity indices in the dataset, by default "S1_conf".
-    basin : str
-        The basin parameter to be used in the plot.
+    basin : str, optional
+        The basin parameter to be used in the plot, by default "".
     filter_var : str, optional
         The variable used for filtering, by default "".
     fig_dir : Union[str, Path], optional
@@ -242,10 +346,10 @@ def plot_sensitivity_indices(
 
     with mpl.rc_context({"font.size": fontsize}):
 
-        fig, ax = plt.subplots(1, 1, figsize=(6.2, 3.6))
-        for g in ds.sensitivity_indices_group:
-            indices_da = ds[indices_var].sel(sensitivity_indices_group=g)
-            conf_da = ds[indices_conf_var].sel(sensitivity_indices_group=g)
+        fig, ax = plt.subplots(1, 1, figsize=(3.2, 1.8))
+        for g in ds[dim]:
+            indices_da = ds[indices_var].sel({dim: g})
+            conf_da = ds[indices_conf_var].sel({dim: g})
             ax.fill_between(
                 indices_da.time,
                 (indices_da - conf_da),
@@ -253,7 +357,7 @@ def plot_sensitivity_indices(
                 alpha=0.25,
             )
             indices_da.plot(
-                hue="sensitivity_indices_group", ax=ax, lw=0.75, label=g.values
+                hue="sensitivity_indices_group", ax=ax, lw=0.5, label=g.values
             )
         legend = ax.legend(loc="upper left")
         legend.get_frame().set_linewidth(0.0)
@@ -354,7 +458,7 @@ def plot_obs_sims(
             3,
             1,
             sharex=True,
-            figsize=(6.2, 3.6),
+            figsize=(6.4, 3.6),
             height_ratios=[2, 1, 1],
         )
         fig.subplots_adjust(hspace=0.05, wspace=0.05)
@@ -393,17 +497,26 @@ def plot_obs_sims(
                 lw=0,
             )
 
-        if filter_var in obs.data_vars:
-            axs[m].fill_between(
-                obs["time"],
-                obs[filter_var] - fudge_factor * obs[filter_var + "_uncertainty"],
-                obs[filter_var] + fudge_factor * obs[filter_var + "_uncertainty"],
-                alpha=0.5,
-                edgecolor="k",
-                facecolor="w",
-                hatch="//",
-                lw=0.25,
+        if (sim_posterior is not None) and (filter_var in obs.data_vars):
+            obs_filtered = obs.sel(
+                time=slice(f"{filter_range[0]}", f"{filter_range[-1]}")
             )
+            obs_filtered_ci = axs[m].fill_between(
+                obs_filtered["time"],
+                obs_filtered[filter_var]
+                - fudge_factor * obs_filtered[filter_var + "_uncertainty"],
+                obs_filtered[filter_var]
+                + fudge_factor * obs_filtered[filter_var + "_uncertainty"],
+                alpha=1.0,
+                edgecolor="k",
+                facecolor="none",
+                hatch="///",
+                lw=0.25,
+                label="Filtering Range",
+            )
+            l_f = axs[m].legend(handles=[obs_filtered_ci], loc="lower left")
+            l_f.get_frame().set_linewidth(0.0)
+            l_f.get_frame().set_alpha(0.0)
 
         sim_cis = []
         if sim_prior is not None:
@@ -483,30 +596,6 @@ def plot_obs_sims(
                     color=sim_cmap[1],
                 )
 
-        if sim_posterior is not None:
-            y_min, y_max = axs[-1].get_ylim()
-            scaler = y_min + (y_max - y_min) * 0.0505
-            obs_filtered = obs.sel(
-                time=slice(f"{filter_range[0]}", f"{filter_range[-1]}")
-            )
-            filter_range_ds = obs_filtered[mass_cumulative_varname]
-            filter_range_ds *= 0
-            filter_range_ds += scaler
-            _ = filter_range_ds.plot(
-                ax=axs[m], lw=1, ls="solid", color="k", label="Filtering Range"
-            )
-            x_s = (
-                filter_range_ds.time.values[0]
-                + (filter_range_ds.time.values[-1] - filter_range_ds.time.values[0]) / 2
-            )
-            y_s = scaler
-            axs[m].text(
-                x_s,
-                y_s,
-                "Filtering Range",
-                horizontalalignment="center",
-                fontweight="medium",
-            )
         legend = axs[0].legend(
             handles=[obs_ci, *sim_cis],
         )
