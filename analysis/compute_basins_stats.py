@@ -19,7 +19,7 @@
 Compute basins.
 """
 
-# pylint: disable=redefined-outer-name
+# pylint: disable=redefined-outer-name,unused-import
 
 import re
 import time
@@ -31,6 +31,7 @@ from typing import Union
 import dask
 import geopandas as gp
 import numpy as np
+import pint_xarray
 import xarray as xr
 from dask.distributed import Client, progress
 
@@ -141,20 +142,6 @@ if __name__ == "__main__":
             ds = ds.sel(
                 time=slice(options.temporal_range[0], options.temporal_range[1])
             )
-    bmb_var = "tendency_of_ice_mass_due_to_basal_mass_flux"
-    if bmb_var in ds:
-        bmb_grounded_da = ds[bmb_var].where(ds["mask"] == 2)
-        bmb_grounded_da.name = "tendency_of_ice_mass_due_to_basal_mass_flux_grounded"
-        bmb_floating_da = ds[bmb_var].where(ds["mask"] == 3)
-        bmb_floating_da.name = "tendency_of_ice_mass_due_to_basal_mass_flux_floating"
-        ds = xr.merge([ds, bmb_grounded_da, bmb_floating_da])
-
-    del ds["time"].attrs["bounds"]
-    ds = ds.drop_vars(
-        ["time_bounds", "timestamp"], errors="ignore"
-    ).rio.set_spatial_dims(x_dim="x", y_dim="y")
-    ds.rio.write_crs(crs, inplace=True)
-
     p_config = ds["pism_config"]
     p_run_stats = ds["run_stats"]
 
@@ -195,6 +182,45 @@ if __name__ == "__main__":
         coords={"run_stats_axis": rs_keys, "exp_id": m_id},
         name="run_stats",
     )
+
+    bmb_var = "tendency_of_ice_mass_due_to_basal_mass_flux"
+    if bmb_var in ds:
+        bmb_grounded_da = ds[bmb_var].where(ds["mask"] == 2)
+        bmb_grounded_da.name = "tendency_of_ice_mass_due_to_basal_mass_flux_grounded"
+        bmb_floating_da = ds[bmb_var].where(ds["mask"] == 3)
+        bmb_floating_da.name = "tendency_of_ice_mass_due_to_basal_mass_flux_floating"
+        ds = xr.merge([ds, bmb_grounded_da, bmb_floating_da])
+
+    fm_var = "tendency_of_ice_mass_due_to_frontal_melt"
+    if fm_var in ds:
+        fm_da = ds[fm_var].pint.quantify()
+        fm_da = fm_da.where(fm_da != 0, np.nan)
+        config_ice_density = float(
+            pism_config.sel({"pism_config_axis": "constants.ice.density"}).values
+        )
+        dx = float(pism_config.sel({"pism_config_axis": "grid.dx"}).values)
+        dy = float(pism_config.sel({"pism_config_axis": "grid.dy"}).values)
+
+        area = xr.DataArray(dx * dy).pint.quantify("m^2")
+        ice_density = (
+            xr.DataArray(config_ice_density).pint.quantify("kg m^-3").pint.to("Gt m^-3")
+        )
+        fm_rate_da = (fm_da / area / ice_density).pint.to("m day^-1").pint.dequantify()
+        fm_rate_da.name = "frontal_melt_rate"
+        fm_rate_ds = (
+            fm_rate_da.to_dataset()
+            .drop_vars(["time_bounds", "timestamp"], errors="ignore")
+            .rio.set_spatial_dims(x_dim="x", y_dim="y")
+        )
+        fm_rate_ds.rio.write_crs(crs, inplace=True)
+        del fm_rate_ds["time"].attrs["bounds"]
+
+    del ds["time"].attrs["bounds"]
+    ds = ds.drop_vars(
+        ["time_bounds", "timestamp"], errors="ignore"
+    ).rio.set_spatial_dims(x_dim="x", y_dim="y")
+    ds.rio.write_crs(crs, inplace=True)
+
     ds = xr.merge(
         [
             ds[mb_vars].drop_vars(["pism_config", "run_stats"], errors="ignore"),
@@ -216,13 +242,37 @@ if __name__ == "__main__":
     )
     basin_names = ["GRACE"] + [basin["SUBREGION1"] for _, basin in basins.iterrows()]
     n_basins = len(basin_names)
-    futures = client.map(compute_basin, basins_ds_scattered, basin_names)
+    futures = client.map(compute_basin, basins_ds_scattered, basin_names, reduce="sum")
     progress(futures)
+
     basin_sums = (
         xr.concat(client.gather(futures), dim="basin")
         .drop_vars(["mapping", "spatial_ref"])
         .sortby(["basin", "pism_config_axis"])
     )
+
+    if fm_var in ds:
+        basins_ds_scattered = client.scatter(
+            [fm_rate_ds]
+            + [fm_rate_ds.rio.clip([basin.geometry]) for _, basin in basins.iterrows()]
+        )
+        basin_names = ["GRACE"] + [
+            basin["SUBREGION1"] for _, basin in basins.iterrows()
+        ]
+        n_basins = len(basin_names)
+        futures = client.map(
+            compute_basin, basins_ds_scattered, basin_names, reduce="mean"
+        )
+        progress(futures)
+
+        fm_basin_sums = (
+            xr.concat(client.gather(futures), dim="basin")
+            .drop_vars(["mapping", "spatial_ref"])
+            .sortby(["basin"])
+        )
+
+        basin_sums = xr.merge([basin_sums, fm_basin_sums])
+
     if cf:
         basin_sums["basin"] = basin_sums["basin"].astype(f"S{n_basins}")
         basin_sums.attrs["Conventions"] = "CF-1.8"

@@ -330,7 +330,10 @@ def preprocess_scalar_nc(
 
 
 def compute_basin(
-    ds: xr.Dataset, name: str = "basin", dim: List = ["x", "y"]
+    ds: xr.Dataset,
+    name: str = "basin",
+    dim: List = ["x", "y"],
+    reduce: Literal["sum", "mean"] = "sum",
 ) -> xr.Dataset:
     """
     Compute the sum of the dataset over the 'x' and 'y' dimensions and add a new dimension 'basin'.
@@ -343,6 +346,8 @@ def compute_basin(
         The name to assign to the new 'basin' dimension.
     dim : List
         The dimensions to sum over.
+    reduce : {"sum", "mean"}, optional
+        The reduction method to apply, by default "sum".
 
     Returns
     -------
@@ -354,7 +359,12 @@ def compute_basin(
     >>> ds = xr.Dataset({'var': (('x', 'y'), np.random.rand(5, 5))})
     >>> compute_basin(ds, 'new_basin')
     """
-    ds = ds.sum(dim=dim).expand_dims("basin", axis=-1)
+    if reduce == "sum":
+        ds = ds.sum(dim=dim).expand_dims("basin")
+    elif reduce == "mean":
+        ds = ds.mean(dim=dim).expand_dims("basin")
+    else:
+        raise ValueError("Invalid reduce method. Use 'sum' or 'mean'.")
     ds["basin"] = [name]
     return ds.compute()
 

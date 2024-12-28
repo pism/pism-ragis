@@ -24,7 +24,6 @@ import json
 import warnings
 from importlib.resources import files
 from pathlib import Path
-from typing import Dict, List, Union
 
 import matplotlib as mpl
 import matplotlib.pylab as plt
@@ -50,8 +49,9 @@ sim_cmap = config["Plotting"]["sim_cmap"]
 @timeit
 def plot_posteriors(
     df: pd.DataFrame,
-    order: List[str] | None = None,
-    fig_dir: Union[str, Path] = "figures",
+    order: list[str] | None = None,
+    figsize: tuple[float, float] | None = (6.4, 5.2),
+    fig_dir: str | Path = "figures",
     fontsize: float = 4,
 ):
     """
@@ -61,9 +61,11 @@ def plot_posteriors(
     ----------
     df : pd.DataFrame
         DataFrame containing the data to plot.
-    order : List[str] or None, optional
+    order : list[str] or None, optional
         Order of the basins for the y-axis, by default None.
-    fig_dir : Union[str, Path], optional
+    figsize : tuple[float, float] or None, optional
+        Size of the figure, by default (6.4, 5.2).
+    fig_dir : str or Path, optional
         Directory to save the figures, by default "figures".
     fontsize : float, optional
         Font size for the plot, by default 4.
@@ -87,7 +89,7 @@ def plot_posteriors(
             3,
             6,
             sharey=True,
-            figsize=[6.4, 5.2],
+            figsize=figsize,
         )
         fig.subplots_adjust(hspace=0.1, wspace=0.1)
         for k, v in enumerate(
@@ -135,7 +137,8 @@ def plot_posteriors(
 @timeit
 def plot_prior_posteriors(
     df: pd.DataFrame,
-    fig_dir: Union[str, Path] = "figures",
+    figsize: tuple[float, float] | None = (6.4, 3.2),
+    fig_dir: str | Path = "figures",
     fontsize: float = 4,
     bins_dict: dict = {},
 ):
@@ -146,7 +149,9 @@ def plot_prior_posteriors(
     ----------
     df : pd.DataFrame
         DataFrame containing the data to plot.
-    fig_dir : Union[str, Path], optional
+    figsize : tuple[float, float] or None, optional
+        Size of the figure, by default (6.4, 3.2).
+    fig_dir : str or Path, optional
         Directory to save the figures, by default "figures".
     fontsize : float, optional
         Font size for the plot, by default 4.
@@ -179,7 +184,7 @@ def plot_prior_posteriors(
                     3,
                     6,
                     sharey=True,
-                    figsize=[6.4, 3.2],
+                    figsize=figsize,
                 )
                 fig.subplots_adjust(hspace=0.5, wspace=0.1)
                 for k, v in enumerate(m_df.drop(columns=["ensemble"]).columns):
@@ -235,11 +240,12 @@ def plot_basins(
     prior: xr.Dataset,
     posterior: xr.Dataset,
     filter_var: str,
-    filter_range: List[int] = [1990, 2019],
-    fig_dir: Union[str, Path] = "figures",
+    figsize: tuple[float, float] | None = None,
+    filter_range: list[int] = [1990, 2019],
+    fig_dir: str | Path = "figures",
     fudge_factor: float = 3.0,
-    plot_range: List[int] = [1980, 2020],
-    config: Dict = {},
+    plot_range: list[int] = [1980, 2020],
+    config: dict = {},
 ):
     """
     Plot basins using observed, prior, and posterior datasets.
@@ -258,16 +264,18 @@ def plot_basins(
         The posterior dataset.
     filter_var : str
         The variable used for filtering.
-    filter_range : List[int], optional
+    figsize : tuple[float, float] or None, optional
+        Size of the figure, by default None.
+    filter_range : list[int], optional
         A list containing the start and end years for filtering, by default [1990, 2019].
-    fig_dir : Union[str, Path], optional
+    fig_dir : str or Path, optional
         The directory where figures will be saved, by default "figures".
     fudge_factor : float, optional
         A multiplicative factor applied to the observed standard deviation to widen the likelihood function,
         allowing for greater tolerance in the matching process, by default 3.0.
-    plot_range : List[int], optional
+    plot_range : list[int], optional
         A list containing the start and end years for plotting, by default [1980, 2020].
-    config : Dict, optional
+    config : dict, optional
         Configuration dictionary, by default {}.
 
     Examples
@@ -296,6 +304,7 @@ def plot_basins(
                 config=config,
                 filter_var=filter_var,
                 filter_range=filter_range,
+                figsize=figsize,
                 fig_dir=fig_dir,
                 fudge_factor=fudge_factor,
                 obs_alpha=obs_alpha,
@@ -311,8 +320,9 @@ def plot_sensitivity_indices(
     indices_var: str = "S1",
     indices_conf_var: str = "S1_conf",
     basin: str = "",
+    figsize: tuple[float, float] | None = (3.2, 1.8),
     filter_var: str = "",
-    fig_dir: Union[str, Path] = "figures",
+    fig_dir: str | Path = "figures",
     fontsize: float = 6,
 ):
     """
@@ -330,9 +340,11 @@ def plot_sensitivity_indices(
         The variable name for confidence intervals of sensitivity indices in the dataset, by default "S1_conf".
     basin : str, optional
         The basin parameter to be used in the plot, by default "".
+    figsize : tuple[float, float] or None, optional
+        Size of the figure, by default (3.2, 1.8).
     filter_var : str, optional
         The variable used for filtering, by default "".
-    fig_dir : Union[str, Path], optional
+    fig_dir : str or Path, optional
         The directory where the figures will be saved, by default "figures".
     fontsize : float, optional
         The font size for the plot, by default 6.
@@ -346,7 +358,7 @@ def plot_sensitivity_indices(
 
     with mpl.rc_context({"font.size": fontsize}):
 
-        fig, ax = plt.subplots(1, 1, figsize=(3.2, 1.8))
+        fig, ax = plt.subplots(1, 1, figsize=figsize)
         for g in ds[dim]:
             indices_da = ds[indices_var].sel({dim: g})
             conf_da = ds[indices_conf_var].sel({dim: g})
@@ -375,14 +387,15 @@ def plot_obs_sims(
     sim_posterior: xr.Dataset,
     config: dict,
     filter_var: str,
-    filter_range: List[int] = [1990, 2019],
-    fig_dir: Union[str, Path] = "figures",
+    filter_range: list[int] = [1990, 2019],
+    figsize: tuple[float, float] | None = None,
+    fig_dir: str | Path = "figures",
     fudge_factor: float = 3.0,
     reference_year: float = 1986.0,
     sim_alpha: float = 0.4,
     obs_alpha: float = 1.0,
     sigma: float = 2,
-    percentiles: List[float] = [0.025, 0.975],
+    percentiles: list[float] = [0.025, 0.975],
     fontsize: float = 6,
 ) -> None:
     """
@@ -400,9 +413,11 @@ def plot_obs_sims(
         Configuration dictionary containing variable names.
     filter_var : str
         Variable used for filtering.
-    filter_range : List[int], optional
+    filter_range : list[int], optional
         Range of years for filtering, by default [1990, 2019].
-    fig_dir : Union[str, Path], optional
+    figsize : tuple[float, float] or None, optional
+        Size of the figure, by default None.
+    fig_dir : str or Path, optional
         Directory to save the figures, by default "figures".
     fudge_factor : float, optional
         A multiplicative factor applied to the observed standard deviation to widen the likelihood function,
@@ -415,7 +430,7 @@ def plot_obs_sims(
         Alpha value for observation plots, by default 1.0.
     sigma : float, optional
         Sigma value for uncertainty, by default 2.
-    percentiles : List[float], optional
+    percentiles : list[float], optional
         Percentiles for credibility interval, by default [0.025, 0.975].
     fontsize : float, optional
         Font size for the plot, by default 6.
@@ -458,7 +473,7 @@ def plot_obs_sims(
             3,
             1,
             sharex=True,
-            figsize=(6.4, 3.6),
+            figsize=figsize,
             height_ratios=[2, 1, 1],
         )
         fig.subplots_adjust(hspace=0.05, wspace=0.05)
@@ -649,7 +664,7 @@ def plot_obs_sims(
 def plot_outliers(
     filtered_da: xr.DataArray,
     outliers_da: xr.DataArray,
-    filename: Union[Path, str],
+    filename: Path | str,
     fontsize: int = 6,
 ):
     """
@@ -665,7 +680,7 @@ def plot_outliers(
         The DataArray containing the filtered data.
     outliers_da : xr.DataArray
         The DataArray containing the outliers.
-    filename : Union[Path, str]
+    filename : Path or str
         The path or filename where the plot will be saved.
     fontsize : int, optional
         The font size for the plot, by default 6.
