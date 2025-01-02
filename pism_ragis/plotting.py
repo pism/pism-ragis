@@ -49,7 +49,9 @@ sim_cmap = config["Plotting"]["sim_cmap"]
 @timeit
 def plot_posteriors(
     df: pd.DataFrame,
-    order: list[str] | None = None,
+    x_order: list[str],
+    y_order: list[str] | None = None,
+    hue: str | None = "filtered_by",
     figsize: tuple[float, float] | None = (6.4, 5.2),
     fig_dir: str | Path = "figures",
     fontsize: float = 4,
@@ -61,8 +63,12 @@ def plot_posteriors(
     ----------
     df : pd.DataFrame
         DataFrame containing the data to plot.
-    order : list[str] or None, optional
+    x_order : Iterable[str] or None, optional
+        Order of the variables for the x-axis, by default None.
+    y_order : Iterable[str] or None, optional
         Order of the basins for the y-axis, by default None.
+    hue : str or None, optional
+        Variable name for the hue, by default "filtered_by".
     figsize : tuple[float, float] or None, optional
         Size of the figure, by default (6.4, 5.2).
     fig_dir : str or Path, optional
@@ -84,31 +90,28 @@ def plot_posteriors(
     }
 
     with mpl.rc_context(rc=rc_params):
-        m_df = df.drop(columns=["exp_id"])
         fig, axs = plt.subplots(
             3,
             6,
             sharey=True,
             figsize=figsize,
         )
-        fig.subplots_adjust(hspace=0.1, wspace=0.1)
-        for k, v in enumerate(
-            m_df.drop(columns=["ensemble", "basin", "filtered_by"]).columns
-        ):
+        fig.subplots_adjust(hspace=0.75, wspace=0.1)
+        for k, v in enumerate(x_order):
             legend = bool(k == 0)
             ax = axs.ravel()[k]
             try:
                 _ = sns.violinplot(
-                    data=m_df,
+                    data=df,
                     x=v,
                     y="basin",
-                    order=order,
+                    order=y_order,
                     linewidth=0.25,
                     cut=0,
                     gap=0.1,
                     split=True,
                     inner="quart",
-                    hue="filtered_by",
+                    hue=hue,
                     orient="h",
                     palette=["#DDCC77", "#CC6677"],
                     ax=ax,
@@ -118,14 +121,24 @@ def plot_posteriors(
                 pass
 
             if legend:
-                ax.get_legend().set_title(None)
-                ax.get_legend().get_frame().set_linewidth(0.0)
-                ax.get_legend().get_frame().set_alpha(0.0)
+                ax.get_legend().remove()
 
-            if k > len(m_df.drop(columns=["ensemble", "basin", "filtered_by"]).columns):
+            if k > len(x_order):
                 ax.set_visible(False)
 
+        # Create a legend outside the figure at the bottom middle
+        handles, labels = axs[0, 0].get_legend_handles_labels()
+        legend_main = fig.legend(
+            handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.0), ncol=2
+        )
+        legend_main.set_title(None)
+        legend_main.get_frame().set_linewidth(0.0)
+        legend_main.get_frame().set_alpha(0.0)
+
+        # Adjust layout to make room for the legend
         fig.tight_layout()
+        fig.subplots_adjust(bottom=0.1)
+
         fn = pdf_dir / Path("posteriors_violinplots.pdf")
         fig.savefig(fn)
         fn = png_dir / Path("posteriors_violinplots.png")
@@ -140,7 +153,9 @@ def plot_prior_posteriors(
     figsize: tuple[float, float] | None = (6.4, 3.2),
     fig_dir: str | Path = "figures",
     fontsize: float = 4,
-    bins_dict: dict = {},
+    x_order: list[str] = [],
+    bins_dict: dict | None = None,
+    group_columns: list = ["basin", "filtered_by"],
 ):
     """
     Plot histograms of prior and posterior distributions.
@@ -155,8 +170,12 @@ def plot_prior_posteriors(
         Directory to save the figures, by default "figures".
     fontsize : float, optional
         Font size for the plot, by default 4.
+    x_order : Iterable[str] or None, optional
+        Order of the variables for the x-axis, by default None.
     bins_dict : dict, optional
         Dictionary specifying the number of bins for each variable, by default {}.
+    group_columns : list, optional
+        List of columns to group by, by default ["basin", "filtered_by"].
     """
 
     plot_dir = fig_dir / Path("basin_histograms")
@@ -166,8 +185,6 @@ def plot_prior_posteriors(
     png_dir = plot_dir / Path("pngs")
     png_dir.mkdir(parents=True, exist_ok=True)
 
-    group_columns = ["basin", "filtered_by"]
-
     rc_params = {
         "font.size": fontsize,
         # Add other rcParams settings if needed
@@ -176,10 +193,9 @@ def plot_prior_posteriors(
     with mpl.rc_context(rc=rc_params):
         with tqdm(
             desc="Plotting prior and posterior histograms",
-            total=len(df["basin"].unique()),
+            total=len(df.groupby(by=group_columns)),
         ) as progress_bar:
             for (basin, filter_var), m_df in df.groupby(by=group_columns):
-                m_df = m_df.drop(columns=group_columns + ["exp_id"])
                 fig, axs = plt.subplots(
                     3,
                     6,
@@ -187,7 +203,11 @@ def plot_prior_posteriors(
                     figsize=figsize,
                 )
                 fig.subplots_adjust(hspace=0.5, wspace=0.1)
-                for k, v in enumerate(m_df.drop(columns=["ensemble"]).columns):
+                for k, v in enumerate(x_order):
+                    if bins_dict is not None:
+                        bins = bins_dict.get(v, "auto")
+                    else:
+                        bins = None
                     legend = bool(k == 1)
                     try:
                         ax = axs.ravel()[k]
@@ -197,7 +217,7 @@ def plot_prior_posteriors(
                             hue="ensemble",
                             hue_order=["Prior", "Posterior"],
                             palette=sim_cmap,
-                            bins=bins_dict[v],
+                            bins=bins,
                             common_norm=False,
                             stat="probability",
                             multiple="dodge",

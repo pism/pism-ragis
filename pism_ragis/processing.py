@@ -329,6 +329,73 @@ def preprocess_scalar_nc(
     )
 
 
+def sort_columns(df: pd.DataFrame, sorted_columns: List[str]) -> pd.DataFrame:
+    """
+    Sort columns of a DataFrame.
+
+    This function sorts the columns of a DataFrame such that the columns specified in
+    `sorted_columns` appear in the specified order, while all other columns appear before
+    the sorted columns in their original order.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The input DataFrame to be sorted.
+    sorted_columns : List[str]
+        A list of column names to be sorted.
+
+    Returns
+    -------
+    pd.DataFrame
+        The DataFrame with columns sorted as specified.
+    """
+    # Identify columns that are not in the list
+    other_columns = [col for col in df.columns if col not in sorted_columns]
+
+    # Concatenate other columns with the sorted columns
+    new_column_order = other_columns + sorted_columns
+
+    # Reindex the DataFrame
+    return df.reindex(columns=new_column_order)
+
+
+def add_prefix_coord(
+    sensitivity_indices: xr.Dataset, parameter_groups: Dict[str, str]
+) -> xr.Dataset:
+    """
+    Add prefix coordinates to an xarray Dataset.
+
+    This function extracts the prefix from each coordinate value in the 'pism_config_axis'
+    and adds it as a new coordinate. It also maps the prefixes to their corresponding
+    sensitivity indices groups.
+
+    Parameters
+    ----------
+    sensitivity_indices : xr.Dataset
+        The input dataset containing sensitivity indices.
+    parameter_groups : Dict[str, str]
+        A dictionary mapping parameter names to their corresponding groups.
+
+    Returns
+    -------
+    xr.Dataset
+        The dataset with added prefix coordinates and sensitivity indices groups.
+    """
+    prefixes = [
+        name.split(".")[0] for name in sensitivity_indices.pism_config_axis.values
+    ]
+
+    sensitivity_indices = sensitivity_indices.assign_coords(
+        prefix=("pism_config_axis", prefixes)
+    )
+    si_prefixes = [parameter_groups[name] for name in sensitivity_indices.prefix.values]
+
+    sensitivity_indices = sensitivity_indices.assign_coords(
+        sensitivity_indices_group=("pism_config_axis", si_prefixes)
+    )
+    return sensitivity_indices
+
+
 def compute_basin(
     ds: xr.Dataset,
     name: str = "basin",
@@ -644,16 +711,12 @@ def load_ensemble(
         The loaded xarray Dataset containing the ensemble data.
     """
     print("Loading ensemble files... ", end="", flush=True)
-    ds = (
-        xr.open_mfdataset(
-            filenames,
-            parallel=parallel,
-            preprocess=preprocess,
-            engine=engine,
-        )
-        .drop_vars(["spatial_ref", "mapping"], errors="ignore")
-        .dropna(dim="exp_id")
-    )
+    ds = xr.open_mfdataset(
+        filenames,
+        parallel=parallel,
+        preprocess=preprocess,
+        engine=engine,
+    ).drop_vars(["spatial_ref", "mapping"], errors="ignore")
     print("Done.")
     return ds
 
@@ -1053,7 +1116,7 @@ def config_to_dataframe(
 
 @timeit
 def filter_retreat_experiments(
-    ds: xr.Dataset, retreat_method: Literal["free", "prescribed", "all"]
+    ds: xr.Dataset, retreat_method: Literal["Free", "Prescribed", "All"]
 ) -> xr.Dataset:
     """
     Filter retreat experiments based on the retreat method.
@@ -1065,7 +1128,7 @@ def filter_retreat_experiments(
     ----------
     ds : xr.Dataset
         The input dataset containing the retreat experiments.
-    retreat_method : {"free", "prescribed", "all"}
+    retreat_method : {"Free", "Prescribed", "All"}
         The retreat method to filter by. "free" selects experiments with no prescribed retreat,
         "prescribed" selects experiments with a prescribed retreat, and "all" selects all experiments.
 
@@ -1092,11 +1155,11 @@ def filter_retreat_experiments(
         pism_config_axis="geometry.front_retreat.prescribed.file"
     ).compute()
 
-    if retreat_method == "free":
+    if retreat_method == "Free":
         retreat_exp_ids = retreat.where(
             retreat["pism_config"] == "false", drop=True
         ).exp_id.values
-    elif retreat_method == "prescribed":
+    elif retreat_method == "Prescribed":
         retreat_exp_ids = retreat.where(
             retreat["pism_config"] != "false", drop=True
         ).exp_id.values
@@ -1107,3 +1170,219 @@ def filter_retreat_experiments(
     ds = ds.sel(exp_id=retreat_exp_ids)
 
     return ds
+
+
+def prepare_input(
+    df: pd.DataFrame,
+    params: List[str] = [
+        "surface.given.file",
+        "ocean.th.file",
+        "calving.rate_scaling.file",
+        "geometry.front_retreat.prescribed.file",
+    ],
+) -> pd.DataFrame:
+    """
+    Prepare the input DataFrame by converting columns to numeric and mapping unique values to integers.
+
+    This function processes the input DataFrame by converting specified columns to numeric values,
+    dropping specified columns, and mapping unique values in the specified parameters to integers.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The input DataFrame to be processed.
+    params : List[str], optional
+        A list of column names to be processed. Unique values in these columns will be mapped to integers.
+        By default, the list includes:
+        ["surface.given.file", "ocean.th.file", "calving.rate_scaling.file", "geometry.front_retreat.prescribed.file"].
+
+    Returns
+    -------
+    pd.DataFrame
+        The processed DataFrame with specified columns converted to numeric and unique values mapped to integers.
+
+    Examples
+    --------
+    >>> df = pd.DataFrame({
+    ...     "surface.given.file": ["file1", "file2", "file1"],
+    ...     "ocean.th.file": ["fileA", "fileB", "fileA"],
+    ...     "calving.rate_scaling.file": ["fileX", "fileY", "fileX"],
+    ...     "geometry.front_retreat.prescribed.file": ["fileM", "fileN", "fileM"],
+    ...     "ensemble": [1, 2, 3],
+    ...     "exp_id": [101, 102, 103]
+    ... })
+    >>> prepare_input(df)
+       surface.given.file  ocean.th.file  calving.rate_scaling.file  geometry.front_retreat.prescribed.file
+    0                   0              0                          0                                      0
+    1                   1              1                          1                                      1
+    2                   0              0                          0                                      0
+    """
+    df = df.apply(convert_column_to_numeric).drop(
+        columns=["ensemble", "exp_id"], errors="ignore"
+    )
+
+    for param in params:
+        m_dict: Dict[str, int] = {v: k for k, v in enumerate(df[param].unique())}
+        df[param] = df[param].map(m_dict)
+
+    return df
+
+
+@timeit
+def prepare_simulations(
+    filenames: List[Union[Path, str]],
+    config: Dict[str, Any],
+    reference_date: str,
+    parallel: bool = True,
+    engine: str = "h5netcdf",
+) -> xr.Dataset:
+    """
+    Prepare simulations by loading and processing ensemble datasets.
+
+    This function loads ensemble datasets from the specified filenames, processes them
+    according to the provided configuration, and returns the processed dataset. The
+    processing steps include sorting, converting byte strings to strings, dropping NaNs,
+    standardizing variable names, calculating cumulative variables, and normalizing
+    cumulative variables.
+
+    Parameters
+    ----------
+    filenames : List[Union[Path, str]]
+        A list of file paths to the ensemble datasets.
+    config : Dict[str, Any]
+        A dictionary containing configuration settings for processing the datasets.
+    reference_date : str
+        The reference date for normalizing cumulative variables.
+    parallel : bool, optional
+        Whether to load the datasets in parallel, by default True.
+    engine : str, optional
+        The engine to use for loading the datasets, by default "h5netcdf".
+
+    Returns
+    -------
+    xr.Dataset
+        The processed xarray dataset.
+
+    Examples
+    --------
+    >>> filenames = ["file1.nc", "file2.nc"]
+    >>> config = {
+    ...     "PISM Spatial": {...},
+    ...     "Cumulative Variables": {
+    ...         "cumulative_grounding_line_flux": "cumulative_gl_flux",
+    ...         "cumulative_smb": "cumulative_smb_flux"
+    ...     },
+    ...     "Flux Variables": {
+    ...         "grounding_line_flux": "gl_flux",
+    ...         "smb_flux": "smb_flux"
+    ...     }
+    ... }
+    >>> reference_date = "2000-01-01"
+    >>> ds = prepare_simulations(filenames, config, reference_date)
+    """
+    ds = load_ensemble(filenames, parallel=parallel, engine=engine).sortby("basin")
+    ds = xr.apply_ufunc(np.vectorize(convert_bstrings_to_str), ds, dask="parallelized")
+
+    ds = standardize_variable_names(ds, config["PISM Spatial"])
+    ds[config["Cumulative Variables"]["cumulative_grounding_line_flux"]] = ds[
+        config["Flux Variables"]["grounding_line_flux"]
+    ].cumsum() / len(ds.time)
+    ds[config["Cumulative Variables"]["cumulative_smb"]] = ds[
+        config["Flux Variables"]["smb_flux"]
+    ].cumsum() / len(ds.time)
+    ds = normalize_cumulative_variables(
+        ds,
+        list(config["Cumulative Variables"].values()),
+        reference_date=reference_date,
+    )
+    return ds
+
+
+@timeit
+def prepare_observations(
+    basin_url: Union[Path, str],
+    grace_url: Union[Path, str],
+    config: Dict[str, Any],
+    reference_date: str,
+    engine: str = "h5netcdf",
+) -> tuple[xr.Dataset, xr.Dataset]:
+    """
+    Prepare observation datasets by normalizing cumulative variables.
+
+    This function loads observation datasets from the specified URLs, sorts them by basin,
+    normalizes the cumulative variables, and returns the processed datasets.
+
+    Parameters
+    ----------
+    basin_url : Union[Path, str]
+        The URL or path to the basin observation dataset.
+    grace_url : Union[Path, str]
+        The URL or path to the GRACE observation dataset.
+    config : Dict[str, Any]
+        A dictionary containing configuration settings for processing the datasets.
+    reference_date : str
+        The reference date for normalizing cumulative variables.
+    engine : str, optional
+        The engine to use for loading the datasets, by default "h5netcdf".
+
+    Returns
+    -------
+    tuple[xr.Dataset, xr.Dataset]
+        A tuple containing the processed basin and GRACE observation datasets.
+
+    Examples
+    --------
+    >>> config = {
+    ...     "Cumulative Variables": {"cumulative_mass_balance": "mass_balance"},
+    ...     "Cumulative Uncertainty Variables": {"cumulative_mass_balance_uncertainty": "mass_balance_uncertainty"}
+    ... }
+    >>> prepare_observations("basin.nc", "grace.nc", config, "2000-01-1")
+    (<xarray.Dataset>, <xarray.Dataset>)
+    """
+    obs_basin = xr.open_dataset(basin_url, engine=engine, chunks=-1)
+    obs_basin = obs_basin.sortby("basin")
+
+    cumulative_vars = config["Cumulative Variables"]
+    cumulative_uncertainty_vars = config["Cumulative Uncertainty Variables"]
+
+    obs_basin = normalize_cumulative_variables(
+        obs_basin,
+        list(cumulative_vars.values()) + list(cumulative_uncertainty_vars.values()),
+        reference_date,
+    )
+
+    obs_grace = xr.open_dataset(grace_url, engine=engine, chunks=-1)
+    obs_grace = obs_grace.sortby("basin")
+
+    cumulative_vars = config["Cumulative Variables"]["cumulative_mass_balance"]
+    cumulative_uncertainty_vars = config["Cumulative Uncertainty Variables"][
+        "cumulative_mass_balance_uncertainty"
+    ]
+
+    obs_grace = normalize_cumulative_variables(
+        obs_grace,
+        [cumulative_vars] + [cumulative_uncertainty_vars],
+        reference_date,
+    )
+
+    return obs_basin, obs_grace
+
+
+def convert_bstrings_to_str(element: Any) -> Any:
+    """
+    Convert byte strings to regular strings.
+
+    Parameters
+    ----------
+    element : Any
+        The element to be checked and potentially converted. If the element is a byte string,
+        it will be converted to a regular string. Otherwise, the element will be returned as is.
+
+    Returns
+    -------
+    Any
+        The converted element if it was a byte string, otherwise the original element.
+    """
+    if isinstance(element, bytes):
+        return element.decode("utf-8")
+    return element
