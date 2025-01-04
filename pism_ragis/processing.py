@@ -329,78 +329,8 @@ def preprocess_scalar_nc(
     )
 
 
-def sort_columns(df: pd.DataFrame, sorted_columns: List[str]) -> pd.DataFrame:
-    """
-    Sort columns of a DataFrame.
-
-    This function sorts the columns of a DataFrame such that the columns specified in
-    `sorted_columns` appear in the specified order, while all other columns appear before
-    the sorted columns in their original order.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        The input DataFrame to be sorted.
-    sorted_columns : List[str]
-        A list of column names to be sorted.
-
-    Returns
-    -------
-    pd.DataFrame
-        The DataFrame with columns sorted as specified.
-    """
-    # Identify columns that are not in the list
-    other_columns = [col for col in df.columns if col not in sorted_columns]
-
-    # Concatenate other columns with the sorted columns
-    new_column_order = other_columns + sorted_columns
-
-    # Reindex the DataFrame
-    return df.reindex(columns=new_column_order)
-
-
-def add_prefix_coord(
-    sensitivity_indices: xr.Dataset, parameter_groups: Dict[str, str]
-) -> xr.Dataset:
-    """
-    Add prefix coordinates to an xarray Dataset.
-
-    This function extracts the prefix from each coordinate value in the 'pism_config_axis'
-    and adds it as a new coordinate. It also maps the prefixes to their corresponding
-    sensitivity indices groups.
-
-    Parameters
-    ----------
-    sensitivity_indices : xr.Dataset
-        The input dataset containing sensitivity indices.
-    parameter_groups : Dict[str, str]
-        A dictionary mapping parameter names to their corresponding groups.
-
-    Returns
-    -------
-    xr.Dataset
-        The dataset with added prefix coordinates and sensitivity indices groups.
-    """
-    prefixes = [
-        name.split(".")[0] for name in sensitivity_indices.pism_config_axis.values
-    ]
-
-    sensitivity_indices = sensitivity_indices.assign_coords(
-        prefix=("pism_config_axis", prefixes)
-    )
-    si_prefixes = [parameter_groups[name] for name in sensitivity_indices.prefix.values]
-
-    sensitivity_indices = sensitivity_indices.assign_coords(
-        sensitivity_indices_group=("pism_config_axis", si_prefixes)
-    )
-    return sensitivity_indices
-
-
 def compute_basin(
-    ds: xr.Dataset,
-    name: str = "basin",
-    dim: List = ["x", "y"],
-    reduce: Literal["sum", "mean"] = "sum",
+    ds: xr.Dataset, name: str = "basin", dim: List = ["x", "y"]
 ) -> xr.Dataset:
     """
     Compute the sum of the dataset over the 'x' and 'y' dimensions and add a new dimension 'basin'.
@@ -413,8 +343,6 @@ def compute_basin(
         The name to assign to the new 'basin' dimension.
     dim : List
         The dimensions to sum over.
-    reduce : {"sum", "mean"}, optional
-        The reduction method to apply, by default "sum".
 
     Returns
     -------
@@ -426,12 +354,7 @@ def compute_basin(
     >>> ds = xr.Dataset({'var': (('x', 'y'), np.random.rand(5, 5))})
     >>> compute_basin(ds, 'new_basin')
     """
-    if reduce == "sum":
-        ds = ds.sum(dim=dim).expand_dims("basin")
-    elif reduce == "mean":
-        ds = ds.mean(dim=dim).expand_dims("basin")
-    else:
-        raise ValueError("Invalid reduce method. Use 'sum' or 'mean'.")
+    ds = ds.sum(dim=dim).expand_dims("basin", axis=-1)
     ds["basin"] = [name]
     return ds.compute()
 
@@ -711,12 +634,16 @@ def load_ensemble(
         The loaded xarray Dataset containing the ensemble data.
     """
     print("Loading ensemble files... ", end="", flush=True)
-    ds = xr.open_mfdataset(
-        filenames,
-        parallel=parallel,
-        preprocess=preprocess,
-        engine=engine,
-    ).drop_vars(["spatial_ref", "mapping"], errors="ignore")
+    ds = (
+        xr.open_mfdataset(
+            filenames,
+            parallel=parallel,
+            preprocess=preprocess,
+            engine=engine,
+        )
+        .drop_vars(["spatial_ref", "mapping"], errors="ignore")
+        .dropna(dim="exp_id")
+    )
     print("Done.")
     return ds
 
@@ -1116,7 +1043,7 @@ def config_to_dataframe(
 
 @timeit
 def filter_retreat_experiments(
-    ds: xr.Dataset, retreat_method: Literal["Free", "Prescribed", "All"]
+    ds: xr.Dataset, retreat_method: Literal["free", "prescribed", "all"]
 ) -> xr.Dataset:
     """
     Filter retreat experiments based on the retreat method.
@@ -1128,7 +1055,7 @@ def filter_retreat_experiments(
     ----------
     ds : xr.Dataset
         The input dataset containing the retreat experiments.
-    retreat_method : {"Free", "Prescribed", "All"}
+    retreat_method : {"free", "prescribed", "all"}
         The retreat method to filter by. "free" selects experiments with no prescribed retreat,
         "prescribed" selects experiments with a prescribed retreat, and "all" selects all experiments.
 
@@ -1155,11 +1082,11 @@ def filter_retreat_experiments(
         pism_config_axis="geometry.front_retreat.prescribed.file"
     ).compute()
 
-    if retreat_method == "Free":
+    if retreat_method == "free":
         retreat_exp_ids = retreat.where(
             retreat["pism_config"] == "false", drop=True
         ).exp_id.values
-    elif retreat_method == "Prescribed":
+    elif retreat_method == "prescribed":
         retreat_exp_ids = retreat.where(
             retreat["pism_config"] != "false", drop=True
         ).exp_id.values
@@ -1170,6 +1097,73 @@ def filter_retreat_experiments(
     ds = ds.sel(exp_id=retreat_exp_ids)
 
     return ds
+
+
+def sort_columns(df: pd.DataFrame, sorted_columns: List[str]) -> pd.DataFrame:
+    """
+    Sort columns of a DataFrame.
+
+    This function sorts the columns of a DataFrame such that the columns specified in
+    `sorted_columns` appear in the specified order, while all other columns appear before
+    the sorted columns in their original order.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The input DataFrame to be sorted.
+    sorted_columns : List[str]
+        A list of column names to be sorted.
+
+    Returns
+    -------
+    pd.DataFrame
+        The DataFrame with columns sorted as specified.
+    """
+    # Identify columns that are not in the list
+    other_columns = [col for col in df.columns if col not in sorted_columns]
+
+    # Concatenate other columns with the sorted columns
+    new_column_order = other_columns + sorted_columns
+
+    # Reindex the DataFrame
+    return df.reindex(columns=new_column_order)
+
+
+def add_prefix_coord(
+    sensitivity_indices: xr.Dataset, parameter_groups: Dict[str, str]
+) -> xr.Dataset:
+    """
+    Add prefix coordinates to an xarray Dataset.
+
+    This function extracts the prefix from each coordinate value in the 'pism_config_axis'
+    and adds it as a new coordinate. It also maps the prefixes to their corresponding
+    sensitivity indices groups.
+
+    Parameters
+    ----------
+    sensitivity_indices : xr.Dataset
+        The input dataset containing sensitivity indices.
+    parameter_groups : Dict[str, str]
+        A dictionary mapping parameter names to their corresponding groups.
+
+    Returns
+    -------
+    xr.Dataset
+        The dataset with added prefix coordinates and sensitivity indices groups.
+    """
+    prefixes = [
+        name.split(".")[0] for name in sensitivity_indices.pism_config_axis.values
+    ]
+
+    sensitivity_indices = sensitivity_indices.assign_coords(
+        prefix=("pism_config_axis", prefixes)
+    )
+    si_prefixes = [parameter_groups[name] for name in sensitivity_indices.prefix.values]
+
+    sensitivity_indices = sensitivity_indices.assign_coords(
+        sensitivity_indices_group=("pism_config_axis", si_prefixes)
+    )
+    return sensitivity_indices
 
 
 def prepare_input(

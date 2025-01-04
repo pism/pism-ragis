@@ -28,7 +28,6 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Any, Dict, Hashable, List, Mapping, Union
 
-import dask
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -37,7 +36,6 @@ import seaborn as sns
 import toml
 import xarray as xr
 from dask.diagnostics import ProgressBar
-from dask.distributed import Client, LocalCluster, progress
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 
@@ -75,7 +73,7 @@ if __name__ == "__main__":
         "--obs_url",
         help="""Path to "observed" mass balance.""",
         type=str,
-        default="data/itslive/ITS_LIVE_GRE_G0240_1985.nc",
+        default="data/itslive/ITS_LIVE_GRE_G0240_2018.nc",
     )
     parser.add_argument(
         "--outlier_variable",
@@ -141,7 +139,7 @@ if __name__ == "__main__":
         str(files("pism_ragis.data").joinpath("ragis_config.toml"))
     )
     ragis_config = toml.load(ragis_config_file)
-    sampling_year = 1985
+    sampling_year = 2018
 
     ds = load_ensemble(spatial_files, preprocess=preprocess_nc)
     sim_ds = ds.sel({"time": str(sampling_year)}).mean(dim="time")

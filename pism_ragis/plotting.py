@@ -63,9 +63,9 @@ def plot_posteriors(
     ----------
     df : pd.DataFrame
         DataFrame containing the data to plot.
-    x_order : Iterable[str] or None, optional
-        Order of the variables for the x-axis, by default None.
-    y_order : Iterable[str] or None, optional
+    x_order : list[str]
+        Order of the variables for the x-axis.
+    y_order : list[str] or None, optional
         Order of the basins for the y-axis, by default None.
     hue : str or None, optional
         Variable name for the hue, by default "filtered_by".
@@ -170,10 +170,10 @@ def plot_prior_posteriors(
         Directory to save the figures, by default "figures".
     fontsize : float, optional
         Font size for the plot, by default 4.
-    x_order : Iterable[str] or None, optional
-        Order of the variables for the x-axis, by default None.
+    x_order : list[str], optional
+        Order of the variables for the x-axis, by default [].
     bins_dict : dict, optional
-        Dictionary specifying the number of bins for each variable, by default {}.
+        Dictionary specifying the number of bins for each variable, by default None.
     group_columns : list, optional
         List of columns to group by, by default ["basin", "filtered_by"].
     """
@@ -264,6 +264,7 @@ def plot_basins(
     filter_range: list[int] = [1990, 2019],
     fig_dir: str | Path = "figures",
     fudge_factor: float = 3.0,
+    reference_date: str = "2020-01-01",
     plot_range: list[int] = [1980, 2020],
     config: dict = {},
 ):
@@ -293,6 +294,8 @@ def plot_basins(
     fudge_factor : float, optional
         A multiplicative factor applied to the observed standard deviation to widen the likelihood function,
         allowing for greater tolerance in the matching process, by default 3.0.
+    reference_date : str, optional
+        The reference date for cumulative mass change, by default "2020-01-01".
     plot_range : list[int], optional
         A list containing the start and end years for plotting, by default [1980, 2020].
     config : dict, optional
@@ -321,6 +324,7 @@ def plot_basins(
                 posterior.sel(basin=basin).sel(
                     {"time": slice(str(plot_range[0]), str(plot_range[1]))}
                 ),
+                reference_date=reference_date,
                 config=config,
                 filter_var=filter_var,
                 filter_range=filter_range,
@@ -411,7 +415,7 @@ def plot_obs_sims(
     figsize: tuple[float, float] | None = None,
     fig_dir: str | Path = "figures",
     fudge_factor: float = 3.0,
-    reference_year: float = 1986.0,
+    reference_date: str = "2020-01-01",
     sim_alpha: float = 0.4,
     obs_alpha: float = 1.0,
     sigma: float = 2,
@@ -442,8 +446,8 @@ def plot_obs_sims(
     fudge_factor : float, optional
         A multiplicative factor applied to the observed standard deviation to widen the likelihood function,
         allowing for greater tolerance in the matching process, by default 3.0.
-    reference_year : float, optional
-        Reference year for cumulative mass balance, by default 1986.0.
+    reference_date : str, optional
+        The reference date for cumulative mass change, by default "2020-01-01".
     sim_alpha : float, optional
         Alpha value for simulation plots, by default 0.4.
     obs_alpha : float, optional
@@ -641,7 +645,7 @@ def plot_obs_sims(
 
         axs[0].xaxis.set_tick_params(labelbottom=False)
 
-        axs[0].set_ylabel(f"Cumulative mass\nloss since {reference_year} (Gt)")
+        axs[0].set_ylabel(f"Cumulative mass\nchange since {reference_date} (Gt)")
         axs[0].set_xlabel("")
         if sim_posterior is not None:
             axs[0].set_title(f"{basin} filtered by {filter_var}")
