@@ -28,7 +28,7 @@ from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from importlib.resources import files
 from itertools import chain
 from pathlib import Path
-from typing import Callable, Dict, List
+from typing import Callable
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -43,7 +43,6 @@ from pism_ragis.filtering import filter_outliers, run_importance_sampling
 from pism_ragis.logger import get_logger
 from pism_ragis.plotting import (
     plot_basins,
-    plot_outliers,
     plot_posteriors,
     plot_prior_posteriors,
     plot_sensitivity_indices,
@@ -138,13 +137,6 @@ if __name__ == "__main__":
         default="2020-01-1",
     )
     parser.add_argument(
-        "--retreat_method",
-        help="""Sub-select retreat method. Default='all'.""",
-        type=str,
-        choices=["all", "free", "prescribed"],
-        default="all",
-    )
-    parser.add_argument(
         "--n_jobs",
         help="""Number of parallel jobs. Default=8.""",
         type=int,
@@ -181,7 +173,6 @@ if __name__ == "__main__":
     parallel = options.parallel
     reference_date = options.reference_date
     resampling_frequency = options.resampling_frequency
-    retreat_method = options.retreat_method
     outlier_variable = options.outlier_variable
     outlier_range = options.outlier_range
     ragis_config_file = Path(
@@ -195,18 +186,18 @@ if __name__ == "__main__":
     sim_cmap = config["Plotting"]["sim_cmap"]
     grace_fudge_factor = config["Importance Sampling"]["grace_fudge_factor"]
     mankoff_fudge_factor = config["Importance Sampling"]["mankoff_fudge_factor"]
+    retreat_methods = ["All", "Free", "Prescribed"]
 
     result_dir = Path(options.result_dir)
     data_dir = result_dir / Path("posteriors")
     data_dir.mkdir(parents=True, exist_ok=True)
-    fig_dir = result_dir / Path("figures")
-    fig_dir.mkdir(parents=True, exist_ok=True)
-    plot_dir = fig_dir / Path("basin_timeseries")
-    plot_dir.mkdir(parents=True, exist_ok=True)
-    pdf_dir = plot_dir / Path("pdfs")
-    pdf_dir.mkdir(parents=True, exist_ok=True)
-    png_dir = plot_dir / Path("pngs")
-    png_dir.mkdir(parents=True, exist_ok=True)
+
+    column_function_mapping: dict[str, list[Callable]] = {
+        "surface.given.file": [prp.simplify_path, prp.simplify_climate],
+        "ocean.th.file": [prp.simplify_path, prp.simplify_ocean],
+        "calving.rate_scaling.file": [prp.simplify_path, prp.simplify_calving],
+        "geometry.front_retreat.prescribed.file": [prp.simplify_retreat],
+    }
 
     rcparams = {
         "axes.linewidth": 0.25,
@@ -233,75 +224,105 @@ if __name__ == "__main__":
         engine=engine,
     )
 
-    simulated_ds = prp.filter_retreat_experiments(simulated_ds, retreat_method)
+    da = observed_mankoff_ds.sel(
+        time=slice(f"{filter_range[0]}", f"{filter_range[-1]}")
+    )["grounding_line_flux"].mean(dim="time")
+    posterior_basins_sorted = observed_mankoff_ds.basin.sortby(da).values
 
-    filtered_ds, outliers_ds = filter_outliers(
-        simulated_ds,
-        outlier_range=outlier_range,
-        outlier_variable=outlier_variable,
-        subset={"basin": "GIS"},
-    )
+    bins_dict = config["Posterior Bins"]
+    parameter_categories = config["Parameter Categories"]
+    params_sorted_by_category: dict = {
+        group: [] for group in sorted(parameter_categories.values())
+    }
+    for param in params:
+        prefix = param.split(".")[0]
+        if prefix in parameter_categories:
+            group = parameter_categories[prefix]
+            if param not in params_sorted_by_category[group]:
+                params_sorted_by_category[group].append(param)
 
-    plot_outliers(
-        filtered_ds.sel(basin="GIS")[outlier_variable],
-        outliers_ds.sel(basin="GIS")[outlier_variable],
-        Path(pdf_dir) / Path(f"{outlier_variable}_filtering.pdf"),
-    )
+    params_sorted_list = list(chain(*params_sorted_by_category.values()))
+    params_sorted_dict = {k: params_short_dict[k] for k in params_sorted_list}
 
-    outliers_config = prp.filter_config(outliers_ds, params)
-    outliers_df = prp.config_to_dataframe(outliers_config, ensemble="Outliers")
+    pp_retreat_list: list[pd.DataFrame] = []
+    for retreat_method in retreat_methods:
+        print("-" * 80)
+        print(f"Retreat method: {retreat_method}")
+        print("-" * 80)
 
-    filtered_config = prp.filter_config(filtered_ds, params)
-    filtered_df = prp.config_to_dataframe(filtered_config, ensemble="Filtered")
+        fig_dir = (
+            result_dir / Path(f"retreat_{retreat_method.lower()}") / Path("figures")
+        )
+        fig_dir.mkdir(parents=True, exist_ok=True)
 
-    obs_mankoff_basins = set(observed_mankoff_ds.basin.values)
-    obs_grace_basins = set(observed_grace_ds.basin.values)
+        simulated_retreat_ds = prp.filter_retreat_experiments(
+            simulated_ds, retreat_method
+        )
 
-    simulated = filtered_ds
+        filtered_ds, outliers_ds = filter_outliers(
+            simulated_retreat_ds,
+            outlier_range=outlier_range,
+            outlier_variable=outlier_variable,
+            subset={"basin": "GIS"},
+        )
 
-    sim_basins = set(simulated.basin.values)
-    sim_grace = set(simulated.basin.values)
+        outliers_config = prp.filter_config(outliers_ds, params)
+        outliers_df = prp.config_to_dataframe(outliers_config, ensemble="Outliers")
 
-    intersection_mankoff = list(sim_basins.intersection(obs_mankoff_basins))
-    intersection_grace = list(sim_grace.intersection(obs_grace_basins))
+        filtered_config = prp.filter_config(filtered_ds, params)
+        filtered_df = prp.config_to_dataframe(filtered_config, ensemble="Filtered")
 
-    observed_mankoff_basins_ds = observed_mankoff_ds.sel(
-        {"basin": intersection_mankoff}
-    )
-    simulated_mankoff_basins_ds = simulated.sel({"basin": intersection_mankoff})
+        obs_mankoff_basins = set(observed_mankoff_ds.basin.values)
+        obs_grace_basins = set(observed_grace_ds.basin.values)
 
-    observed_mankoff_basins_resampled_ds = observed_mankoff_basins_ds.resample(
-        {"time": resampling_frequency}
-    ).mean()
-    simulated_mankoff_basins_resampled_ds = simulated_mankoff_basins_ds.resample(
-        {"time": resampling_frequency}
-    ).mean()
+        simulated = filtered_ds
 
-    observed_grace_basins_ds = observed_grace_ds.sel({"basin": intersection_grace})
-    simulated_grace_basins_ds = simulated.sel({"basin": intersection_grace})
+        sim_basins = set(simulated.basin.values)
+        sim_grace = set(simulated.basin.values)
 
-    observed_grace_basins_resampled_ds = observed_grace_basins_ds.resample(
-        {"time": resampling_frequency}
-    ).mean()
-    simulated_grace_basins_resampled_ds = simulated_grace_basins_ds.resample(
-        {"time": resampling_frequency}
-    ).mean()
+        intersection_mankoff = list(sim_basins.intersection(obs_mankoff_basins))
+        intersection_grace = list(sim_grace.intersection(obs_grace_basins))
 
-    obs_mean_vars_mankoff: List[str] = ["grounding_line_flux", "mass_balance"]
-    obs_std_vars_mankoff: List[str] = [
-        "grounding_line_flux_uncertainty",
-        "mass_balance_uncertainty",
-    ]
-    sim_vars_mankoff: List[str] = ["grounding_line_flux", "mass_balance"]
+        observed_mankoff_basins_ds = observed_mankoff_ds.sel(
+            {"basin": intersection_mankoff}
+        )
+        simulated_mankoff_basins_ds = simulated.sel({"basin": intersection_mankoff})
 
-    sim_plot_vars = (
-        [ragis_config["Cumulative Variables"]["cumulative_mass_balance"]]
-        + list(ragis_config["Flux Variables"].values())
-        + ["ensemble"]
-    )
+        observed_mankoff_basins_resampled_ds = observed_mankoff_basins_ds.resample(
+            {"time": resampling_frequency}
+        ).mean()
+        simulated_mankoff_basins_resampled_ds = simulated_mankoff_basins_ds.resample(
+            {"time": resampling_frequency}
+        ).mean()
 
-    prior_posterior_mankoff, simulated_prior_mankoff, simulated_posterior_mankoff = (
-        run_importance_sampling(
+        observed_grace_basins_ds = observed_grace_ds.sel({"basin": intersection_grace})
+        simulated_grace_basins_ds = simulated.sel({"basin": intersection_grace})
+
+        observed_grace_basins_resampled_ds = observed_grace_basins_ds.resample(
+            {"time": resampling_frequency}
+        ).mean()
+        simulated_grace_basins_resampled_ds = simulated_grace_basins_ds.resample(
+            {"time": resampling_frequency}
+        ).mean()
+
+        obs_mean_vars_mankoff: list[str] = ["grounding_line_flux", "mass_balance"]
+        obs_std_vars_mankoff: list[str] = [
+            "grounding_line_flux_uncertainty",
+            "mass_balance_uncertainty",
+        ]
+        sim_vars_mankoff: list[str] = ["grounding_line_flux", "mass_balance"]
+
+        sim_plot_vars = (
+            [ragis_config["Cumulative Variables"]["cumulative_mass_balance"]]
+            + list(ragis_config["Flux Variables"].values())
+            + ["ensemble"]
+        )
+
+        (
+            prior_posterior_mankoff,
+            simulated_prior_mankoff,
+            simulated_posterior_mankoff,
+        ) = run_importance_sampling(
             observed=observed_mankoff_basins_resampled_ds,
             simulated=simulated_mankoff_basins_resampled_ds,
             obs_mean_vars=obs_mean_vars_mankoff,
@@ -311,127 +332,115 @@ if __name__ == "__main__":
             fudge_factor=mankoff_fudge_factor,
             params=params,
         )
-    )
 
-    for filter_var in obs_mean_vars_mankoff:
-        plot_basins(
-            observed_mankoff_basins_resampled_ds,
-            simulated_prior_mankoff[sim_plot_vars],
-            simulated_posterior_mankoff.sel({"filtered_by": filter_var})[sim_plot_vars],
-            filter_var=filter_var,
-            filter_range=filter_range,
+        for filter_var in obs_mean_vars_mankoff:
+            plot_basins(
+                observed_mankoff_basins_resampled_ds,
+                simulated_prior_mankoff[sim_plot_vars],
+                simulated_posterior_mankoff.sel({"filtered_by": filter_var})[
+                    sim_plot_vars
+                ],
+                filter_var=filter_var,
+                filter_range=filter_range,
+                fig_dir=fig_dir,
+                fudge_factor=mankoff_fudge_factor,
+                reference_date=reference_date,
+                config=config,
+            )
+
+        obs_mean_vars_grace: list[str] = ["mass_balance"]
+        obs_std_vars_grace: list[str] = [
+            "mass_balance_uncertainty",
+        ]
+        sim_vars_grace: list[str] = ["mass_balance"]
+
+        prior_posterior_grace, simulated_prior_grace, simulated_posterior_grace = (
+            run_importance_sampling(
+                observed=observed_grace_basins_resampled_ds,
+                simulated=simulated_grace_basins_resampled_ds,
+                obs_mean_vars=obs_mean_vars_grace,
+                obs_std_vars=obs_std_vars_grace,
+                sim_vars=sim_vars_grace,
+                fudge_factor=grace_fudge_factor,
+                filter_range=filter_range,
+                params=params,
+            )
+        )
+
+        for filter_var in obs_mean_vars_grace:
+            plot_basins(
+                observed_grace_basins_resampled_ds,
+                simulated_prior_grace[sim_plot_vars],
+                simulated_posterior_grace.sel({"filtered_by": filter_var})[
+                    sim_plot_vars
+                ],
+                filter_var=filter_var,
+                filter_range=filter_range,
+                fudge_factor=grace_fudge_factor,
+                fig_dir=fig_dir,
+                config=config,
+            )
+
+        prior_posterior = pd.concat(
+            [prior_posterior_mankoff, prior_posterior_grace]
+        ).reset_index(drop=True)
+
+        # Apply the functions to the corresponding columns
+        for col, functions in column_function_mapping.items():
+            for func in functions:
+                prior_posterior[col] = prior_posterior[col].apply(func)
+
+        if "frontal_melt.routing.parameter_a" in prior_posterior.columns:
+            prior_posterior["frontal_melt.routing.parameter_a"] *= 10**4
+        if "ocean.th.gamma_T" in prior_posterior.columns:
+            prior_posterior["ocean.th.gamma_T"] *= 10**4
+        if "calving.vonmises_calving.sigma_max" in prior_posterior.columns:
+            prior_posterior["calving.vonmises_calving.sigma_max"] *= 10**-3
+
+        prior_posterior.to_parquet(
+            data_dir
+            / Path(
+                f"""prior_posterior_retreat_{retreat_method}_{filter_range[0]}-{filter_range[1]}.parquet"""
+            )
+        )
+
+        plot_prior_posteriors(
+            prior_posterior.rename(columns=params_sorted_dict),
+            x_order=params_sorted_dict.values(),
             fig_dir=fig_dir,
-            fudge_factor=mankoff_fudge_factor,
-            config=config,
+            bins_dict=bins_dict,
         )
 
-    obs_mean_vars_grace: List[str] = ["mass_balance"]
-    obs_std_vars_grace: List[str] = [
-        "mass_balance_uncertainty",
-    ]
-    sim_vars_grace: List[str] = ["mass_balance"]
-
-    prior_posterior_grace, simulated_prior_grace, simulated_posterior_grace = (
-        run_importance_sampling(
-            observed=observed_grace_basins_resampled_ds,
-            simulated=simulated_grace_basins_resampled_ds,
-            obs_mean_vars=obs_mean_vars_grace,
-            obs_std_vars=obs_std_vars_grace,
-            sim_vars=sim_vars_grace,
-            fudge_factor=grace_fudge_factor,
-            filter_range=filter_range,
-            params=params,
-        )
-    )
-
-    for filter_var in obs_mean_vars_grace:
-        plot_basins(
-            observed_grace_basins_resampled_ds,
-            simulated_prior_grace[sim_plot_vars],
-            simulated_posterior_grace.sel({"filtered_by": filter_var})[sim_plot_vars],
-            filter_var=filter_var,
-            filter_range=filter_range,
-            fudge_factor=grace_fudge_factor,
+        plot_posteriors(
+            prior_posterior.rename(columns=params_sorted_dict),
+            x_order=params_sorted_dict.values(),
+            y_order=posterior_basins_sorted,
+            hue="filtered_by",
             fig_dir=fig_dir,
-            config=config,
         )
 
-    column_function_mapping: Dict[str, List[Callable]] = {
-        "surface.given.file": [prp.simplify_path, prp.simplify_climate],
-        "ocean.th.file": [prp.simplify_path, prp.simplify_ocean],
-        "calving.rate_scaling.file": [prp.simplify_path, prp.simplify_calving],
-        "geometry.front_retreat.prescribed.file": [prp.simplify_retreat],
-    }
+        p_df = prior_posterior
+        p_df["retreat_method"] = retreat_method
+        pp_retreat_list.append(p_df)
 
-    # Apply the functions to the corresponding columns
-    for col, functions in column_function_mapping.items():
-        for func in functions:
-            prior_posterior_mankoff[col] = prior_posterior_mankoff[col].apply(func)
-            prior_posterior_grace[col] = prior_posterior_grace[col].apply(func)
+    retreat_df = pd.concat(pp_retreat_list).reset_index(drop=True)
 
-    bins_dict = config["Posterior Bins"]
-    parameter_catetories = config["Parameter Categories"]
-    params_sorted_by_category: dict = {
-        group: [] for group in sorted(parameter_catetories.values())
-    }
-    for param in params:
-        prefix = param.split(".")[0]
-        if prefix in parameter_catetories:
-            group = parameter_catetories[prefix]
-            if param not in params_sorted_by_category[group]:
-                params_sorted_by_category[group].append(param)
+    for f_var in ["grounding_line_flux", "mass_balance"]:
+        fig_p_dir = result_dir / Path(f"filtered_by_{f_var.lower()}") / Path("figures")
+        fig_p_dir.mkdir(parents=True, exist_ok=True)
 
-    params_sorted_list = list(chain(*params_sorted_by_category.values()))
-    if "frontal_melt.routing.parameter_a" in prior_posterior_mankoff.columns:
-        prior_posterior_mankoff["frontal_melt.routing.parameter_a"] *= 10**4
-    if "frontal_melt.routing.parameter_a" in prior_posterior_grace.columns:
-        prior_posterior_grace["frontal_melt.routing.parameter_a"] *= 10**4
-    if "ocean.th.gamma_T" in prior_posterior_mankoff.columns:
-        prior_posterior_mankoff["ocean.th.gamma_T"] *= 10**4
-    if "ocean.th.gamma_T" in prior_posterior_grace.columns:
-        prior_posterior_grace["ocean.th.gamma_T"] *= 10**4
-    if "calving.vonmises_calving.sigma_max" in prior_posterior_mankoff.columns:
-        prior_posterior_mankoff["calving.vonmises_calving.sigma_max"] *= 10**-3
-    if "calving.vonmises_calving.sigma_max" in prior_posterior_grace.columns:
-        prior_posterior_mankoff["calving.vonmises_calving.sigma_max"] *= 10**-3
-
-    prior_posterior = pd.concat(
-        [prior_posterior_mankoff, prior_posterior_grace]
-    ).reset_index(drop=True)
-
-    prior_posterior.to_parquet(
-        data_dir
-        / Path(f"""prior_posterior_{filter_range[0]}-{filter_range[1]}.parquet""")
-    )
-
-    prior_posterior_sorted = prp.sort_columns(prior_posterior, params_sorted_list)
-    prior_posterior_mankoff_sorted = prp.sort_columns(
-        prior_posterior_mankoff, params_sorted_list
-    )
-    prior_posterior_grace = _sorted = prp.sort_columns(
-        prior_posterior_grace, params_sorted_list
-    )
-
-    params_sorted_dict = {k: params_short_dict[k] for k in params_sorted_list}
-    bins_sorted_dict = {params_short_dict[k]: bins_dict[k] for k in params_sorted_list}
-    plot_prior_posteriors(
-        prior_posterior_sorted.rename(columns=params_sorted_dict),
-        fig_dir=fig_dir,
-        bins_dict=bins_sorted_dict,
-    )
-
-    da = observed_mankoff_basins_resampled_ds.sel(
-        time=slice(f"{filter_range[0]}", f"{filter_range[-1]}")
-    ).grounding_line_flux.mean(dim="time")
-    posterior_basins_sorted = observed_mankoff_basins_resampled_ds.basin.sortby(
-        da
-    ).values
-
-    plot_posteriors(
-        prior_posterior_mankoff_sorted.rename(columns=params_sorted_dict),
-        x_order=posterior_basins_sorted,
-        fig_dir=fig_dir,
-    )
+        df = retreat_df[
+            (retreat_df["filtered_by"] == f_var)
+            & (retreat_df["ensemble"] == "Posterior")
+        ]
+        df = df[df["retreat_method"] != "All"].drop(columns=["filtered_by"])
+        plot_posteriors(
+            df.rename(columns=params_sorted_dict),
+            x_order=params_sorted_dict.values(),
+            y_order=["GIS", "CW"],
+            hue="retreat_method",
+            fig_dir=fig_p_dir,
+        )
 
     prior_config = prp.filter_config(simulated.isel({"time": 0}), params)
     prior_df = prp.config_to_dataframe(prior_config, ensemble="Prior")
@@ -461,7 +470,7 @@ if __name__ == "__main__":
     sensitivity_indices.to_netcdf(si_dir / Path("sensitivity_indices.nc"))
 
     sensitivity_indices = prp.add_prefix_coord(
-        sensitivity_indices, parameter_catetories
+        sensitivity_indices, parameter_categories
     )
 
     # Group by the new coordinate and compute the sum for each group

@@ -634,16 +634,12 @@ def load_ensemble(
         The loaded xarray Dataset containing the ensemble data.
     """
     print("Loading ensemble files... ", end="", flush=True)
-    ds = (
-        xr.open_mfdataset(
-            filenames,
-            parallel=parallel,
-            preprocess=preprocess,
-            engine=engine,
-        )
-        .drop_vars(["spatial_ref", "mapping"], errors="ignore")
-        .dropna(dim="exp_id")
-    )
+    ds = xr.open_mfdataset(
+        filenames,
+        parallel=parallel,
+        preprocess=preprocess,
+        engine=engine,
+    ).drop_vars(["spatial_ref", "mapping"], errors="ignore")
     print("Done.")
     return ds
 
@@ -1043,7 +1039,7 @@ def config_to_dataframe(
 
 @timeit
 def filter_retreat_experiments(
-    ds: xr.Dataset, retreat_method: Literal["free", "prescribed", "all"]
+    ds: xr.Dataset, retreat_method: Literal["Free", "Prescribed", "All"]
 ) -> xr.Dataset:
     """
     Filter retreat experiments based on the retreat method.
@@ -1055,9 +1051,9 @@ def filter_retreat_experiments(
     ----------
     ds : xr.Dataset
         The input dataset containing the retreat experiments.
-    retreat_method : {"free", "prescribed", "all"}
+    retreat_method : {"Free", "Prescribed", "All"}
         The retreat method to filter by. "free" selects experiments with no prescribed retreat,
-        "prescribed" selects experiments with a prescribed retreat, and "all" selects all experiments.
+        "Prescribed" selects experiments with a prescribed retreat, and "All" selects all experiments.
 
     Returns
     -------
@@ -1068,7 +1064,7 @@ def filter_retreat_experiments(
     --------
     >>> ds = xr.Dataset({'pism_config': (('exp_id', 'pism_config_axis'), [[1, 2], [3, 4]])},
     ...                 coords={'exp_id': [0, 1], 'pism_config_axis': ['param1', 'geometry.front_retreat.prescribed.file']})
-    >>> filter_retreat_experiments(ds, 'free')
+    >>> filter_retreat_experiments(ds, 'Free')
     <xarray.Dataset>
     Dimensions:         (exp_id: 1, pism_config_axis: 2)
     Coordinates:
@@ -1082,11 +1078,11 @@ def filter_retreat_experiments(
         pism_config_axis="geometry.front_retreat.prescribed.file"
     ).compute()
 
-    if retreat_method == "free":
+    if retreat_method == "Free":
         retreat_exp_ids = retreat.where(
             retreat["pism_config"] == "false", drop=True
         ).exp_id.values
-    elif retreat_method == "prescribed":
+    elif retreat_method == "Prescribed":
         retreat_exp_ids = retreat.where(
             retreat["pism_config"] != "false", drop=True
         ).exp_id.values
