@@ -134,7 +134,7 @@ if __name__ == "__main__":
         "--reference_date",
         help="""Reference date.""",
         type=str,
-        default="2020-01-1",
+        default="1986-01-1",
     )
     parser.add_argument(
         "--n_jobs",
@@ -275,7 +275,7 @@ if __name__ == "__main__":
         obs_mankoff_basins = set(observed_mankoff_ds.basin.values)
         obs_grace_basins = set(observed_grace_ds.basin.values)
 
-        simulated = filtered_ds
+        simulated = simulated_retreat_ds
 
         sim_basins = set(simulated.basin.values)
         sim_grace = set(simulated.basin.values)
@@ -305,12 +305,21 @@ if __name__ == "__main__":
             {"time": resampling_frequency}
         ).mean()
 
-        obs_mean_vars_mankoff: list[str] = ["grounding_line_flux", "mass_balance"]
+        obs_mean_vars_mankoff: list[str] = [
+            "grounding_line_flux",
+            "mass_balance",
+            "surface_mass_balance",
+        ]
         obs_std_vars_mankoff: list[str] = [
             "grounding_line_flux_uncertainty",
             "mass_balance_uncertainty",
+            "surface_mass_balance_uncertainty",
         ]
-        sim_vars_mankoff: list[str] = ["grounding_line_flux", "mass_balance"]
+        sim_vars_mankoff: list[str] = [
+            "grounding_line_flux",
+            "mass_balance",
+            "surface_mass_balance",
+        ]
 
         sim_plot_vars = (
             [ragis_config["Cumulative Variables"]["cumulative_mass_balance"]]
@@ -332,17 +341,18 @@ if __name__ == "__main__":
             fudge_factor=mankoff_fudge_factor,
             params=params,
         )
-
         for filter_var in obs_mean_vars_mankoff:
             plot_basins(
-                observed_mankoff_basins_resampled_ds,
-                simulated_prior_mankoff[sim_plot_vars],
+                observed_mankoff_basins_resampled_ds.load(),
+                simulated_prior_mankoff[sim_plot_vars].load(),
                 simulated_posterior_mankoff.sel({"filtered_by": filter_var})[
                     sim_plot_vars
-                ],
+                ].load(),
                 filter_var=filter_var,
                 filter_range=filter_range,
+                figsize=(4.2, 3.2),
                 fig_dir=fig_dir,
+                fontsize=6,
                 fudge_factor=mankoff_fudge_factor,
                 reference_date=reference_date,
                 config=config,
@@ -369,15 +379,16 @@ if __name__ == "__main__":
 
         for filter_var in obs_mean_vars_grace:
             plot_basins(
-                observed_grace_basins_resampled_ds,
-                simulated_prior_grace[sim_plot_vars],
+                observed_grace_basins_resampled_ds.load(),
+                simulated_prior_grace[sim_plot_vars].load(),
                 simulated_posterior_grace.sel({"filtered_by": filter_var})[
                     sim_plot_vars
-                ],
+                ].load(),
                 filter_var=filter_var,
                 filter_range=filter_range,
                 fudge_factor=grace_fudge_factor,
                 fig_dir=fig_dir,
+                figsize=(4.2, 3.2),
                 config=config,
             )
 

@@ -241,6 +241,7 @@ def plot_prior_posteriors(
                         tick.set_rotation(15)
 
                 fig.tight_layout()
+                fig.set_dpi(300)
                 fn = pdf_dir / Path(
                     f"{basin}_prior_posterior_filtered_by_{filter_var}.pdf"
                 )
@@ -248,7 +249,7 @@ def plot_prior_posteriors(
                 fn = png_dir / Path(
                     f"{basin}_prior_posterior_filtered_by_{filter_var}.png"
                 )
-                fig.savefig(fn, dpi=300)
+                fig.savefig(fn)
                 plt.close()
                 del fig
                 progress_bar.update()
@@ -263,6 +264,7 @@ def plot_basins(
     figsize: tuple[float, float] | None = None,
     filter_range: list[int] = [1990, 2019],
     fig_dir: str | Path = "figures",
+    fontsize: int = 6,
     fudge_factor: float = 3.0,
     reference_date: str = "2020-01-01",
     plot_range: list[int] = [1980, 2020],
@@ -291,6 +293,8 @@ def plot_basins(
         A list containing the start and end years for filtering, by default [1990, 2019].
     fig_dir : str or Path, optional
         The directory where figures will be saved, by default "figures".
+    fontsize : float, optional
+        Font size for the plot, by default 6.
     fudge_factor : float, optional
         A multiplicative factor applied to the observed standard deviation to widen the likelihood function,
         allowing for greater tolerance in the matching process, by default 3.0.
@@ -314,7 +318,7 @@ def plot_basins(
         total=len(observed.basin),
     ) as progress_bar:
         for basin in observed.basin:
-            plot_obs_sims(
+            plot_obs_sims_4(
                 observed.sel(basin=basin).sel(
                     {"time": slice(str(plot_range[0]), str(plot_range[1]))}
                 ),
@@ -330,6 +334,7 @@ def plot_basins(
                 filter_range=filter_range,
                 figsize=figsize,
                 fig_dir=fig_dir,
+                fontsize=fontsize,
                 fudge_factor=fudge_factor,
                 obs_alpha=obs_alpha,
                 sim_alpha=sim_alpha,
@@ -405,7 +410,7 @@ def plot_sensitivity_indices(
 
 
 @timeit
-def plot_obs_sims(
+def plot_obs_sims_4(
     obs: xr.Dataset,
     sim_prior: xr.Dataset,
     sim_posterior: xr.Dataset,
@@ -484,6 +489,309 @@ def plot_obs_sims(
     mass_flux_varname = config["Flux Variables"]["mass_flux"]
     mass_flux_uncertainty_varname = config["Flux Uncertainty Variables"][
         "mass_flux_uncertainty"
+    ]
+    smb_flux_varname = config["Flux Variables"]["smb_flux"]
+    smb_flux_uncertainty_varname = config["Flux Uncertainty Variables"][
+        "smb_flux_uncertainty"
+    ]
+
+    if filter_var == "grounding_line_flux":
+        m = -1
+    elif filter_var == "surface_mass_balance":
+        m = -2
+    else:
+        m = 1
+
+    with mpl.rc_context({"font.size": fontsize}):
+
+        fig, axs = plt.subplots(
+            4,
+            1,
+            sharex=True,
+            figsize=figsize,
+            height_ratios=[2, 1, 1, 1],
+        )
+        fig.subplots_adjust(hspace=0.05, wspace=0.05)
+
+        obs_ci = axs[0].fill_between(
+            obs["time"],
+            obs[mass_cumulative_varname]
+            - sigma * obs[mass_cumulative_uncertainty_varname],
+            obs[mass_cumulative_varname]
+            + sigma * obs[mass_cumulative_uncertainty_varname],
+            color=obs_cmap[0],
+            alpha=obs_alpha,
+            lw=0,
+            label=f"Observed ({sigma}-$\sigma$ uncertainty)",
+        )
+
+        if mass_flux_varname in obs.data_vars:
+            axs[1].fill_between(
+                obs["time"],
+                obs[mass_flux_varname] - sigma * obs[mass_flux_uncertainty_varname],
+                obs[mass_flux_varname] + sigma * obs[mass_flux_uncertainty_varname],
+                color=obs_cmap[0],
+                alpha=obs_alpha,
+                lw=0,
+            )
+
+        if smb_flux_varname in obs.data_vars:
+            axs[-2].fill_between(
+                obs["time"],
+                obs[smb_flux_varname] - sigma * obs[smb_flux_uncertainty_varname],
+                obs[smb_flux_varname] + sigma * obs[smb_flux_uncertainty_varname],
+                color=obs_cmap[0],
+                alpha=obs_alpha,
+                lw=0,
+            )
+        if grounding_line_flux_varname in obs.data_vars:
+            axs[-1].fill_between(
+                obs["time"],
+                obs[grounding_line_flux_varname]
+                - sigma * obs[grounding_line_flux_uncertainty_varname],
+                obs[grounding_line_flux_varname]
+                + sigma * obs[grounding_line_flux_uncertainty_varname],
+                color=obs_cmap[0],
+                alpha=obs_alpha,
+                lw=0,
+            )
+
+        if (sim_posterior is not None) and (filter_var in obs.data_vars):
+            obs_filtered = obs.sel(
+                time=slice(f"{filter_range[0]}", f"{filter_range[-1]}")
+            )
+            obs_filtered_ci = axs[m].fill_between(
+                obs_filtered["time"],
+                obs_filtered[filter_var]
+                - fudge_factor * obs_filtered[filter_var + "_uncertainty"],
+                obs_filtered[filter_var]
+                + fudge_factor * obs_filtered[filter_var + "_uncertainty"],
+                alpha=1.0,
+                edgecolor="k",
+                facecolor="none",
+                hatch="///",
+                lw=0.25,
+                label="Filtering Range",
+            )
+            l_f = axs[m].legend(handles=[obs_filtered_ci], loc="lower left")
+            l_f.get_frame().set_linewidth(0.0)
+            l_f.get_frame().set_alpha(0.0)
+
+        sim_cis = []
+        if sim_prior is not None:
+            sim_prior = sim_prior[
+                [
+                    mass_cumulative_varname,
+                    mass_flux_varname,
+                    smb_flux_varname,
+                    grounding_line_flux_varname,
+                    "ensemble",
+                ]
+            ].load()
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
+                quantiles = {}
+                for q in [percentiles[0], 0.5, percentiles[1]]:
+                    quantiles[q] = sim_prior.utils.drop_nonnumeric_vars().quantile(
+                        q, dim="exp_id", skipna=True
+                    )
+
+            for k, m_var in enumerate(
+                [
+                    mass_cumulative_varname,
+                    mass_flux_varname,
+                    smb_flux_varname,
+                    grounding_line_flux_varname,
+                ]
+            ):
+                sim_ci = axs[k].fill_between(
+                    quantiles[0.5].time,
+                    quantiles[percentiles[0]][m_var],
+                    quantiles[percentiles[1]][m_var],
+                    alpha=sim_alpha,
+                    color=sim_cmap[0],
+                    label=f"""{sim_prior["ensemble"].values} ({percentile_range:.0f}% credibility interval)""",
+                    lw=0,
+                )
+                if k == 0:
+                    sim_cis.append(sim_ci)
+        if sim_posterior is not None:
+            sim_posterior = sim_posterior[
+                [
+                    mass_cumulative_varname,
+                    mass_flux_varname,
+                    smb_flux_varname,
+                    grounding_line_flux_varname,
+                    "ensemble",
+                ]
+            ].load()
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
+                quantiles = {}
+                for q in [percentiles[0], 0.5, percentiles[1]]:
+                    quantiles[q] = sim_posterior.utils.drop_nonnumeric_vars().quantile(
+                        q, dim="exp_id", skipna=True
+                    )
+
+            for k, m_var in enumerate(
+                [
+                    mass_cumulative_varname,
+                    mass_flux_varname,
+                    smb_flux_varname,
+                    grounding_line_flux_varname,
+                ]
+            ):
+                sim_ci = axs[k].fill_between(
+                    quantiles[0.5].time,
+                    quantiles[percentiles[0]][m_var],
+                    quantiles[percentiles[1]][m_var],
+                    alpha=sim_alpha,
+                    color=sim_cmap[1],
+                    label=f"""{sim_posterior["ensemble"].values} ({percentile_range:.0f}% credibility interval)""",
+                    lw=0,
+                )
+                if k == 0:
+                    sim_cis.append(sim_ci)
+                axs[k].plot(
+                    quantiles[0.5].time,
+                    quantiles[0.5][m_var],
+                    lw=0.75,
+                    color=sim_cmap[1],
+                )
+
+        legend = axs[0].legend(
+            handles=[obs_ci, *sim_cis],
+        )
+        legend.get_frame().set_linewidth(0.0)
+        legend.get_frame().set_alpha(0.0)
+
+        axs[0].add_artist(legend)
+
+        axs[0].xaxis.set_tick_params(labelbottom=False)
+
+        axs[0].set_ylabel(f"Cumulative mass change\nsince {reference_date} (Gt)")
+        axs[0].set_xlabel("")
+        if sim_posterior is not None:
+            axs[0].set_title(f"{basin} filtered by {filter_var}")
+        else:
+            axs[0].set_title(f"{basin}")
+        axs[1].set_title("")
+        axs[1].set_ylabel("Mass balance\n (Gt/yr)")
+        axs[-2].set_title("")
+        axs[-2].set_ylabel("SMB\n (Gt/yr)")
+        axs[-1].set_title("")
+        axs[-1].set_ylabel("Grounding Line\nFlux (Gt/yr)")
+        axs[-1].set_xlim(np.datetime64("1980-01-01"), np.datetime64("2020-01-01"))
+        fig.tight_layout()
+
+        if sim_prior is not None:
+            prior_str = "prior"
+        else:
+            prior_str = ""
+        if sim_posterior is not None:
+            posterior_str = "_posterior"
+        else:
+            posterior_str = ""
+        prior_posterior_str = prior_str + posterior_str
+
+        fig.set_dpi(600)
+        fig.savefig(
+            pdf_dir
+            / Path(
+                f"{basin}_mass_accounting_{prior_posterior_str}_filtered_by_{filter_var}.pdf"
+            )
+        )
+        fig.savefig(
+            png_dir
+            / Path(
+                f"{basin}_mass_accounting_{prior_posterior_str}_filtered_by_{filter_var}.png",
+                dpi=300,
+            )
+        )
+        plt.close()
+        del fig
+
+
+@timeit
+def plot_obs_sims_3(
+    obs: xr.Dataset,
+    sim_prior: xr.Dataset,
+    sim_posterior: xr.Dataset,
+    config: dict,
+    filter_var: str,
+    filter_range: list[int] = [1990, 2019],
+    figsize: tuple[float, float] | None = None,
+    fig_dir: str | Path = "figures",
+    fudge_factor: float = 3.0,
+    reference_date: str = "2020-01-01",
+    sim_alpha: float = 0.4,
+    obs_alpha: float = 1.0,
+    sigma: float = 2,
+    percentiles: list[float] = [0.025, 0.975],
+    fontsize: float = 6,
+) -> None:
+    """
+    Plot cumulative mass balance and grounding line flux.
+
+    Parameters
+    ----------
+    obs : xr.Dataset
+        Observational dataset.
+    sim_prior : xr.Dataset
+        Prior simulation dataset.
+    sim_posterior : xr.Dataset
+        Posterior simulation dataset.
+    config : dict
+        Configuration dictionary containing variable names.
+    filter_var : str
+        Variable used for filtering.
+    filter_range : list[int], optional
+        Range of years for filtering, by default [1990, 2019].
+    figsize : tuple[float, float] or None, optional
+        Size of the figure, by default None.
+    fig_dir : str or Path, optional
+        Directory to save the figures, by default "figures".
+    fudge_factor : float, optional
+        A multiplicative factor applied to the observed standard deviation to widen the likelihood function,
+        allowing for greater tolerance in the matching process, by default 3.0.
+    reference_date : str, optional
+        The reference date for cumulative mass change, by default "2020-01-01".
+    sim_alpha : float, optional
+        Alpha value for simulation plots, by default 0.4.
+    obs_alpha : float, optional
+        Alpha value for observation plots, by default 1.0.
+    sigma : float, optional
+        Sigma value for uncertainty, by default 2.
+    percentiles : list[float], optional
+        Percentiles for credibility interval, by default [0.025, 0.975].
+    fontsize : float, optional
+        Font size for the plot, by default 6.
+    """
+
+    import pism_ragis.processing  # pylint: disable=import-outside-toplevel,reimported
+
+    Path(fig_dir).mkdir(exist_ok=True)
+    plot_dir = fig_dir / Path("basin_timeseries")
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    pdf_dir = plot_dir / Path("pdfs")
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    png_dir = plot_dir / Path("pngs")
+    png_dir.mkdir(parents=True, exist_ok=True)
+
+    percentile_range = (percentiles[1] - percentiles[0]) * 100
+
+    basin = obs.basin.values
+    mass_cumulative_varname = config["Cumulative Variables"]["cumulative_mass_balance"]
+    mass_cumulative_uncertainty_varname = config["Cumulative Uncertainty Variables"][
+        "cumulative_mass_balance_uncertainty"
+    ]
+    grounding_line_flux_varname = config["Flux Variables"]["grounding_line_flux"]
+    grounding_line_flux_uncertainty_varname = config["Flux Uncertainty Variables"][
+        "grounding_line_flux_uncertainty"
+    ]
+    mass_flux_varname = config["Flux Variables"]["smb_flux"]
+    mass_flux_uncertainty_varname = config["Flux Uncertainty Variables"][
+        "smb_flux_uncertainty"
     ]
 
     if filter_var == "grounding_line_flux":
@@ -645,14 +953,14 @@ def plot_obs_sims(
 
         axs[0].xaxis.set_tick_params(labelbottom=False)
 
-        axs[0].set_ylabel(f"Cumulative mass\nchange since {reference_date} (Gt)")
+        axs[0].set_ylabel(f"Cumulative mass change\nsince {reference_date} (Gt)")
         axs[0].set_xlabel("")
         if sim_posterior is not None:
             axs[0].set_title(f"{basin} filtered by {filter_var}")
         else:
             axs[0].set_title(f"{basin}")
         axs[1].set_title("")
-        axs[1].set_ylabel("Mass balance\n (Gt/yr)")
+        axs[1].set_ylabel("Mass Balance\n (Gt/yr)")
         axs[-1].set_title("")
         axs[-1].set_ylabel("Grounding Line\nFlux (Gt/yr)")
         axs[-1].set_xlim(np.datetime64("1980-01-01"), np.datetime64("2020-01-01"))
@@ -668,6 +976,268 @@ def plot_obs_sims(
             posterior_str = ""
         prior_posterior_str = prior_str + posterior_str
 
+        fig.set_dpi(600)
+        fig.savefig(
+            pdf_dir
+            / Path(
+                f"{basin}_mass_accounting_{prior_posterior_str}_filtered_by_{filter_var}.pdf"
+            )
+        )
+        fig.savefig(
+            png_dir
+            / Path(
+                f"{basin}_mass_accounting_{prior_posterior_str}_filtered_by_{filter_var}.png",
+                dpi=300,
+            )
+        )
+        plt.close()
+        del fig
+
+
+@timeit
+def plot_obs_sims_2(
+    obs: xr.Dataset,
+    sim_prior: xr.Dataset,
+    sim_posterior: xr.Dataset,
+    config: dict,
+    filter_var: str,
+    filter_range: list[int] = [1990, 2019],
+    figsize: tuple[float, float] | None = None,
+    fig_dir: str | Path = "figures",
+    fudge_factor: float = 3.0,
+    reference_date: str = "2020-01-01",
+    sim_alpha: float = 0.4,
+    obs_alpha: float = 1.0,
+    sigma: float = 2,
+    percentiles: list[float] = [0.025, 0.975],
+    fontsize: float = 6,
+) -> None:
+    """
+    Plot cumulative mass balance and grounding line flux.
+
+    Parameters
+    ----------
+    obs : xr.Dataset
+        Observational dataset.
+    sim_prior : xr.Dataset
+        Prior simulation dataset.
+    sim_posterior : xr.Dataset
+        Posterior simulation dataset.
+    config : dict
+        Configuration dictionary containing variable names.
+    filter_var : str
+        Variable used for filtering.
+    filter_range : list[int], optional
+        Range of years for filtering, by default [1990, 2019].
+    figsize : tuple[float, float] or None, optional
+        Size of the figure, by default None.
+    fig_dir : str or Path, optional
+        Directory to save the figures, by default "figures".
+    fudge_factor : float, optional
+        A multiplicative factor applied to the observed standard deviation to widen the likelihood function,
+        allowing for greater tolerance in the matching process, by default 3.0.
+    reference_date : str, optional
+        The reference date for cumulative mass change, by default "2020-01-01".
+    sim_alpha : float, optional
+        Alpha value for simulation plots, by default 0.4.
+    obs_alpha : float, optional
+        Alpha value for observation plots, by default 1.0.
+    sigma : float, optional
+        Sigma value for uncertainty, by default 2.
+    percentiles : list[float], optional
+        Percentiles for credibility interval, by default [0.025, 0.975].
+    fontsize : float, optional
+        Font size for the plot, by default 6.
+    """
+
+    import pism_ragis.processing  # pylint: disable=import-outside-toplevel,reimported
+
+    Path(fig_dir).mkdir(exist_ok=True)
+    plot_dir = fig_dir / Path("basin_timeseries")
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    pdf_dir = plot_dir / Path("pdfs")
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    png_dir = plot_dir / Path("pngs")
+    png_dir.mkdir(parents=True, exist_ok=True)
+
+    percentile_range = (percentiles[1] - percentiles[0]) * 100
+
+    basin = obs.basin.values
+    mass_cumulative_varname = config["Cumulative Variables"]["cumulative_mass_balance"]
+    mass_cumulative_uncertainty_varname = config["Cumulative Uncertainty Variables"][
+        "cumulative_mass_balance_uncertainty"
+    ]
+    grounding_line_flux_varname = config["Flux Variables"]["grounding_line_flux"]
+    grounding_line_flux_uncertainty_varname = config["Flux Uncertainty Variables"][
+        "grounding_line_flux_uncertainty"
+    ]
+    if filter_var == "grounding_line_flux":
+        m = -1
+    else:
+        m = 1
+
+    with mpl.rc_context({"font.size": fontsize}):
+
+        fig, axs = plt.subplots(
+            2,
+            1,
+            sharex=True,
+            figsize=figsize,
+            height_ratios=[2, 1],
+        )
+        fig.subplots_adjust(hspace=0.05, wspace=0.05)
+
+        obs_ci = axs[0].fill_between(
+            obs["time"],
+            obs[mass_cumulative_varname]
+            - sigma * obs[mass_cumulative_uncertainty_varname],
+            obs[mass_cumulative_varname]
+            + sigma * obs[mass_cumulative_uncertainty_varname],
+            color=obs_cmap[0],
+            alpha=obs_alpha,
+            lw=0,
+            label=f"Observed ({sigma}-$\sigma$ uncertainty)",
+        )
+
+        if grounding_line_flux_varname in obs.data_vars:
+            axs[-1].fill_between(
+                obs["time"],
+                obs[grounding_line_flux_varname]
+                - sigma * obs[grounding_line_flux_uncertainty_varname],
+                obs[grounding_line_flux_varname]
+                + sigma * obs[grounding_line_flux_uncertainty_varname],
+                color=obs_cmap[0],
+                alpha=obs_alpha,
+                lw=0,
+            )
+
+        if (sim_posterior is not None) and (filter_var in obs.data_vars):
+            obs_filtered = obs.sel(
+                time=slice(f"{filter_range[0]}", f"{filter_range[-1]}")
+            )
+            obs_filtered_ci = axs[m].fill_between(
+                obs_filtered["time"],
+                obs_filtered[filter_var]
+                - fudge_factor * obs_filtered[filter_var + "_uncertainty"],
+                obs_filtered[filter_var]
+                + fudge_factor * obs_filtered[filter_var + "_uncertainty"],
+                alpha=1.0,
+                edgecolor="k",
+                facecolor="none",
+                hatch="///",
+                lw=0.25,
+                label="Filtering Range",
+            )
+            l_f = axs[m].legend(handles=[obs_filtered_ci], loc="lower left")
+            l_f.get_frame().set_linewidth(0.0)
+            l_f.get_frame().set_alpha(0.0)
+
+        sim_cis = []
+        if sim_prior is not None:
+            sim_prior = sim_prior[
+                [
+                    mass_cumulative_varname,
+                    grounding_line_flux_varname,
+                    "ensemble",
+                ]
+            ].load()
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
+                quantiles = {}
+                for q in [percentiles[0], 0.5, percentiles[1]]:
+                    quantiles[q] = sim_prior.utils.drop_nonnumeric_vars().quantile(
+                        q, dim="exp_id", skipna=True
+                    )
+
+            for k, m_var in enumerate(
+                [
+                    mass_cumulative_varname,
+                    grounding_line_flux_varname,
+                ]
+            ):
+                sim_ci = axs[k].fill_between(
+                    quantiles[0.5].time,
+                    quantiles[percentiles[0]][m_var],
+                    quantiles[percentiles[1]][m_var],
+                    alpha=sim_alpha,
+                    color=sim_cmap[0],
+                    label=f"""{sim_prior["ensemble"].values} ({percentile_range:.0f}% credibility interval)""",
+                    lw=0,
+                )
+                if k == 0:
+                    sim_cis.append(sim_ci)
+        if sim_posterior is not None:
+            sim_posterior = sim_posterior[
+                [
+                    mass_cumulative_varname,
+                    grounding_line_flux_varname,
+                    "ensemble",
+                ]
+            ].load()
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
+                quantiles = {}
+                for q in [percentiles[0], 0.5, percentiles[1]]:
+                    quantiles[q] = sim_posterior.utils.drop_nonnumeric_vars().quantile(
+                        q, dim="exp_id", skipna=True
+                    )
+
+            for k, m_var in enumerate(
+                [
+                    mass_cumulative_varname,
+                    grounding_line_flux_varname,
+                ]
+            ):
+                sim_ci = axs[k].fill_between(
+                    quantiles[0.5].time,
+                    quantiles[percentiles[0]][m_var],
+                    quantiles[percentiles[1]][m_var],
+                    alpha=sim_alpha,
+                    color=sim_cmap[1],
+                    label=f"""{sim_posterior["ensemble"].values} ({percentile_range:.0f}% credibility interval)""",
+                    lw=0,
+                )
+                if k == 0:
+                    sim_cis.append(sim_ci)
+                axs[k].plot(
+                    quantiles[0.5].time,
+                    quantiles[0.5][m_var],
+                    lw=0.75,
+                    color=sim_cmap[1],
+                )
+
+        legend = axs[0].legend(
+            handles=[obs_ci, *sim_cis],
+        )
+        legend.get_frame().set_linewidth(0.0)
+        legend.get_frame().set_alpha(0.0)
+
+        axs[0].add_artist(legend)
+
+        axs[0].xaxis.set_tick_params(labelbottom=False)
+
+        axs[0].set_ylabel(f"Cumulative mass change\nsince {reference_date} (Gt)")
+        axs[0].set_xlabel("")
+        if sim_posterior is not None:
+            axs[0].set_title(f"{basin} filtered by {filter_var}")
+        else:
+            axs[0].set_title(f"{basin}")
+        axs[-1].set_title("")
+        axs[-1].set_ylabel("Grounding Line\nFlux (Gt/yr)")
+        axs[-1].set_xlim(np.datetime64("1980-01-01"), np.datetime64("2020-01-01"))
+        fig.tight_layout()
+
+        if sim_prior is not None:
+            prior_str = "prior"
+        else:
+            prior_str = ""
+        if sim_posterior is not None:
+            posterior_str = "_posterior"
+        else:
+            posterior_str = ""
+        prior_posterior_str = prior_str + posterior_str
+
+        fig.set_dpi(600)
         fig.savefig(
             pdf_dir
             / Path(
