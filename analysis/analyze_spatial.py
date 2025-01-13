@@ -35,6 +35,7 @@ import rioxarray as rxr
 import seaborn as sns
 import toml
 import xarray as xr
+import xskillscore
 from dask.diagnostics import ProgressBar
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
@@ -144,7 +145,11 @@ if __name__ == "__main__":
     ds = load_ensemble(spatial_files, preprocess=preprocess_nc)
     sim_ds = ds.sel({"time": str(sampling_year)}).mean(dim="time")
 
-    observed = xr.open_dataset(options.obs_url, chunks="auto")
+    observed = (
+        xr.open_dataset(options.obs_url, chunks="auto")
+        .sel({"time": str(sampling_year)})
+        .mean(dim="time")
+    )
     observed = observed.where(observed["ice"])
 
     obs_ds = observed.interp_like(sim_ds)
@@ -157,6 +162,10 @@ if __name__ == "__main__":
     # sim_ds = sim_ds.sel(
     #     {"x": slice(-225_000, -80_000), "y": slice(-2_350_000, -2_222_000)}
     # )
+    x_min, y_min = -65517, -3317968
+    x_max, y_max = 525929, -2528980
+    obs_ds = obs_ds.sel({"x": slice(x_min, x_max), "y": slice(y_min, y_max)})
+    sim_ds = sim_ds.sel({"x": slice(x_min, x_max), "y": slice(y_min, y_max)})
 
     print("Importance sampling using v")
     f = importance_sampling(
@@ -172,3 +181,12 @@ if __name__ == "__main__":
     )
     with ProgressBar():
         filtered_ids = f.compute()
+
+    s = sim_ds["velsurf_mag"]
+    o = obs_ds["v"]
+    print(xskillscore.rmse(s, o, dim=["x", "y"], skipna=True).values)
+
+    fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+    s.median(dim="exp_id").plot(ax=axs[0], vmin=0, vmax=500, label=False)
+    o.plot(ax=axs[1], vmin=0, vmax=500)
+    plt.show()
