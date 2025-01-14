@@ -190,3 +190,9 @@ if __name__ == "__main__":
     s.median(dim="exp_id").plot(ax=axs[0], vmin=0, vmax=500, label=False)
     o.plot(ax=axs[1], vmin=0, vmax=500)
     plt.show()
+
+    observed = (
+        xr.open_dataset(options.obs_url, chunks="auto")
+        .sel({"time": str(sampling_year)})
+        .mean(dim="time")
+    )

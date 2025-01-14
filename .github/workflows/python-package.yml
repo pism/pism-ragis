@@ -17,18 +17,20 @@ jobs:
       fail-fast: false
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
-    - name: Set up micromamba
-      uses: mamba-org/setup-micromamba@v2
+    - name: Set up conda
+      uses: conda-incubator/setup-miniconda@v3
       with:
-        micromamba-version: "latest"
+        auto-update-conda: true
+        miniconda-version: "latest"
         generate-run-shell: true
         environment-file: environment-dev.yml
-        cache-environment: true
-        post-cleanup: 'all'
+        auto-activate-base: false
+     - name: Conda info
+      shell: bash -el {0}
+      run: conda info
     - name: Run tests
       run: |
         python -c "import petsc4py; petsc4py.init(); from petsc4py import PETSc;"
         python -m pytest
-      shell: micromamba-shell {0}
