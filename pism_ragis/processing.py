@@ -1290,12 +1290,11 @@ def prepare_simulations(
 
 @timeit
 def prepare_observations(
-    basin_url: Union[Path, str],
-    grace_url: Union[Path, str],
+    url: Path | str,
     config: Dict[str, Any],
     reference_date: str,
     engine: str = "h5netcdf",
-) -> tuple[xr.Dataset, xr.Dataset]:
+) -> xr.Dataset:
     """
     Prepare observation datasets by normalizing cumulative variables.
 
@@ -1304,10 +1303,8 @@ def prepare_observations(
 
     Parameters
     ----------
-    basin_url : Union[Path, str]
+    url : Union[Path, str]
         The URL or path to the basin observation dataset.
-    grace_url : Union[Path, str]
-        The URL or path to the GRACE observation dataset.
     config : Dict[str, Any]
         A dictionary containing configuration settings for processing the datasets.
     reference_date : str
@@ -1317,8 +1314,8 @@ def prepare_observations(
 
     Returns
     -------
-    tuple[xr.Dataset, xr.Dataset]
-        A tuple containing the processed basin and GRACE observation datasets.
+    xr.Dataset
+        A observation datasets.
 
     Examples
     --------
@@ -1326,36 +1323,22 @@ def prepare_observations(
     ...     "Cumulative Variables": {"cumulative_mass_balance": "mass_balance"},
     ...     "Cumulative Uncertainty Variables": {"cumulative_mass_balance_uncertainty": "mass_balance_uncertainty"}
     ... }
-    >>> prepare_observations("basin.nc", "grace.nc", config, "2000-01-1")
-    (<xarray.Dataset>, <xarray.Dataset>)
+    >>> prepare_observations("basin.nc", config, "2000-01-1")
+    <xarray.Dataset>
     """
-    obs_basin = xr.open_dataset(basin_url, engine=engine, chunks=-1)
-    obs_basin = obs_basin.sortby("basin")
+    ds = xr.open_dataset(url, engine=engine, chunks=-1)
+    ds = ds.sortby("basin")
 
     cumulative_vars = config["Cumulative Variables"]
     cumulative_uncertainty_vars = config["Cumulative Uncertainty Variables"]
 
-    obs_basin = normalize_cumulative_variables(
-        obs_basin,
+    ds = normalize_cumulative_variables(
+        ds,
         list(cumulative_vars.values()) + list(cumulative_uncertainty_vars.values()),
         reference_date,
     )
 
-    obs_grace = xr.open_dataset(grace_url, engine=engine, chunks=-1)
-    obs_grace = obs_grace.sortby("basin")
-
-    cumulative_vars = config["Cumulative Variables"]["cumulative_mass_balance"]
-    cumulative_uncertainty_vars = config["Cumulative Uncertainty Variables"][
-        "cumulative_mass_balance_uncertainty"
-    ]
-
-    obs_grace = normalize_cumulative_variables(
-        obs_grace,
-        [cumulative_vars] + [cumulative_uncertainty_vars],
-        reference_date,
-    )
-
-    return obs_basin, obs_grace
+    return ds
 
 
 def convert_bstrings_to_str(element: Any) -> Any:

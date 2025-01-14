@@ -75,16 +75,10 @@ if __name__ == "__main__":
         default="./results",
     )
     parser.add_argument(
-        "--mankoff_url",
-        help="""Path to "observed" Mankoff mass balance.""",
+        "--observed_url",
+        help="""Path to "observed" mass balance.""",
         type=str,
         default="data/mass_balance/mankoff_greenland_mass_balance.nc",
-    )
-    parser.add_argument(
-        "--grace_url",
-        help="""Path to "observed" GRACE mass balance.""",
-        type=str,
-        default="data/mass_balance/grace_greenland_mass_balance.nc",
     )
     parser.add_argument(
         "--engine",
@@ -184,8 +178,7 @@ if __name__ == "__main__":
     params = list(params_short_dict.keys())
     obs_cmap = config["Plotting"]["obs_cmap"]
     sim_cmap = config["Plotting"]["sim_cmap"]
-    grace_fudge_factor = config["Importance Sampling"]["grace_fudge_factor"]
-    mankoff_fudge_factor = config["Importance Sampling"]["mankoff_fudge_factor"]
+    fudge_factor = config["Importance Sampling"]["mankoff_fudge_factor"]
     retreat_methods = ["All", "Free", "Prescribed"]
 
     result_dir = Path(options.result_dir)
@@ -216,18 +209,17 @@ if __name__ == "__main__":
         basin_files, config, reference_date, parallel=parallel, engine=engine
     )
 
-    observed_mankoff_ds, observed_grace_ds = prp.prepare_observations(
-        options.mankoff_url,
-        options.grace_url,
+    observed_ds = prp.prepare_observations(
+        options.observed_url,
         config,
         reference_date,
         engine=engine,
     )
 
-    da = observed_mankoff_ds.sel(
-        time=slice(f"{filter_range[0]}", f"{filter_range[-1]}")
-    )["grounding_line_flux"].mean(dim="time")
-    posterior_basins_sorted = observed_mankoff_ds.basin.sortby(da).values
+    da = observed_ds.sel(time=slice(f"{filter_range[0]}", f"{filter_range[-1]}"))[
+        "grounding_line_flux"
+    ].mean(dim="time")
+    posterior_basins_sorted = observed_ds.basin.sortby(da).values
 
     bins_dict = config["Posterior Bins"]
     parameter_categories = config["Parameter Categories"]
@@ -272,50 +264,35 @@ if __name__ == "__main__":
         filtered_config = prp.filter_config(filtered_ds, params)
         filtered_df = prp.config_to_dataframe(filtered_config, ensemble="Filtered")
 
-        obs_mankoff_basins = set(observed_mankoff_ds.basin.values)
-        obs_grace_basins = set(observed_grace_ds.basin.values)
+        obs_basins = set(observed_ds.basin.values)
 
         simulated = simulated_retreat_ds
 
         sim_basins = set(simulated.basin.values)
-        sim_grace = set(simulated.basin.values)
 
-        intersection_mankoff = list(sim_basins.intersection(obs_mankoff_basins))
-        intersection_grace = list(sim_grace.intersection(obs_grace_basins))
+        intersection = list(sim_basins.intersection(obs_basins))
 
-        observed_mankoff_basins_ds = observed_mankoff_ds.sel(
-            {"basin": intersection_mankoff}
-        )
-        simulated_mankoff_basins_ds = simulated.sel({"basin": intersection_mankoff})
+        observed_basins_ds = observed_ds.sel({"basin": intersection})
+        simulated_basins_ds = simulated.sel({"basin": intersection})
 
-        observed_mankoff_basins_resampled_ds = observed_mankoff_basins_ds.resample(
+        observed_basins_resampled_ds = observed_basins_ds.resample(
             {"time": resampling_frequency}
         ).mean()
-        simulated_mankoff_basins_resampled_ds = simulated_mankoff_basins_ds.resample(
+        simulated_basins_resampled_ds = simulated_basins_ds.resample(
             {"time": resampling_frequency}
         ).mean()
 
-        observed_grace_basins_ds = observed_grace_ds.sel({"basin": intersection_grace})
-        simulated_grace_basins_ds = simulated.sel({"basin": intersection_grace})
-
-        observed_grace_basins_resampled_ds = observed_grace_basins_ds.resample(
-            {"time": resampling_frequency}
-        ).mean()
-        simulated_grace_basins_resampled_ds = simulated_grace_basins_ds.resample(
-            {"time": resampling_frequency}
-        ).mean()
-
-        obs_mean_vars_mankoff: list[str] = [
+        obs_mean_vars: list[str] = [
             "grounding_line_flux",
             "mass_balance",
             "surface_mass_balance",
         ]
-        obs_std_vars_mankoff: list[str] = [
+        obs_std_vars: list[str] = [
             "grounding_line_flux_uncertainty",
             "mass_balance_uncertainty",
             "surface_mass_balance_uncertainty",
         ]
-        sim_vars_mankoff: list[str] = [
+        sim_vars: list[str] = [
             "grounding_line_flux",
             "mass_balance",
             "surface_mass_balance",
@@ -328,24 +305,24 @@ if __name__ == "__main__":
         )
 
         (
-            prior_posterior_mankoff,
-            simulated_prior_mankoff,
-            simulated_posterior_mankoff,
+            prior_posterior,
+            simulated_prior,
+            simulated_posterior,
         ) = run_importance_sampling(
-            observed=observed_mankoff_basins_resampled_ds,
-            simulated=simulated_mankoff_basins_resampled_ds,
-            obs_mean_vars=obs_mean_vars_mankoff,
-            obs_std_vars=obs_std_vars_mankoff,
-            sim_vars=sim_vars_mankoff,
+            observed=observed_basins_resampled_ds,
+            simulated=simulated_basins_resampled_ds,
+            obs_mean_vars=obs_mean_vars,
+            obs_std_vars=obs_std_vars,
+            sim_vars=sim_vars,
             filter_range=filter_range,
-            fudge_factor=mankoff_fudge_factor,
+            fudge_factor=fudge_factor,
             params=params,
         )
-        for filter_var in obs_mean_vars_mankoff:
+        for filter_var in obs_mean_vars:
             plot_basins(
-                observed_mankoff_basins_resampled_ds.load(),
-                simulated_prior_mankoff[sim_plot_vars].load(),
-                simulated_posterior_mankoff.sel({"filtered_by": filter_var})[
+                observed_basins_resampled_ds.load(),
+                simulated_prior[sim_plot_vars].load(),
+                simulated_posterior.sel({"filtered_by": filter_var})[
                     sim_plot_vars
                 ].load(),
                 filter_var=filter_var,
@@ -353,48 +330,10 @@ if __name__ == "__main__":
                 figsize=(4.2, 3.2),
                 fig_dir=fig_dir,
                 fontsize=6,
-                fudge_factor=mankoff_fudge_factor,
+                fudge_factor=fudge_factor,
                 reference_date=reference_date,
                 config=config,
             )
-
-        obs_mean_vars_grace: list[str] = ["mass_balance"]
-        obs_std_vars_grace: list[str] = [
-            "mass_balance_uncertainty",
-        ]
-        sim_vars_grace: list[str] = ["mass_balance"]
-
-        prior_posterior_grace, simulated_prior_grace, simulated_posterior_grace = (
-            run_importance_sampling(
-                observed=observed_grace_basins_resampled_ds,
-                simulated=simulated_grace_basins_resampled_ds,
-                obs_mean_vars=obs_mean_vars_grace,
-                obs_std_vars=obs_std_vars_grace,
-                sim_vars=sim_vars_grace,
-                fudge_factor=grace_fudge_factor,
-                filter_range=filter_range,
-                params=params,
-            )
-        )
-
-        for filter_var in obs_mean_vars_grace:
-            plot_basins(
-                observed_grace_basins_resampled_ds.load(),
-                simulated_prior_grace[sim_plot_vars].load(),
-                simulated_posterior_grace.sel({"filtered_by": filter_var})[
-                    sim_plot_vars
-                ].load(),
-                filter_var=filter_var,
-                filter_range=filter_range,
-                fudge_factor=grace_fudge_factor,
-                fig_dir=fig_dir,
-                figsize=(4.2, 3.2),
-                config=config,
-            )
-
-        prior_posterior = pd.concat(
-            [prior_posterior_mankoff, prior_posterior_grace]
-        ).reset_index(drop=True)
 
         # Apply the functions to the corresponding columns
         for col, functions in column_function_mapping.items():
@@ -459,9 +398,9 @@ if __name__ == "__main__":
 
     sensitivity_indices_list = []
     for basin_group, intersection, filtering_vars in zip(
-        [simulated_grace_basins_ds, simulated_mankoff_basins_ds],
-        [intersection_grace, intersection_mankoff],
-        [["mass_balance"], ["mass_balance", "grounding_line_flux"]],
+        [simulated_basins_ds],
+        [intersection],
+        [["mass_balance", "grounding_line_flux"]],
     ):
         sobol_response_ds = basin_group
         sobol_input_df = params_df[params_df["basin"].isin(intersection)]
