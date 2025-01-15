@@ -142,7 +142,7 @@ if __name__ == "__main__":
     ragis_config = toml.load(ragis_config_file)
     sampling_year = 2018
 
-    ds = load_ensemble(spatial_files, preprocess=preprocess_nc)
+    ds = load_ensemble(spatial_files, preprocess=preprocess_nc, parallel=True
     sim_ds = ds.sel({"time": str(sampling_year)}).mean(dim="time")
 
     observed = (
@@ -173,7 +173,7 @@ if __name__ == "__main__":
         simulated=sim_ds,
         log_likelihood=log_normal,
         n_samples=len(ds.exp_id),
-        fudge_factor=10,
+        fudge_factor=50,
         obs_mean_var="v",
         obs_std_var="v_err",
         sim_var="velsurf_mag",
