@@ -87,18 +87,27 @@ if __name__ == "__main__":
     ds = xr.concat([ds, gis], dim="basin")
     ds["basin"] = ds["basin"].astype("<U3")
 
+    # The data is unevenly space in time. Until 1986, the interval is 1 year, and
+    # from 1986 on, the interval is 1 day. We thus compute the amount of days in a given
+    # interval.
     days_in_interval = (
         (ds.time.diff(dim="time") / np.timedelta64(1, "s"))
         .pint.quantify("s")
         .pint.to("day")
     )
     for v in basin_vars:
-        ds[f"cumulative_{v}"] = (ds[v] * days_in_interval).cumsum(dim="time")
+        ds[f"cumulative_{v}"] = (ds[v].pint.to("Gt day^-1") * days_in_interval).cumsum(
+            dim="time"
+        )
         ds[v] = ds[v].pint.to("Gt year^-1")
+        ds[f"cumulative_{v}"] = ds[f"cumulative_{v}"].pint.to("Gt")
 
     for v in basin_uncertainty_vars:
-        ds[f"cumulative_{v}"] = (ds[v] * days_in_interval).cumsum(dim="time")
+        ds[f"cumulative_{v}"] = np.sqrt(
+            (((ds[v].pint.to("Gt day^-1") * days_in_interval) ** 2)).cumsum(dim="time")
+        )
         ds[v] = ds[v].pint.to("Gt year^-1")
+        ds[f"cumulative_{v}"] = ds[f"cumulative_{v}"].pint.to("Gt")
 
     discharge_sign = xr.DataArray(-1).pint.quantify("1")
 

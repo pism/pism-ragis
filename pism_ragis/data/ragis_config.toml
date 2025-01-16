@@ -1,7 +1,6 @@
 [Parameters]
 
 'calving.vonmises_calving.sigma_max' = '$\sigma_{\mathrm{max}}$ (kPa)'
-'calving.rate_scaling.file' = 'Calving'
 'geometry.front_retreat.prescribed.file' = 'Retreat Method'
 'ocean.th.gamma_T' = '$\gamma$ (10$^{-4}$ 1)'
 'surface.given.file' = 'Climate Forcing'
@@ -22,7 +21,6 @@
 ['Posterior Bins']
 
 'calving.vonmises_calving.sigma_max' = 10
-'calving.rate_scaling.file' = 5
 'geometry.front_retreat.prescribed.file' = 2
 'ocean.th.gamma_T' = 5
 'surface.given.file' = 3

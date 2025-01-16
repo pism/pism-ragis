@@ -214,13 +214,13 @@ if __name__ == "__main__":
         "--resampling_frequency",
         help="""Resampling data to resampling_frequency for importance sampling. Default is "MS".""",
         type=str,
-        default="YS",
+        default=None,
     )
     parser.add_argument(
         "--reference_date",
         help="""Reference date.""",
         type=str,
-        default="2003-01-1",
+        default="2018-01-1",
     )
     parser.add_argument(
         "--log",
@@ -263,7 +263,6 @@ if __name__ == "__main__":
 
     mpl.rcParams.update(rcparams)
 
-    reference_date = "2003-01-01"
     cumulative_vars = list(config["Cumulative Variables"].values())
     cumulative_uncertainty_vars = list(
         config["Cumulative Uncertainty Variables"].values()
@@ -278,7 +277,6 @@ if __name__ == "__main__":
     mou_ds["name"] = "MOU19"
 
     man_ds = xr.open_dataset("data/mass_balance/mankoff_greenland_mass_balance.nc")
-    man_ds = man_ds.resample({"time": resampling_frequency}).mean()
     man_ds = normalize_cumulative_variables(
         man_ds, normalize_vars, reference_date=reference_date
     )
@@ -290,16 +288,20 @@ if __name__ == "__main__":
         reference_date=reference_date,
     )
 
-    grace_ds = grace_ds.resample({"time": resampling_frequency}).mean()
     grace_ds["name"] = "GRACE"
     grace_ds["basin"] = ["GIS"]
+
+    if resampling_frequency is not None:
+        man_ds = man_ds.resample({"time": resampling_frequency}).mean()
+        grace_ds = grace_ds.resample({"time": resampling_frequency}).mean()
 
     for basin in ["GIS"]:
         plot_basin(
             [man_ds, mou_ds, grace_ds],
             basin=basin,
-            sigma=1,
+            sigma=2,
             fig_dir=fig_dir,
+            plot_range=["1980", "2020"],
         )
 
     for basin in ["CW", "CE", "SW", "SE", "NW", "NE", "NO"]:
