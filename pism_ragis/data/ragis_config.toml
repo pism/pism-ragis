@@ -104,5 +104,5 @@ hist_cmap = ["#a6cee3", "#1f78b4"]
 
 ['Importance Sampling']
 
-grace_fudge_factor = 5
+grace_fudge_factor = 3
 mankoff_fudge_factor = 3

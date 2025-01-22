@@ -883,9 +883,8 @@ def simplify_ocean(my_str: str) -> int:
         "HadGEM2-ES_rcp85": 4,
         "IPSL-CM5-MR_rcp85": 5,
         "MIROC-ESM-CHEM_rcp26": 6,
-        "MIROC-ESM-CHEM_rcp85": 7,
-        "NorESM1-M_rcp85": 8,
-        "UKESM1-CM6_ssp585": 9,
+        "NorESM1-M_rcp85": 7,
+        "UKESM1-CM6_ssp585": 8,
     }
 
     gcm = "_".join(my_str.split("_")[1:3])
@@ -1167,7 +1166,6 @@ def prepare_input(
     params: List[str] = [
         "surface.given.file",
         "ocean.th.file",
-        "calving.rate_scaling.file",
         "geometry.front_retreat.prescribed.file",
     ],
 ) -> pd.DataFrame:
@@ -1184,7 +1182,7 @@ def prepare_input(
     params : List[str], optional
         A list of column names to be processed. Unique values in these columns will be mapped to integers.
         By default, the list includes:
-        ["surface.given.file", "ocean.th.file", "calving.rate_scaling.file", "geometry.front_retreat.prescribed.file"].
+        ["surface.given.file", "ocean.th.file", "geometry.front_retreat.prescribed.file"].
 
     Returns
     -------
@@ -1196,16 +1194,15 @@ def prepare_input(
     >>> df = pd.DataFrame({
     ...     "surface.given.file": ["file1", "file2", "file1"],
     ...     "ocean.th.file": ["fileA", "fileB", "fileA"],
-    ...     "calving.rate_scaling.file": ["fileX", "fileY", "fileX"],
     ...     "geometry.front_retreat.prescribed.file": ["fileM", "fileN", "fileM"],
     ...     "ensemble": [1, 2, 3],
     ...     "exp_id": [101, 102, 103]
     ... })
     >>> prepare_input(df)
-       surface.given.file  ocean.th.file  calving.rate_scaling.file  geometry.front_retreat.prescribed.file
-    0                   0              0                          0                                      0
-    1                   1              1                          1                                      1
-    2                   0              0                          0                                      0
+       surface.given.file  ocean.th.file  geometry.front_retreat.prescribed.file
+    0                   0              0                                      0
+    1                   1              1                                      1
+    2                   0              0                                      0
     """
     df = df.apply(convert_column_to_numeric).drop(
         columns=["ensemble", "exp_id"], errors="ignore"

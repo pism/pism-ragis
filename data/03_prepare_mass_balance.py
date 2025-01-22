@@ -90,27 +90,21 @@ if __name__ == "__main__":
     # The data is unevenly space in time. Until 1986, the interval is 1 year, and
     # from 1986 on, the interval is 1 day. We thus compute the amount of days in a given
     # interval.
-    days_in_interval = (
-        (ds.time.diff(dim="time") / np.timedelta64(1, "s"))
+    dt = (
+        (ds.time.diff(dim="time", label="lower") / np.timedelta64(1, "s"))
         .pint.quantify("s")
         .pint.to("day")
     )
-    for v in basin_vars:
-        ds[f"cumulative_{v}"] = (ds[v].pint.to("Gt day^-1") * days_in_interval).cumsum(
-            dim="time"
-        )
+    for v in basin_vars + basin_uncertainty_vars:
+        ds[f"cumulative_{v}"] = (ds[v].pint.to("Gt day^-1") * dt).cumsum(dim="time")
         ds[v] = ds[v].pint.to("Gt year^-1")
         ds[f"cumulative_{v}"] = ds[f"cumulative_{v}"].pint.to("Gt")
 
-    for v in basin_uncertainty_vars:
-        ds[f"cumulative_{v}"] = np.sqrt(
-            (((ds[v].pint.to("Gt day^-1") * days_in_interval) ** 2)).cumsum(dim="time")
-        )
-        ds[v] = ds[v].pint.to("Gt year^-1")
-        ds[f"cumulative_{v}"] = ds[f"cumulative_{v}"].pint.to("Gt")
+    # ds["cumulative_mass_balance_uncertainty"] = (((ds["grounding_line_flux_uncertainty"] ** 2 + ds["basal_mass_balance_uncertainty"] ** 2)**(1/2)).pint.to("Gt day^-1") * dt).cumsum(dim="time")
 
+    # remove last time entry because it is NaN for cumulative uncertainties.
+    ds = ds.isel(time=slice(0, -1))
     discharge_sign = xr.DataArray(-1).pint.quantify("1")
-
     ds["grounding_line_flux"] *= discharge_sign
 
     comp = {"zlib": True, "complevel": 2}

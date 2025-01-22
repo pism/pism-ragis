@@ -203,7 +203,7 @@ def importance_sampling(
 @timeit
 def filter_outliers(
     ds: xr.Dataset,
-    outlier_range: List[float],
+    valid_range: List[float],
     outlier_variable: str,
     freq: str = "YS",
     subset: Dict[str, str | int] = {"basin": "GIS", "ensemble_id": "RAGIS"},
@@ -212,15 +212,15 @@ def filter_outliers(
     Filter outliers from a dataset based on a specified variable and range.
 
     This function filters out ensemble members from the dataset `ds` where the values of
-    `outlier_variable` fall outside the specified `outlier_range`. The filtering is done
+    `outlier_variable` fall outside the specified `valid_range`. The filtering is done
     for the specified subset of the dataset.
 
     Parameters
     ----------
     ds : xr.Dataset
         The input dataset containing the data to be filtered.
-    outlier_range : List[float]
-        A list containing the lower and upper bounds for the outlier range.
+    valid_range : List[float]
+        A list containing the lower and upper bounds for the valid range.
     outlier_variable : str
         The variable in the dataset to be used for outlier detection.
     freq : str, optional
@@ -232,10 +232,10 @@ def filter_outliers(
     -------
     Tuple[xr.Dataset, xr.Dataset]
         A tuple containing two xarray.Dataset objects:
-        - The filtered dataset without outliers.
+        - The valid dataset without outliers.
         - The dataset containing only the outliers.
     """
-    lower_bound, upper_bound = outlier_range
+    lower_bound, upper_bound = valid_range
     if hasattr(ds[outlier_variable], "units"):
         outlier_variable_units = ds[outlier_variable].attrs["units"]
     else:
@@ -264,10 +264,10 @@ def filter_outliers(
 
     n_members = len(ds.exp_id)
     n_members_filtered = len(filtered_exp_ids)
-    filtered_ds = ds.sel(exp_id=filtered_exp_ids)
+    valid_ds = ds.sel(exp_id=filtered_exp_ids)
     outliers_ds = ds.sel(exp_id=outlier_exp_ids)
     print(f"Ensemble size: {n_members}, outlier-filtered size: {n_members_filtered}\n")
-    return filtered_ds, outliers_ds
+    return valid_ds, outliers_ds
 
 
 @timeit

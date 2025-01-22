@@ -94,11 +94,18 @@ if __name__ == "__main__":
         default=[1990, 2019],
     )
     parser.add_argument(
-        "--outlier_range",
+        "--ci",
+        help="""Credibility Interval percentiles. Default="0.025 0.0975". """,
+        type=float,
+        nargs=2,
+        default=[0.025, 0.975],
+    )
+    parser.add_argument(
+        "--valid_range",
         help="""Ensemble members outside this range are removed. Default="-1_250 250". """,
         type=float,
         nargs=2,
-        default=[-10000.0, 0.0],
+        default=[-1000.0, 0.0],
     )
     parser.add_argument(
         "--outlier_variable",
@@ -161,6 +168,7 @@ if __name__ == "__main__":
 
     options, unknown = parser.parse_known_args()
     basin_files = options.FILES
+    ci = options.ci
     engine = options.engine
     filter_range = options.filter_range
     notebook = options.notebook
@@ -168,7 +176,7 @@ if __name__ == "__main__":
     reference_date = options.reference_date
     resampling_frequency = options.resampling_frequency
     outlier_variable = options.outlier_variable
-    outlier_range = options.outlier_range
+    valid_range = options.valid_range
     ragis_config_file = Path(
         str(files("pism_ragis.data").joinpath("ragis_config.toml"))
     )
@@ -188,7 +196,6 @@ if __name__ == "__main__":
     column_function_mapping: dict[str, list[Callable]] = {
         "surface.given.file": [prp.simplify_path, prp.simplify_climate],
         "ocean.th.file": [prp.simplify_path, prp.simplify_ocean],
-        "calving.rate_scaling.file": [prp.simplify_path, prp.simplify_calving],
         "geometry.front_retreat.prescribed.file": [prp.simplify_retreat],
     }
 
@@ -208,7 +215,7 @@ if __name__ == "__main__":
     simulated_ds = prp.prepare_simulations(
         basin_files, config, reference_date, parallel=parallel, engine=engine
     )
-
+    simulated_ds = simulated_ds.dropna(dim="exp_id")
     observed_ds = prp.prepare_observations(
         options.observed_url,
         config,
@@ -251,9 +258,9 @@ if __name__ == "__main__":
             simulated_ds, retreat_method
         )
 
-        filtered_ds, outliers_ds = filter_outliers(
+        valid_ds, outliers_ds = filter_outliers(
             simulated_retreat_ds,
-            outlier_range=outlier_range,
+            valid_range=valid_range,
             outlier_variable=outlier_variable,
             subset={"basin": "GIS"},
         )
@@ -261,12 +268,12 @@ if __name__ == "__main__":
         outliers_config = prp.filter_config(outliers_ds, params)
         outliers_df = prp.config_to_dataframe(outliers_config, ensemble="Outliers")
 
-        filtered_config = prp.filter_config(filtered_ds, params)
-        filtered_df = prp.config_to_dataframe(filtered_config, ensemble="Filtered")
+        valid_config = prp.filter_config(valid_ds, params)
+        valid_df = prp.config_to_dataframe(valid_config, ensemble="Valid")
 
         obs_basins = set(observed_ds.basin.values)
 
-        simulated = simulated_retreat_ds
+        simulated = valid_ds
 
         sim_basins = set(simulated.basin.values)
 
@@ -285,17 +292,14 @@ if __name__ == "__main__":
         obs_mean_vars: list[str] = [
             "grounding_line_flux",
             "mass_balance",
-            "surface_mass_balance",
         ]
         obs_std_vars: list[str] = [
             "grounding_line_flux_uncertainty",
             "mass_balance_uncertainty",
-            "surface_mass_balance_uncertainty",
         ]
         sim_vars: list[str] = [
             "grounding_line_flux",
             "mass_balance",
-            "surface_mass_balance",
         ]
 
         sim_plot_vars = (
@@ -331,6 +335,7 @@ if __name__ == "__main__":
                 fig_dir=fig_dir,
                 fontsize=6,
                 fudge_factor=fudge_factor,
+                percentiles=ci,
                 reference_date=reference_date,
                 config=config,
             )
@@ -361,19 +366,22 @@ if __name__ == "__main__":
             bins_dict=bins_dict,
         )
 
-        plot_posteriors(
-            prior_posterior.rename(columns=params_sorted_dict),
-            x_order=params_sorted_dict.values(),
-            y_order=posterior_basins_sorted,
-            hue="filtered_by",
-            fig_dir=fig_dir,
-        )
+        # plot_posteriors(
+        #     prior_posterior.rename(columns=params_sorted_dict),
+        #     x_order=params_sorted_dict.values(),
+        #     y_order=posterior_basins_sorted,
+        #     hue="filtered_by",
+        #     fig_dir=fig_dir,
+        # )
 
         p_df = prior_posterior
         p_df["retreat_method"] = retreat_method
         pp_retreat_list.append(p_df)
 
     retreat_df = pd.concat(pp_retreat_list).reset_index(drop=True)
+
+    ps = params_sorted_dict.copy()
+    del ps["geometry.front_retreat.prescribed.file"]
 
     for f_var in ["grounding_line_flux", "mass_balance"]:
         fig_p_dir = result_dir / Path(f"filtered_by_{f_var.lower()}") / Path("figures")
@@ -386,7 +394,7 @@ if __name__ == "__main__":
         df = df[df["retreat_method"] != "All"].drop(columns=["filtered_by"])
         plot_posteriors(
             df.rename(columns=params_sorted_dict),
-            x_order=params_sorted_dict.values(),
+            x_order=ps.values(),
             y_order=["GIS", "CW"],
             hue="retreat_method",
             fig_dir=fig_p_dir,

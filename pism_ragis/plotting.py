@@ -36,6 +36,9 @@ from tqdm.auto import tqdm
 
 from pism_ragis.decorators import profileit, timeit
 
+# from dask.distributed import Client
+
+
 ragis_config_file = Path(str(files("pism_ragis.data").joinpath("ragis_config.toml")))
 ragis_config = toml.load(ragis_config_file)
 config = json.loads(json.dumps(ragis_config))
@@ -91,8 +94,8 @@ def plot_posteriors(
 
     with mpl.rc_context(rc=rc_params):
         fig, axs = plt.subplots(
-            3,
-            6,
+            4,
+            4,
             sharey=True,
             figsize=figsize,
         )
@@ -209,8 +212,9 @@ def plot_prior_posteriors(
                     else:
                         bins = None
                     legend = bool(k == 1)
+                    ax = axs.ravel()[k]
                     try:
-                        ax = axs.ravel()[k]
+
                         _ = sns.histplot(
                             data=m_df,
                             x=v,
@@ -226,12 +230,18 @@ def plot_prior_posteriors(
                             ax=axs.ravel()[k],
                             legend=legend,
                         )
+                        ax.plot([], [])
                     except:
-                        ax.set_visible(False)
+                        pass
+
                     if legend:
                         ax.get_legend().set_title(None)
                         ax.get_legend().get_frame().set_linewidth(0.0)
                         ax.get_legend().get_frame().set_alpha(0.0)
+
+                # for ax in axs.flat:
+                #     if not ax.lines:  # Check if the subplot has any lines plotted
+                #         ax.remove()
 
                 for ax in axs.flatten():
                     ax.set_ylabel("")
@@ -266,6 +276,7 @@ def plot_basins(
     fig_dir: str | Path = "figures",
     fontsize: int = 6,
     fudge_factor: float = 3.0,
+    percentiles: list[float] = [0.025, 0.975],
     reference_date: str = "2020-01-01",
     plot_range: list[int] = [1980, 2020],
     config: dict = {},
@@ -298,6 +309,8 @@ def plot_basins(
     fudge_factor : float, optional
         A multiplicative factor applied to the observed standard deviation to widen the likelihood function,
         allowing for greater tolerance in the matching process, by default 3.0.
+    percentiles : list[float], optional
+        Percentiles for credibility interval, by default [0.025, 0.975].
     reference_date : str, optional
         The reference date for cumulative mass change, by default "2020-01-01".
     plot_range : list[int], optional
@@ -318,7 +331,7 @@ def plot_basins(
         total=len(observed.basin),
     ) as progress_bar:
         for basin in observed.basin:
-            plot_obs_sims_4(
+            plot_obs_sims_3(
                 observed.sel(basin=basin).sel(
                     {"time": slice(str(plot_range[0]), str(plot_range[1]))}
                 ),
@@ -336,10 +349,41 @@ def plot_basins(
                 fig_dir=fig_dir,
                 fontsize=fontsize,
                 fudge_factor=fudge_factor,
+                percentiles=percentiles,
                 obs_alpha=obs_alpha,
                 sim_alpha=sim_alpha,
             )
             progress_bar.update()
+
+    # client = Client()
+    # futures = [
+    # client.submit(
+    #         plot_obs_sims_3,
+    #             observed.sel(basin=basin).sel(
+    #                 {"time": slice(str(plot_range[0]), str(plot_range[1]))}
+    #             ),
+    #             prior.sel(basin=basin).sel(
+    #                 {"time": slice(str(plot_range[0]), str(plot_range[1]))}
+    #             ),
+    #             posterior.sel(basin=basin).sel(
+    #                 {"time": slice(str(plot_range[0]), str(plot_range[1]))}
+    #             ),
+    #             reference_date=reference_date,
+    #             config=config,
+    #             filter_var=filter_var,
+    #             filter_range=filter_range,
+    #             figsize=figsize,
+    #             fig_dir=fig_dir,
+    #             fontsize=fontsize,
+    #             fudge_factor=fudge_factor,
+    #             percentiles=percentiles,
+    #             obs_alpha=obs_alpha,
+    #             sim_alpha=sim_alpha,
+    #         ) for basin in observed.basin
+    # ]
+
+    # for future in futures:
+    #     future.result()
 
 
 @timeit
@@ -409,7 +453,6 @@ def plot_sensitivity_indices(
         plt.close()
 
 
-@timeit
 def plot_obs_sims_4(
     obs: xr.Dataset,
     sim_prior: xr.Dataset,
@@ -712,7 +755,6 @@ def plot_obs_sims_4(
         del fig
 
 
-@timeit
 def plot_obs_sims_3(
     obs: xr.Dataset,
     sim_prior: xr.Dataset,
@@ -994,7 +1036,6 @@ def plot_obs_sims_3(
         del fig
 
 
-@timeit
 def plot_obs_sims_2(
     obs: xr.Dataset,
     sim_prior: xr.Dataset,

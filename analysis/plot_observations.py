@@ -55,11 +55,11 @@ warnings.filterwarnings(
 def plot_basin(
     ds: xr.Dataset | list[xr.Dataset],
     basin: str = "GIS",
-    sigma: float = 2,
+    sigma: float = 1,
     figsize=(6.4, 6.2),
     fig_dir: str | Path = "figures",
     fontsize: float = 6,
-    cmap=["#CC6677", "#882255", "#feba80"],
+    cmap=["#117733", "#CC6677", "#882255", "#feba80"],
     alpha=0.5,
     reference_date: str = "2003-01-01",
     plot_range: list[str] = ["1986-01-01", "2020-01-01"],
@@ -78,7 +78,7 @@ def plot_basin(
     basin : str, optional
         The basin to plot, by default "GIS".
     sigma : float, optional
-        The number of standard deviations for the uncertainty interval, by default 2.
+        The number of standard deviations for the uncertainty interval, by default 1.
     figsize : tuple, optional
         The size of the figure, by default (6.4, 6.2).
     fig_dir : str or Path, optional
@@ -280,7 +280,13 @@ if __name__ == "__main__":
     man_ds = normalize_cumulative_variables(
         man_ds, normalize_vars, reference_date=reference_date
     )
-    man_ds["name"] = "MAN21"
+    man_pub_ds = xr.open_dataset(
+        "data/mass_balance/mankoff_greenland_mass_balance_no_smb_err.nc"
+    )
+    man_pub_ds = normalize_cumulative_variables(
+        man_pub_ds, normalize_vars, reference_date=reference_date
+    )
+
     grace_ds = xr.open_dataset("data/mass_balance/grace_greenland_mass_balance.nc")
     grace_ds = normalize_cumulative_variables(
         grace_ds,
@@ -288,18 +294,19 @@ if __name__ == "__main__":
         reference_date=reference_date,
     )
 
-    grace_ds["name"] = "GRACE"
-    grace_ds["basin"] = ["GIS"]
-
     if resampling_frequency is not None:
         man_ds = man_ds.resample({"time": resampling_frequency}).mean()
         grace_ds = grace_ds.resample({"time": resampling_frequency}).mean()
 
+    man_ds["name"] = "MAN21 (with SMB error)"
+    man_pub_ds["name"] = "MAN21 (no SMB error)"
+    grace_ds["name"] = "GRACE"
+    grace_ds["basin"] = ["GIS"]
+
     for basin in ["GIS"]:
         plot_basin(
-            [man_ds, mou_ds, grace_ds],
+            [man_pub_ds, man_ds, mou_ds, grace_ds],
             basin=basin,
-            sigma=2,
             fig_dir=fig_dir,
             plot_range=["1980", "2020"],
         )

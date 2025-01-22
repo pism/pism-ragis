@@ -142,7 +142,7 @@ if __name__ == "__main__":
     ragis_config = toml.load(ragis_config_file)
     sampling_year = 2018
 
-    ds = load_ensemble(spatial_files, preprocess=preprocess_nc, parallel=True
+    ds = load_ensemble(spatial_files, preprocess=preprocess_nc, parallel=True)
     sim_ds = ds.sel({"time": str(sampling_year)}).mean(dim="time")
 
     observed = (
