@@ -34,6 +34,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
 import toml
 import xarray as xr
 
@@ -60,6 +61,44 @@ warnings.filterwarnings(
 warnings.filterwarnings(
     "ignore", category=RuntimeWarning, message="invalid value encountered in divide"
 )
+
+
+def cumulative_df(df, v):
+    """
+    Create a cumulative DataFrame for a specified variable.
+
+    This function takes a DataFrame and a variable name, renames the specified variable
+    to "cumulative_value", and adds a new column "variable" with the variable name.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The input DataFrame containing the data.
+    v : str
+        The name of the variable to be processed.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame with the specified variable renamed to "cumulative_value" and an additional
+        column "variable" containing the variable name.
+
+    Examples
+    --------
+    >>> df = pd.DataFrame({
+    ...     "basin": ["A", "B", "C"],
+    ...     "filtered_by": ["X", "Y", "Z"],
+    ...     "mass_balance": [1.0, 2.0, 3.0]
+    ... })
+    >>> cumulative_df(df, "mass_balance")
+       basin filtered_by  cumulative_value      variable
+    0     A           X               1.0  mass_balance
+    1     B           Y               2.0  mass_balance
+    2     C           Z               3.0  mass_balance
+    """
+    df = df[["basin", "filtered_by", v]].rename(columns={v: "cumulative_value"})
+    df["variable"] = v
+    return df
 
 
 if __name__ == "__main__":
@@ -244,6 +283,7 @@ if __name__ == "__main__":
     params_sorted_dict = {k: params_short_dict[k] for k in params_sorted_list}
 
     pp_retreat_list: list[pd.DataFrame] = []
+    posterior_ds_list: list[xr.Dataset] = []
     for retreat_method in retreat_methods:
         print("-" * 80)
         print(f"Retreat method: {retreat_method}")
@@ -322,6 +362,7 @@ if __name__ == "__main__":
             fudge_factor=fudge_factor,
             params=params,
         )
+        reduced = True
         for filter_var in obs_mean_vars:
             plot_basins(
                 observed_basins_resampled_ds.load(),
@@ -331,14 +372,215 @@ if __name__ == "__main__":
                 ].load(),
                 filter_var=filter_var,
                 filter_range=filter_range,
-                figsize=(4.2, 3.2),
+                figsize=(2.2, 0.6),
                 fig_dir=fig_dir,
-                fontsize=6,
+                fontsize=5,
                 fudge_factor=fudge_factor,
+                level=1,
+                reduced=reduced,
                 percentiles=ci,
                 reference_date=reference_date,
                 config=config,
             )
+            plot_basins(
+                observed_basins_resampled_ds.load(),
+                simulated_prior[sim_plot_vars].load(),
+                simulated_posterior.sel({"filtered_by": filter_var})[
+                    sim_plot_vars
+                ].load(),
+                filter_var=filter_var,
+                filter_range=filter_range,
+                figsize=(2.2, 1.0),
+                fig_dir=fig_dir,
+                fontsize=5,
+                fudge_factor=fudge_factor,
+                level=2,
+                reduced=reduced,
+                percentiles=ci,
+                reference_date=reference_date,
+                config=config,
+            )
+            plot_basins(
+                observed_basins_resampled_ds.load(),
+                simulated_prior[sim_plot_vars].load(),
+                simulated_posterior.sel({"filtered_by": filter_var})[
+                    sim_plot_vars
+                ].load(),
+                filter_var=filter_var,
+                filter_range=filter_range,
+                figsize=(2.2, 1.6),
+                fig_dir=fig_dir,
+                fontsize=5,
+                fudge_factor=fudge_factor,
+                level=3,
+                reduced=reduced,
+                percentiles=ci,
+                reference_date=reference_date,
+                config=config,
+            )
+            plot_basins(
+                observed_basins_resampled_ds.load(),
+                simulated_prior[sim_plot_vars].load(),
+                simulated_posterior.sel({"filtered_by": filter_var})[
+                    sim_plot_vars
+                ].load(),
+                filter_var=filter_var,
+                filter_range=filter_range,
+                figsize=(2.2, 2.2),
+                fig_dir=fig_dir,
+                fontsize=5,
+                fudge_factor=fudge_factor,
+                level=4,
+                reduced=reduced,
+                percentiles=ci,
+                reference_date=reference_date,
+                config=config,
+            )
+
+        Path(fig_dir).mkdir(exist_ok=True)
+        plot_dir = fig_dir / Path("basin_cumulative_violins")
+        plot_dir.mkdir(parents=True, exist_ok=True)
+        pdf_dir = plot_dir / Path("pdfs")
+        pdf_dir.mkdir(parents=True, exist_ok=True)
+        png_dir = plot_dir / Path("pngs")
+        png_dir.mkdir(parents=True, exist_ok=True)
+        svg_dir = plot_dir / Path("svgs")
+        svg_dir.mkdir(parents=True, exist_ok=True)
+
+        post_sum = (
+            simulated_posterior.sel(filtered_by=sim_vars)
+            .sel(time=slice(str(filter_range[0]), str(filter_range[-1])))[sim_vars]
+            .sum(dim="time")
+        )
+        obs_sum = observed_basins_resampled_ds.sel(
+            time=slice(str(filter_range[0]), str(filter_range[-1]))
+        )[sim_vars].sum(dim="time")
+        # post_sum_norm = post_sum - obs_sum
+
+        df = post_sum.to_dataframe().reset_index()
+        c_df = pd.concat([cumulative_df(df, v) for v in sim_vars]).reset_index(
+            drop=True
+        )
+
+        with mpl.rc_context({"font.size": 6}):
+            legend = False
+            for k, (basin, basin_df) in enumerate(c_df.groupby(by="basin")):
+                fig, ax = plt.subplots(1, 1, figsize=(1.2, 1.2))
+
+                obs_data = (
+                    observed_basins_resampled_ds.sel(basin=basin)
+                    .sel(time=slice(str(filter_range[0]), str(filter_range[-1])))
+                    .sum(dim="time")
+                )
+                obs_data_x = ["grounding_line_flux", "mass_balance"]
+                obs_data_y = [
+                    obs_data["grounding_line_flux"].to_numpy(),
+                    obs_data["mass_balance"].to_numpy(),
+                ]
+                obs_data_y = [0, 0]
+                obs_data_y_err = [
+                    obs_data["grounding_line_flux_uncertainty"].to_numpy(),
+                    obs_data["mass_balance_uncertainty"].to_numpy(),
+                ]
+                sns.violinplot(
+                    data=basin_df,
+                    x="variable",
+                    y="cumulative_value",
+                    hue="variable",
+                    split=False,
+                    palette=["#88CCEE", "#DDCC77"],
+                    inner="quart",
+                    cut=0,
+                    linewidth=0.35,
+                    linecolor="k",
+                    ax=ax,
+                    legend=legend,
+                )
+                ax.scatter(
+                    obs_data_x, obs_data_y, s=2, marker="o", edgecolors="k", color="w"
+                )
+                ax.errorbar(
+                    obs_data_x,
+                    obs_data_y,
+                    obs_data_y_err,
+                    fmt="none",
+                    capsize=1.5,
+                    capthick=0.5,
+                    ecolor="k",
+                    elinewidth=0.5,
+                )
+                ax.set_title(basin)
+                ax.set_xlabel(None)
+                if basin == "GIS":
+                    ax.set_ylabel(
+                        f"Cumulative mass change\n{filter_range[0]} to {filter_range[1]} (Gt)"
+                    )
+                else:
+                    ax.set_ylabel(None)
+                ax.spines["top"].set_visible(False)
+                ax.spines["right"].set_visible(False)
+                ax.spines["bottom"].set_visible(False)
+                ax.get_xaxis().set_visible(False)
+                fig.tight_layout()
+                fig.set_dpi(600)
+                fig.savefig(pdf_dir / Path(f"{basin}_cumulative_change.pdf"))
+                fig.savefig(svg_dir / Path(f"{basin}_cumulative_change.svg"))
+                fig.savefig(
+                    png_dir
+                    / Path(
+                        f"{basin}_cumulative_change.png",
+                    )
+                )
+                plt.close()
+                del fig
+
+            # with mpl.rc_context({"font.size": 6}):
+            # fig, axs = plt.subplots(2,4, figsize=(6.4, 4.8))
+
+            # for k, (basin, basin_df) in enumerate(c_df.groupby(by="basin")):
+            #     ax = axs.flatten()[k]
+            #     legend = bool(k==0)
+            #     obs_data = observed_basins_resampled_ds.sel(basin=basin).sel(time=slice(str(filter_range[0]), str(filter_range[-1]))).sum(dim="time")
+            #     obs_data_x = ["grounding_line_flux", "mass_balance"]
+            #     obs_data_y = [obs_data["grounding_line_flux"].to_numpy(), obs_data["mass_balance"].to_numpy()]
+            #     obs_data_y = [0, 0]
+            #     obs_data_y_err = [obs_data["grounding_line_flux_uncertainty"].to_numpy(), obs_data["mass_balance_uncertainty"].to_numpy()]
+            #     sns.violinplot(data=basin_df,
+            #                    x="variable",
+            #                    y="cumulative_value",
+            #                    hue="variable",
+            #                    split=False,
+            #                    palette=["#88CCEE", "#CC6677"],
+            #                    inner="quart",
+            #                    cut=0,
+            #                    linewidth=0.5,
+            #                    ax=ax, legend=legend)
+            #     # ax.scatter(obs_data_x, obs_data_y,
+            #     #            s=2,
+            #     #            marker="o", edgecolors="#117733", color="#117733")
+            #     ax.errorbar(obs_data_x, obs_data_y, obs_data_y_err, fmt="none",
+            #                 capsize=1.5,
+            #                 capthick=0.5,
+            #                 ecolor="#117733",
+            #                 elinewidth=0.5)
+            #     ax.set_title(basin)
+            # fig.tight_layout()
+            # fig.set_dpi(600)
+            # fig.savefig(
+            #     pdf_dir
+            #     / Path(
+            #         "cumulative_change.pdf"
+            #     )
+            # )
+            # fig.savefig(
+            #     png_dir
+            #     / Path(
+            #         "cumulative_change.png",
+            #         dpi=300,
+            #     )
+            # )
+            # plt.close()
+            # del fig
 
         # Apply the functions to the corresponding columns
         for col, functions in column_function_mapping.items():
@@ -377,6 +619,8 @@ if __name__ == "__main__":
         p_df = prior_posterior
         p_df["retreat_method"] = retreat_method
         pp_retreat_list.append(p_df)
+        simulated_posterior["retreat_method"] = [retreat_method]
+        posterior_ds_list.append(simulated_posterior)
 
     retreat_df = pd.concat(pp_retreat_list).reset_index(drop=True)
 
