@@ -85,7 +85,7 @@ if __name__ == "__main__":
     mask_da = mask_da.assign_attrs({"mask": "m"})
 
     grimp_ds = xr.merge([dem_da, dem_uncertainty_da, mask_da]).drop_vars(
-        "band", "spatial_ref"
+        ["band", "spatial_ref"]
     )
     grimp_ds = grimp_ds.rio.set_spatial_dims(x_dim="x", y_dim="y")
     grimp_ds.rio.write_crs(crs, inplace=True)

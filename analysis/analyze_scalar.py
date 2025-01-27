@@ -281,7 +281,11 @@ if __name__ == "__main__":
 
     params_sorted_list = list(chain(*params_sorted_by_category.values()))
     params_sorted_dict = {k: params_short_dict[k] for k in params_sorted_list}
-
+    short_bins_dict = {
+        params_short_dict[key]: bins_dict[key]
+        for key in params_short_dict
+        if key in bins_dict
+    }
     pp_retreat_list: list[pd.DataFrame] = []
     posterior_ds_list: list[xr.Dataset] = []
     for retreat_method in retreat_methods:
@@ -362,7 +366,7 @@ if __name__ == "__main__":
             fudge_factor=fudge_factor,
             params=params,
         )
-        reduced = True
+        reduced = False
         for filter_var in obs_mean_vars:
             plot_basins(
                 observed_basins_resampled_ds.load(),
@@ -390,7 +394,7 @@ if __name__ == "__main__":
                 ].load(),
                 filter_var=filter_var,
                 filter_range=filter_range,
-                figsize=(2.2, 1.0),
+                figsize=(3.2, 2.0),
                 fig_dir=fig_dir,
                 fontsize=5,
                 fudge_factor=fudge_factor,
@@ -605,7 +609,7 @@ if __name__ == "__main__":
             prior_posterior.rename(columns=params_sorted_dict),
             x_order=params_sorted_dict.values(),
             fig_dir=fig_dir,
-            bins_dict=bins_dict,
+            bins_dict=short_bins_dict,
         )
 
         # plot_posteriors(

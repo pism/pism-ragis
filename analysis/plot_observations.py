@@ -63,6 +63,7 @@ def plot_basin(
     alpha=0.5,
     reference_date: str = "2003-01-01",
     plot_range: list[str] = ["1986-01-01", "2020-01-01"],
+    reduced: bool = False,
 ):
     """
     Plot basin data from one or more xarray Datasets.
@@ -86,13 +87,15 @@ def plot_basin(
     fontsize : float, optional
         The font size for the plot, by default 6.
     cmap : list, optional
-        The color map for the plots, by default ["#CC6677", "#882255", "#feba80"].
+        The color map for the plots, by default ["#117733", "#CC6677", "#882255", "#feba80"].
     alpha : float, optional
         The alpha value for the uncertainty interval, by default 0.5.
     reference_date : str, optional
         The reference date for cumulative mass change, by default "2003-01-01".
     plot_range : list[str], optional
         The time range for the plot, by default ["1986-01-01", "2020-01-01"].
+    reduced : bool, optional
+        If True, reduces the amount of information displayed on the plot, by default False.
 
     Examples
     --------
@@ -134,6 +137,7 @@ def plot_basin(
             height_ratios=[2, 1, 1, 1],
         )
         fig.subplots_adjust(hspace=0.05, wspace=0.05)
+        fig.set_dpi(600)
 
         for k, obs in enumerate(observations):
             obs = obs.sel({"basin": basin}).sel({"time": slice(*plot_range)})
@@ -149,18 +153,29 @@ def plot_basin(
                         lw=0,
                         label=obs.name.values,
                     )
-        axs[0].legend()
 
-        axs[0].set_ylabel(f"Cumulative mass change\nsince {reference_date} (Gt)")
-        axs[0].set_xlabel("")
-        axs[1].set_title("")
-        axs[1].set_ylabel("Mass balance\n (Gt/yr)")
-        axs[-2].set_title("")
-        axs[-2].set_ylabel("SMB\n (Gt/yr)")
-        axs[-1].set_title("")
-        axs[-1].set_ylabel("Grounding Line\nFlux (Gt/yr)")
-        axs[-1].set_xlim(np.datetime64(plot_range[0]), np.datetime64(plot_range[1]))
-        axs[0].set_title(f"{basin}")
+        if reduced:
+            axs[0].set_ylabel(None)
+            axs[0].set_xlabel("")
+            axs[1].set_title("")
+            axs[1].set_ylabel(None)
+            axs[-2].set_title("")
+            axs[-2].set_ylabel(None)
+            axs[-1].set_title(None)
+            axs[-1].set_ylabel(None)
+            axs[-1].set_xlim(np.datetime64(plot_range[0]), np.datetime64(plot_range[1]))
+        else:
+            axs[0].legend()
+            axs[0].set_ylabel(f"Cumulative mass change\nsince {reference_date} (Gt)")
+            axs[0].set_xlabel("")
+            axs[1].set_title("")
+            axs[1].set_ylabel("Mass balance\n (Gt/yr)")
+            axs[-2].set_title("")
+            axs[-2].set_ylabel("SMB\n (Gt/yr)")
+            axs[-1].set_title("")
+            axs[-1].set_ylabel("Grounding Line\nFlux (Gt/yr)")
+            axs[-1].set_xlim(np.datetime64(plot_range[0]), np.datetime64(plot_range[1]))
+            axs[0].set_title(f"{basin}")
         fig.tight_layout()
         fig.savefig(pdf_dir / Path(f"{basin}.pdf"))
         fig.savefig(png_dir / Path(f"{basin}.png"))
@@ -298,18 +313,32 @@ if __name__ == "__main__":
         man_ds = man_ds.resample({"time": resampling_frequency}).mean()
         grace_ds = grace_ds.resample({"time": resampling_frequency}).mean()
 
-    man_ds["name"] = "MAN21 (with SMB error)"
+    man_ds["name"] = "MAN21"
     man_pub_ds["name"] = "MAN21 (no SMB error)"
     grace_ds["name"] = "GRACE"
     grace_ds["basin"] = ["GIS"]
 
     for basin in ["GIS"]:
         plot_basin(
-            [man_pub_ds, man_ds, mou_ds, grace_ds],
+            [man_pub_ds, mou_ds, grace_ds],
             basin=basin,
+            cmap=["#feba80", "#CC6677", "#882255"],
             fig_dir=fig_dir,
-            plot_range=["1980", "2020"],
+            figsize=(6.4, 3.4),
+            plot_range=["1990", "2020"],
+            alpha=0.4,
+            sigma=2,
         )
 
     for basin in ["CW", "CE", "SW", "SE", "NW", "NE", "NO"]:
-        plot_basin([man_ds, mou_ds], basin=basin, fig_dir=fig_dir)
+        plot_basin(
+            [man_ds, mou_ds],
+            basin=basin,
+            cmap=["#feba80", "#CC6677", "#882255"],
+            fig_dir=fig_dir,
+            figsize=(4.2, 2.8),
+            plot_range=["1990", "2020"],
+            alpha=0.4,
+            sigma=1,
+            reduced=False,
+        )
