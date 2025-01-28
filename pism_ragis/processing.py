@@ -984,7 +984,6 @@ def filter_config(ds: xr.Dataset, params: list[str]) -> xr.DataArray:
     return config
 
 
-@timeit
 def config_to_dataframe(
     config: xr.DataArray, ensemble: Union[str, None] = None
 ) -> pd.DataFrame:
@@ -1036,7 +1035,6 @@ def config_to_dataframe(
     return df
 
 
-@timeit
 def filter_retreat_experiments(
     ds: xr.Dataset, retreat_method: Literal["Free", "Prescribed", "All"]
 ) -> xr.Dataset:

@@ -33,12 +33,12 @@ import pandas as pd
 import seaborn as sns
 import toml
 import xarray as xr
+from dask.distributed import Client, progress
 from tqdm.auto import tqdm
 
 from pism_ragis.decorators import profileit, timeit
 
-# from dask.distributed import Client
-
+mpl.use("Agg")
 
 ragis_config_file = Path(str(files("pism_ragis.data").joinpath("ragis_config.toml")))
 ragis_config = toml.load(ragis_config_file)
@@ -90,6 +90,7 @@ def plot_posteriors(
 
     rc_params = {
         "font.size": fontsize,
+        "font.family": "Helvetica",
         # Add other rcParams settings if needed
     }
 
@@ -191,6 +192,7 @@ def plot_prior_posteriors(
 
     rc_params = {
         "font.size": fontsize,
+        "font.family": "Helvetica",
         # Add other rcParams settings if needed
     }
 
@@ -333,41 +335,12 @@ def plot_basins(
     >>> plot_basins(observed, prior, posterior, "grounding_line_flux")
     """
 
-    with tqdm(
-        desc="Plotting basins",
-        total=len(observed.basin),
-    ) as progress_bar:
-        for basin in observed.basin:
-            plot_obs_sims(
-                observed.sel(basin=basin).sel(
-                    {"time": slice(str(plot_range[0]), str(plot_range[1]))}
-                ),
-                prior.sel(basin=basin).sel(
-                    {"time": slice(str(plot_range[0]), str(plot_range[1]))}
-                ),
-                posterior.sel(basin=basin).sel(
-                    {"time": slice(str(plot_range[0]), str(plot_range[1]))}
-                ),
-                reference_date=reference_date,
-                config=config,
-                filter_var=filter_var,
-                filter_range=filter_range,
-                figsize=figsize,
-                fig_dir=fig_dir,
-                fontsize=fontsize,
-                fudge_factor=fudge_factor,
-                level=level,
-                percentiles=percentiles,
-                reduced=reduced,
-                obs_alpha=obs_alpha,
-                sim_alpha=sim_alpha,
-            )
-            progress_bar.update()
-
-    # client = Client()
-    # futures = [
-    # client.submit(
-    #         plot_obs_sims_3,
+    # with tqdm(
+    #     desc="Plotting basins",
+    #     total=len(observed.basin),
+    # ) as progress_bar:
+    #     for basin in observed.basin:
+    #         plot_obs_sims(
     #             observed.sel(basin=basin).sel(
     #                 {"time": slice(str(plot_range[0]), str(plot_range[1]))}
     #             ),
@@ -385,14 +358,62 @@ def plot_basins(
     #             fig_dir=fig_dir,
     #             fontsize=fontsize,
     #             fudge_factor=fudge_factor,
+    #             level=level,
     #             percentiles=percentiles,
+    #             reduced=reduced,
     #             obs_alpha=obs_alpha,
     #             sim_alpha=sim_alpha,
-    #         ) for basin in observed.basin
-    # ]
+    #         )
+    #         progress_bar.update()
 
-    # for future in futures:
-    #     future.result()
+    client = Client()
+    observed_scattered = client.scatter(
+        [
+            observed.sel(basin=basin).sel(
+                {"time": slice(str(plot_range[0]), str(plot_range[1]))}
+            )
+            for basin in observed.basin
+        ]
+    )
+    prior_scattered = client.scatter(
+        [
+            prior.sel(basin=basin).sel(
+                {"time": slice(str(plot_range[0]), str(plot_range[1]))}
+            )
+            for basin in prior.basin
+        ]
+    )
+    posterior_scattered = client.scatter(
+        [
+            posterior.sel(basin=basin).sel(
+                {"time": slice(str(plot_range[0]), str(plot_range[1]))}
+            )
+            for basin in posterior.basin
+        ]
+    )
+
+    futures = client.map(
+        plot_obs_sims,
+        observed_scattered,
+        prior_scattered,
+        posterior_scattered,
+        reference_date=reference_date,
+        config=config,
+        filter_var=filter_var,
+        filter_range=filter_range,
+        figsize=figsize,
+        fig_dir=fig_dir,
+        fontsize=fontsize,
+        fudge_factor=fudge_factor,
+        level=level,
+        percentiles=percentiles,
+        reduced=reduced,
+        obs_alpha=obs_alpha,
+        sim_alpha=sim_alpha,
+    )
+
+    progress(futures)
+    client.close()
 
 
 @timeit
@@ -438,7 +459,7 @@ def plot_sensitivity_indices(
     png_dir = plot_dir / "pngs"
     png_dir.mkdir(parents=True, exist_ok=True)
 
-    with mpl.rc_context({"font.size": fontsize}):
+    with mpl.rc_context({"font.size": fontsize, "font.family": "Helvetica"}):
 
         fig, ax = plt.subplots(1, 1, figsize=figsize)
         for g in ds[dim]:
@@ -568,7 +589,7 @@ def plot_obs_sims(
     if level >= 4:
         p_vars.append(smb_flux_varname)
 
-    with mpl.rc_context({"font.size": fontsize}):
+    with mpl.rc_context({"font.size": fontsize, "font.family": "Helvetica"}):
 
         fig, axs = plt.subplots(
             level,
@@ -653,7 +674,7 @@ def plot_obs_sims(
 
         sim_cis = []
         if sim_prior is not None:
-            sim_prior = sim_prior[p_vars + ["ensemble"]].load()
+            sim_prior = sim_prior[p_vars + ["ensemble"]]
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
                 quantiles = {}
@@ -688,7 +709,7 @@ def plot_obs_sims(
                 )
                 sim_cis.append(sim_ci)
         if sim_posterior is not None:
-            sim_posterior = sim_posterior[p_vars + ["ensemble"]].load()
+            sim_posterior = sim_posterior[p_vars + ["ensemble"]]
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
                 quantiles = {}
