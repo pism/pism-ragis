@@ -30,7 +30,7 @@ import shutil
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Dict, Hashable, List, Literal, Mapping, Union
+from typing import Any, Dict, Hashable, List, Mapping, Union
 
 import joblib
 import numpy as np
@@ -1035,9 +1035,7 @@ def config_to_dataframe(
     return df
 
 
-def filter_retreat_experiments(
-    ds: xr.Dataset, retreat_method: Literal["Free", "Prescribed", "All"]
-) -> xr.Dataset:
+def filter_retreat_experiments(ds: xr.Dataset, retreat_method: str) -> xr.Dataset:
     """
     Filter retreat experiments based on the retreat method.
 

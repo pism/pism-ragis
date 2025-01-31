@@ -1,4 +1,4 @@
-# Copyright (C) 2024 Andy Aschwanden, Constantine Khroulev
+# Copyright (C) 2024-25 Andy Aschwanden, Constantine Khroulev
 #
 # This file is part of pism-ragis.
 #
@@ -226,7 +226,8 @@ if __name__ == "__main__":
     obs_cmap = config["Plotting"]["obs_cmap"]
     sim_cmap = config["Plotting"]["sim_cmap"]
     fudge_factor = config["Importance Sampling"]["mankoff_fudge_factor"]
-    retreat_methods = ["All", "Free", "Prescribed"]
+    retreat_methods = ["Free", "Prescribed"]
+    reduced = False
 
     result_dir = Path(options.result_dir)
     data_dir = result_dir / Path("posteriors")
@@ -287,7 +288,7 @@ if __name__ == "__main__":
         if key in bins_dict
     }
     pp_retreat_list: list[pd.DataFrame] = []
-    posterior_ds_list: list[xr.Dataset] = []
+    posterior_ds_dict: dict[str, xr.Dataset] = {}
     for retreat_method in retreat_methods:
         print("-" * 80)
         print(f"Retreat method: {retreat_method}")
@@ -366,7 +367,7 @@ if __name__ == "__main__":
             fudge_factor=fudge_factor,
             params=params,
         )
-        reduced = False
+
         for filter_var in obs_mean_vars:
             plot_basins(
                 observed_basins_resampled_ds.load(),
@@ -376,7 +377,7 @@ if __name__ == "__main__":
                 ].load(),
                 filter_var=filter_var,
                 filter_range=filter_range,
-                figsize=(2.2, 0.6),
+                figsize=(2.4, 1.0),
                 fig_dir=fig_dir,
                 fontsize=5,
                 fudge_factor=fudge_factor,
@@ -394,7 +395,7 @@ if __name__ == "__main__":
                 ].load(),
                 filter_var=filter_var,
                 filter_range=filter_range,
-                figsize=(3.2, 2.0),
+                figsize=(2.4, 1.4),
                 fig_dir=fig_dir,
                 fontsize=5,
                 fudge_factor=fudge_factor,
@@ -412,7 +413,7 @@ if __name__ == "__main__":
                 ].load(),
                 filter_var=filter_var,
                 filter_range=filter_range,
-                figsize=(2.2, 1.6),
+                figsize=(2.4, 1.6),
                 fig_dir=fig_dir,
                 fontsize=5,
                 fudge_factor=fudge_factor,
@@ -422,24 +423,24 @@ if __name__ == "__main__":
                 reference_date=reference_date,
                 config=config,
             )
-            plot_basins(
-                observed_basins_resampled_ds.load(),
-                simulated_prior[sim_plot_vars].load(),
-                simulated_posterior.sel({"filtered_by": filter_var})[
-                    sim_plot_vars
-                ].load(),
-                filter_var=filter_var,
-                filter_range=filter_range,
-                figsize=(2.2, 2.2),
-                fig_dir=fig_dir,
-                fontsize=5,
-                fudge_factor=fudge_factor,
-                level=4,
-                reduced=reduced,
-                percentiles=ci,
-                reference_date=reference_date,
-                config=config,
-            )
+            # plot_basins(
+            #     observed_basins_resampled_ds.load(),
+            #     simulated_prior[sim_plot_vars].load(),
+            #     simulated_posterior.sel({"filtered_by": filter_var})[
+            #         sim_plot_vars
+            #     ].load(),
+            #     filter_var=filter_var,
+            #     filter_range=filter_range,
+            #     figsize=(2.2, 2.2),
+            #     fig_dir=fig_dir,
+            #     fontsize=5,
+            #     fudge_factor=fudge_factor,
+            #     level=4,
+            #     reduced=reduced,
+            #     percentiles=ci,
+            #     reference_date=reference_date,
+            #     config=config,
+            # )
 
         Path(fig_dir).mkdir(exist_ok=True)
         plot_dir = fig_dir / Path("basin_cumulative_violins")
@@ -481,7 +482,6 @@ if __name__ == "__main__":
                     obs_data["grounding_line_flux"].to_numpy(),
                     obs_data["mass_balance"].to_numpy(),
                 ]
-                obs_data_y = [0, 0]
                 obs_data_y_err = [
                     obs_data["grounding_line_flux_uncertainty"].to_numpy(),
                     obs_data["mass_balance_uncertainty"].to_numpy(),
@@ -624,7 +624,7 @@ if __name__ == "__main__":
         p_df["retreat_method"] = retreat_method
         pp_retreat_list.append(p_df)
         simulated_posterior["retreat_method"] = [retreat_method]
-        posterior_ds_list.append(simulated_posterior)
+        posterior_ds_dict[retreat_method] = simulated_posterior
 
     retreat_df = pd.concat(pp_retreat_list).reset_index(drop=True)
 

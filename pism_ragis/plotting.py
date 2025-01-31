@@ -1,4 +1,4 @@
-# Copyright (C) 2024 Andy Aschwanden
+# Copyright (C) 2024-25 Andy Aschwanden
 #
 # This file is part of pism-ragis.
 #
@@ -39,7 +39,16 @@ from tqdm.auto import tqdm
 from pism_ragis.decorators import profileit, timeit
 
 mpl.use("Agg")
+rcparams = {
+    "axes.linewidth": 0.15,
+    "xtick.major.size": 2.0,
+    "xtick.major.width": 0.15,
+    "ytick.major.size": 2.0,
+    "ytick.major.width": 0.15,
+    "hatch.linewidth": 0.15,
+}
 
+mpl.rcParams.update(rcparams)
 ragis_config_file = Path(str(files("pism_ragis.data").joinpath("ragis_config.toml")))
 ragis_config = toml.load(ragis_config_file)
 config = json.loads(json.dumps(ragis_config))
@@ -90,7 +99,7 @@ def plot_posteriors(
 
     rc_params = {
         "font.size": fontsize,
-        "font.family": "Helvetica",
+        "font.family": "DejaVu Sans",
         # Add other rcParams settings if needed
     }
 
@@ -192,7 +201,7 @@ def plot_prior_posteriors(
 
     rc_params = {
         "font.size": fontsize,
-        "font.family": "Helvetica",
+        "font.family": "DejaVu Sans",
         # Add other rcParams settings if needed
     }
 
@@ -335,37 +344,6 @@ def plot_basins(
     >>> plot_basins(observed, prior, posterior, "grounding_line_flux")
     """
 
-    # with tqdm(
-    #     desc="Plotting basins",
-    #     total=len(observed.basin),
-    # ) as progress_bar:
-    #     for basin in observed.basin:
-    #         plot_obs_sims(
-    #             observed.sel(basin=basin).sel(
-    #                 {"time": slice(str(plot_range[0]), str(plot_range[1]))}
-    #             ),
-    #             prior.sel(basin=basin).sel(
-    #                 {"time": slice(str(plot_range[0]), str(plot_range[1]))}
-    #             ),
-    #             posterior.sel(basin=basin).sel(
-    #                 {"time": slice(str(plot_range[0]), str(plot_range[1]))}
-    #             ),
-    #             reference_date=reference_date,
-    #             config=config,
-    #             filter_var=filter_var,
-    #             filter_range=filter_range,
-    #             figsize=figsize,
-    #             fig_dir=fig_dir,
-    #             fontsize=fontsize,
-    #             fudge_factor=fudge_factor,
-    #             level=level,
-    #             percentiles=percentiles,
-    #             reduced=reduced,
-    #             obs_alpha=obs_alpha,
-    #             sim_alpha=sim_alpha,
-    #         )
-    #         progress_bar.update()
-
     client = Client()
     observed_scattered = client.scatter(
         [
@@ -459,7 +437,7 @@ def plot_sensitivity_indices(
     png_dir = plot_dir / "pngs"
     png_dir.mkdir(parents=True, exist_ok=True)
 
-    with mpl.rc_context({"font.size": fontsize, "font.family": "Helvetica"}):
+    with mpl.rc_context({"font.size": fontsize, "font.family": "DejaVu Sans"}):
 
         fig, ax = plt.subplots(1, 1, figsize=figsize)
         for g in ds[dim]:
@@ -589,7 +567,7 @@ def plot_obs_sims(
     if level >= 4:
         p_vars.append(smb_flux_varname)
 
-    with mpl.rc_context({"font.size": fontsize, "font.family": "Helvetica"}):
+    with mpl.rc_context({"font.size": fontsize, "font.family": "DejaVu Sans"}):
 
         fig, axs = plt.subplots(
             level,
@@ -760,12 +738,14 @@ def plot_obs_sims(
         )
         legend.get_frame().set_linewidth(0.0)
         legend.get_frame().set_alpha(0.0)
+
         if not reduced:
             ax_0.add_artist(legend)
 
         ax_0.xaxis.set_tick_params(labelbottom=False)
-        ax_0.set_ylabel(f"Cumulative mass change\nsince {reference_date} (Gt)")
-        ax_0.set_xlabel("")
+        ax_0.set_ylabel(f"""Mass change\nsince {reference_date.split("-")[0]} (Gt)""")
+        ax_last.xaxis.set_tick_params(labelbottom=True)
+
         if sim_posterior is not None:
             ax_0.set_title(f"{basin} filtered by {filter_var}")
         else:
@@ -802,7 +782,6 @@ def plot_obs_sims(
                     ax_0.get_legend().remove()
                 except:
                     pass
-        fig.tight_layout()
 
         if sim_prior is not None:
             prior_str = "prior"
@@ -814,6 +793,7 @@ def plot_obs_sims(
             posterior_str = ""
         prior_posterior_str = prior_str + posterior_str
 
+        fig.tight_layout()
         fig.set_dpi(600)
         fig.savefig(
             pdf_dir
@@ -825,9 +805,18 @@ def plot_obs_sims(
             png_dir
             / Path(
                 f"{basin}_mass_accounting_{prior_posterior_str}_filtered_by_{filter_var}_{level}.png",
-                dpi=600,
             )
         )
+
+        # # Create a new figure for the legend
+        # fig_legend = plt.figure()
+        # # Add the legend from the original plot to the new figure
+        # fig_legend.legend(*ax_0.get_legend_handles_labels(), loc='center')
+
+        # # Remove the axes from the legend figure
+        # fig_legend.gca().axis('off')
+        # # Save the legend figure as a separate PDF
+        # fig_legend.savefig('legend.pdf', format='pdf', bbox_inches='tight')
         plt.close()
         del fig
 
