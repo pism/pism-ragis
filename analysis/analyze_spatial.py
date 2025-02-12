@@ -21,32 +21,33 @@
 Analyze RAGIS ensemble.
 """
 
-import time
-import warnings
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from importlib.resources import files
 from pathlib import Path
-from typing import Any, Dict, Hashable, List, Mapping, Union
 
+import cartopy.crs as ccrs
+import cf_xarray.units  # pylint: disable=unused-import
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import pint_xarray  # pylint: disable=unused-import
 import rioxarray as rxr
 import seaborn as sns
 import toml
 import xarray as xr
 import xskillscore
 from dask.diagnostics import ProgressBar
-from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 
 from pism_ragis.filtering import importance_sampling
-from pism_ragis.likelihood import log_normal, log_pseudo_huber
-from pism_ragis.processing import load_ensemble, preprocess_nc
+from pism_ragis.likelihood import log_normal
+from pism_ragis.logger import get_logger
+from pism_ragis.processing import filter_retreat_experiments, preprocess_config
 
 xr.set_options(keep_attrs=True)
 
 plt.style.use("tableau-colorblind10")
+logger = get_logger("pism_ragis")
 
 sim_alpha = 0.5
 sim_cmap = sns.color_palette("crest", n_colors=4).as_hex()[0:3:2]
@@ -56,6 +57,9 @@ obs_alpha = 1.0
 obs_cmap = ["0.8", "0.7"]
 # obs_cmap = ["#88CCEE", "#44AA99"]
 hist_cmap = ["#a6cee3", "#1f78b4"]
+cartopy_crs = ccrs.NorthPolarStereo(
+    central_longitude=-45, true_scale_latitude=70, globe=None
+)
 
 
 if __name__ == "__main__":
@@ -107,7 +111,7 @@ if __name__ == "__main__":
         "--resampling_frequency",
         help="""Resampling data to resampling_frequency for importance sampling. Default is "MS".""",
         type=str,
-        default="MS",
+        default="YS",
     )
     parser.add_argument(
         "--reference_year",
@@ -135,6 +139,7 @@ if __name__ == "__main__":
     parallel = options.parallel
     reference_year = options.reference_year
     resampling_frequency = options.resampling_frequency
+    result_dir = Path(options.result_dir)
     outlier_variable = options.outlier_variable
     ragis_config_file = Path(
         str(files("pism_ragis.data").joinpath("ragis_config.toml"))
@@ -142,57 +147,136 @@ if __name__ == "__main__":
     ragis_config = toml.load(ragis_config_file)
     sampling_year = 2018
 
-    ds = load_ensemble(spatial_files, preprocess=preprocess_nc, parallel=True)
-    sim_ds = ds.sel({"time": str(sampling_year)}).mean(dim="time")
+    obs_mean_var = "dhdt"
+    obs_std_var = "dhdt_err"
+    sim_var = "dhdt"
 
-    observed = (
-        xr.open_dataset(options.obs_url, chunks="auto")
-        .sel({"time": str(sampling_year)})
-        .mean(dim="time")
+    retreat_methods = ["Free", "Prescribed"]
+
+    start_date = "2012-01-01"
+    end_date = "2018-01-01"
+
+    print("Loading ensemble.")
+    with ProgressBar():
+        simulated = xr.open_mfdataset(
+            spatial_files, preprocess=preprocess_config, parallel=True, decode_cf=True
+        )
+
+    simulated = simulated.pint.quantify()
+    simulated[sim_var] = simulated["dHdt"] * 1000.0 / 910.0
+    simulated[sim_var] = simulated[sim_var].pint.to("m year^-1")
+    simulated = simulated.pint.dequantify()
+
+    observed = xr.open_mfdataset(
+        "/Users/andy/Downloads/Greenland_netcdf_1kmgrid_DB/Greenland_dhdt_mass*_1kmgrid_DB.nc",
+        chunks="auto",
     )
-    observed = observed.where(observed["ice"])
+    observed_resampled = observed.resample({"time": resampling_frequency}).mean()
 
-    obs_ds = observed.interp_like(sim_ds)
-
-    sim_mask = sim_ds.isnull().sum(dim="exp_id") == 0
-    sim_ds = sim_ds.where(sim_mask)
-    # obs_ds = obs_ds.sel(
-    #     {"x": slice(-225_000, -80_000), "y": slice(-2_350_000, -2_222_000)}
-    # )
-    # sim_ds = sim_ds.sel(
-    #     {"x": slice(-225_000, -80_000), "y": slice(-2_350_000, -2_222_000)}
-    # )
     x_min, y_min = -65517, -3317968
     x_max, y_max = 525929, -2528980
-    obs_ds = obs_ds.sel({"x": slice(x_min, x_max), "y": slice(y_min, y_max)})
-    sim_ds = sim_ds.sel({"x": slice(x_min, x_max), "y": slice(y_min, y_max)})
+    # obs_ds = obs_ds.sel({"x": slice(x_min, x_max), "y": slice(y_min, y_max)})
+    # sim_ds = sim_ds.sel({"x": slice(x_min, x_max), "y": slice(y_min, y_max)})
+    r = []
+    for retreat_method in retreat_methods:
+        print("-" * 80)
+        print(f"Retreat method: {retreat_method}")
+        print("-" * 80)
 
-    print("Importance sampling using v")
-    f = importance_sampling(
-        observed=obs_ds,
-        simulated=sim_ds,
-        log_likelihood=log_normal,
-        n_samples=len(ds.exp_id),
-        fudge_factor=50,
-        obs_mean_var="v",
-        obs_std_var="v_err",
-        sim_var="velsurf_mag",
-        sum_dim=["x", "y"],
-    )
-    with ProgressBar():
-        filtered_ids = f.compute()
+        fig_dir = (
+            result_dir / Path(f"retreat_{retreat_method.lower()}") / Path("figures")
+        )
+        fig_dir.mkdir(parents=True, exist_ok=True)
 
-    s = sim_ds["velsurf_mag"]
-    o = obs_ds["v"]
-    print(xskillscore.rmse(s, o, dim=["x", "y"], skipna=True).values)
+        simulated_retreat = filter_retreat_experiments(simulated, retreat_method)
+        simulated_retreat_resampled = (
+            simulated_retreat.sel(time=slice("2012-01-01", "2018-01-01"))
+            .resample({"time": resampling_frequency})
+            .mean(dim="time")
+        )
 
-    fig, axs = plt.subplots(1, 2, figsize=(12, 6))
-    s.median(dim="exp_id").plot(ax=axs[0], vmin=0, vmax=500, label=False)
-    o.plot(ax=axs[1], vmin=0, vmax=500)
-    plt.show()
+        obs = observed_resampled.interp_like(
+            simulated_retreat_resampled
+        ).pint.quantify()
+        for v in [obs_mean_var, obs_std_var]:
+            obs[v] = obs[v].pint.to("m year^-1")
+        obs = obs.pint.dequantify()
 
-    observed = (
-        xr.open_dataset(options.obs_url, chunks="auto")
-        .sel({"time": str(sampling_year)})
-        .mean(dim="time")
-    )
+        obs_dhdt = obs["dhdt"]
+        obs_mask = obs_dhdt.isnull()
+        obs_mask = obs_mask.any(dim="time").compute()
+
+        sim = simulated_retreat_resampled.where(~obs_mask)
+
+        o = obs.sum(dim="time")[obs_mean_var]
+        s = sim.median(dim="exp_id").sum(dim="time")[sim_var]
+
+        fig = plt.figure(figsize=(6.4, 6.4))
+        ax_1 = fig.add_subplot(1, 2, 1, projection=cartopy_crs)
+        ax_2 = fig.add_subplot(1, 2, 2, projection=cartopy_crs)
+        cb = o.plot(
+            ax=ax_1, vmin=-20, vmax=20, cmap="RdBu_r", extend="both", add_colorbar=False
+        )
+        s.plot(
+            ax=ax_2, vmin=-20, vmax=20, cmap="RdBu_r", extend="both", add_colorbar=False
+        )
+        for ax in [ax_1, ax_2]:
+            ax.gridlines(
+                draw_labels={"top": "x", "left": "y"},
+                dms=True,
+                xlocs=np.arange(-60, 60, 10),
+                ylocs=np.arange(50, 88, 10),
+                x_inline=False,
+                y_inline=False,
+                rotate_labels=20,
+                ls="dotted",
+                color="k",
+            )
+            ax.coastlines()
+        ax_1.set_title("Observed dhdt")
+        ax_2.set_title("Simulated Median dhdt")
+
+        fig.colorbar(
+            cb,
+            ax=[ax_1, ax_2],
+            location="bottom",
+            orientation="horizontal",
+            extend="both",
+            anchor=(0.5, 0),
+            pad=0,
+            shrink=0.5,
+            label="dh/dt (m)",
+        )
+        fig.set_dpi(600)
+        fig.savefig(fig_dir / Path("dhdt.png"))
+
+        print(f"Importance sampling using {obs_mean_var}.")
+        f = importance_sampling(
+            observed=obs.sum(dim="time", skipna=False),
+            simulated=sim.sum(dim="time", skipna=False),
+            log_likelihood=log_normal,
+            n_samples=len(sim.exp_id),
+            fudge_factor=fudge_factor,
+            obs_mean_var=obs_mean_var,
+            obs_std_var=obs_std_var,
+            sim_var=sim_var,
+            sum_dim=["x", "y"],
+        )
+        with ProgressBar():
+            sum_filtered_ids = f.compute()
+        r.append(sum_filtered_ids)
+
+    # s = sim_ds["velsurf_mag"]
+    # o = obs_ds["v"]
+    # print(xskillscore.rmse(s, o, dim=["x", "y"], skipna=True).values)
+
+    # fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+    # s.median(dim="exp_id").plot(ax=axs[0], vmin=0, vmax=500, label=False)
+    # o.plot(ax=axs[1], vmin=0, vmax=500)
+    # plt.show()
+
+    # observed = (
+    #     xr.open_dataset(options.obs_url, chunks="auto")
+    #     .sel({"time": str(sampling_year)})
+    #     .mean(dim="time")
+    # )

@@ -8,6 +8,7 @@ dependencies:
   - cdo
   - nco
   - ncview
+  - geos
   - pre-commit
   - mypy
   - black

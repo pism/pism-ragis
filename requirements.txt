@@ -6,6 +6,7 @@ cf_units
 cftime
 dask[distributed,dataframe]
 earthaccess
+flox
 geocube
 geopandas
 gsl

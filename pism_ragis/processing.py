@@ -28,6 +28,7 @@ import pathlib
 import re
 import shutil
 import zipfile
+from collections import OrderedDict
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Dict, Hashable, List, Mapping, Union
@@ -229,6 +230,102 @@ def preprocess_nc(
     except:
         m_id = str(m_id_re.group(1))
     ds[dim] = [m_id]
+
+    return ds.drop_vars(drop_vars, errors="ignore").drop_dims(
+        drop_dims, errors="ignore"
+    )
+
+
+def preprocess_config(
+    ds,
+    regexp: str = "id_(.+?)_",
+    dim: str = "exp_id",
+    drop_vars: Union[List[str], None] = None,
+    drop_dims: List[str] = ["nv4"],
+) -> xr.Dataset:
+    """
+    Add experiment identifier to the dataset.
+
+    This function processes the dataset by extracting an experiment identifier from the filename
+    using a regular expression, adding it as a new dimension, and optionally dropping specified
+    variables and dimensions from the dataset.
+
+    Parameters
+    ----------
+    ds : xarray.Dataset
+        The input dataset to be processed.
+    regexp : str, optional
+        The regular expression pattern to extract the experiment identifier from the filename, by default "id_(.+?)_".
+    dim : str, optional
+        The name of the new dimension to be added to the dataset, by default "exp_id".
+    drop_vars : Union[List[str], None], optional
+        A list of variable names to be dropped from the dataset, by default None.
+    drop_dims : List[str], optional
+        A list of dimension names to be dropped from the dataset, by default ["nv4"].
+
+    Returns
+    -------
+    xarray.Dataset
+        The processed dataset with the experiment identifier added as a new dimension, and specified variables and dimensions dropped.
+
+    Raises
+    ------
+    AssertionError
+        If the regular expression does not match any part of the filename.
+    """
+    m_id_re = re.search(regexp, ds.encoding["source"])
+    ds = ds.expand_dims(dim)
+    assert m_id_re is not None
+    m_id: Union[str, int]
+    try:
+        m_id = int(m_id_re.group(1))
+    except:
+        m_id = str(m_id_re.group(1))
+    ds[dim] = [m_id]
+
+    p_config = ds["pism_config"]
+    p_run_stats = ds["run_stats"]
+
+    # List of suffixes to exclude
+    suffixes_to_exclude = ["_doc", "_type", "_units", "_option", "_choices"]
+
+    # Filter the dictionary
+    config = {
+        k: v
+        for k, v in p_config.attrs.items()
+        if not any(k.endswith(suffix) for suffix in suffixes_to_exclude)
+    }
+    if "geometry.front_retreat.prescribed.file" not in config.keys():
+        config["geometry.front_retreat.prescribed.file"] = "false"
+
+    stats = p_run_stats
+    config_sorted = OrderedDict(sorted(config.items()))
+
+    pc_keys = list(config_sorted.keys())
+    pc_vals = list(config_sorted.values())
+    rs_keys = list(stats.attrs.keys())
+    rs_vals = list(stats.attrs.values())
+
+    pism_config = xr.DataArray(
+        pc_vals,
+        dims=["pism_config_axis"],
+        coords={"pism_config_axis": pc_keys, "exp_id": m_id},
+        name="pism_config",
+    )
+    run_stats = xr.DataArray(
+        rs_vals,
+        dims=["run_stats_axis"],
+        coords={"run_stats_axis": rs_keys, "exp_id": m_id},
+        name="run_stats",
+    )
+
+    ds = xr.merge(
+        [
+            ds.drop_vars(["pism_config", "run_stats"], errors="ignore"),
+            pism_config,
+            run_stats,
+        ]
+    )
 
     return ds.drop_vars(drop_vars, errors="ignore").drop_dims(
         drop_dims, errors="ignore"
@@ -1035,6 +1132,7 @@ def config_to_dataframe(
     return df
 
 
+@timeit
 def filter_retreat_experiments(ds: xr.Dataset, retreat_method: str) -> xr.Dataset:
     """
     Filter retreat experiments based on the retreat method.
@@ -1069,9 +1167,7 @@ def filter_retreat_experiments(ds: xr.Dataset, retreat_method: str) -> xr.Datase
         pism_config     (exp_id, pism_config_axis) int64 1 2
     """
     # Select the relevant pism_config_axis
-    retreat = ds.sel(
-        pism_config_axis="geometry.front_retreat.prescribed.file"
-    ).compute()
+    retreat = ds.sel(pism_config_axis="geometry.front_retreat.prescribed.file")
 
     if retreat_method == "Free":
         retreat_exp_ids = retreat.where(
