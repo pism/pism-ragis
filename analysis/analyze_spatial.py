@@ -38,6 +38,7 @@ import xarray as xr
 import xskillscore
 from dask.diagnostics import ProgressBar
 from tqdm.auto import tqdm
+import time
 
 from pism_ragis.filtering import importance_sampling
 from pism_ragis.likelihood import log_normal
@@ -124,7 +125,7 @@ if __name__ == "__main__":
         help="""Time slice to extract.""",
         type=str,
         nargs=2,
-        default=None,
+        default=[2003, 2017],
     )
     parser.add_argument(
         "FILES",
@@ -153,14 +154,16 @@ if __name__ == "__main__":
 
     retreat_methods = ["Free", "Prescribed"]
 
-    start_date = "2012-01-01"
-    end_date = "2018-01-01"
+    start_date = "2003"
+    end_date = "2020"
 
     print("Loading ensemble.")
     with ProgressBar():
         simulated = xr.open_mfdataset(
-            spatial_files, preprocess=preprocess_config, parallel=True, decode_cf=True
-        )
+            spatial_files, preprocess=preprocess_config,
+            parallel=True,
+            decode_cf=True
+        ).sel(time=slice(start_date, end_date))
 
     simulated = simulated.pint.quantify()
     simulated[sim_var] = simulated["dHdt"] * 1000.0 / 910.0
@@ -168,9 +171,9 @@ if __name__ == "__main__":
     simulated = simulated.pint.dequantify()
 
     observed = xr.open_mfdataset(
-        "/Users/andy/Downloads/Greenland_netcdf_1kmgrid_DB/Greenland_dhdt_mass*_1kmgrid_DB.nc",
+        "~/base/pism-ragis/data/mass_balance/Greenland_dhdt_mass*_1kmgrid_DB.nc",
         chunks="auto",
-    )
+    ).sel(time=slice(start_date, end_date))
     observed_resampled = observed.resample({"time": resampling_frequency}).mean()
 
     x_min, y_min = -65517, -3317968
@@ -190,8 +193,7 @@ if __name__ == "__main__":
 
         simulated_retreat = filter_retreat_experiments(simulated, retreat_method)
         simulated_retreat_resampled = (
-            simulated_retreat.sel(time=slice("2012-01-01", "2018-01-01"))
-            .resample({"time": resampling_frequency})
+            simulated_retreat.resample({"time": resampling_frequency})
             .mean(dim="time")
         )
 
@@ -208,19 +210,34 @@ if __name__ == "__main__":
 
         sim = simulated_retreat_resampled.where(~obs_mask)
 
+        start_time = time.time()
         o = obs.sum(dim="time")[obs_mean_var]
+        smb_var = "tendency_of_ice_mass_due_to_surface_mass_flux"
+        flow_var = "tendency_of_ice_mass_due_to_flow"
+        
         s = sim.median(dim="exp_id").sum(dim="time")[sim_var]
+        smb = sim.median(dim="exp_id").sum(dim="time")[smb_var]
+        flow = sim.median(dim="exp_id").sum(dim="time")[flow_var]
 
-        fig = plt.figure(figsize=(6.4, 6.4))
-        ax_1 = fig.add_subplot(1, 2, 1, projection=cartopy_crs)
-        ax_2 = fig.add_subplot(1, 2, 2, projection=cartopy_crs)
+        fig = plt.figure(figsize=(6.4, 7.2))
+        fig.set_dpi(600)
+        ax_1 = fig.add_subplot(2, 2, 1, projection=cartopy_crs)
+        ax_2 = fig.add_subplot(2, 2, 2, projection=cartopy_crs)
+        ax_3 = fig.add_subplot(2, 2, 3, projection=cartopy_crs)
+        ax_4 = fig.add_subplot(2, 2, 4, projection=cartopy_crs)
         cb = o.plot(
             ax=ax_1, vmin=-20, vmax=20, cmap="RdBu_r", extend="both", add_colorbar=False
         )
         s.plot(
             ax=ax_2, vmin=-20, vmax=20, cmap="RdBu_r", extend="both", add_colorbar=False
         )
-        for ax in [ax_1, ax_2]:
+        cb2 = smb.plot(
+            ax=ax_3, vmin=-0.05, vmax=0.05, cmap="RdBu_r", extend="both", add_colorbar=False
+        )
+        flow.plot(
+            ax=ax_4, vmin=-0.05, vmax=0.05, cmap="RdBu_r", extend="both", add_colorbar=False
+        )
+        for ax in [ax_1, ax_2, ax_3, ax_4]:
             ax.gridlines(
                 draw_labels={"top": "x", "left": "y"},
                 dms=True,
@@ -235,36 +252,51 @@ if __name__ == "__main__":
             ax.coastlines()
         ax_1.set_title("Observed dhdt")
         ax_2.set_title("Simulated Median dhdt")
+        ax_3.set_title("Simulated Median SMB")
+        ax_4.set_title("Simulated Median Flow")
 
         fig.colorbar(
             cb,
             ax=[ax_1, ax_2],
-            location="bottom",
-            orientation="horizontal",
+            location="right",
+            orientation="vertical",
             extend="both",
-            anchor=(0.5, 0),
+            anchor=(0.5, 0.5),
             pad=0,
-            shrink=0.5,
+            shrink=0.75,
             label="dh/dt (m)",
         )
-        fig.set_dpi(600)
-        fig.savefig(fig_dir / Path("dhdt.png"))
-
-        print(f"Importance sampling using {obs_mean_var}.")
-        f = importance_sampling(
-            observed=obs.sum(dim="time", skipna=False),
-            simulated=sim.sum(dim="time", skipna=False),
-            log_likelihood=log_normal,
-            n_samples=len(sim.exp_id),
-            fudge_factor=fudge_factor,
-            obs_mean_var=obs_mean_var,
-            obs_std_var=obs_std_var,
-            sim_var=sim_var,
-            sum_dim=["x", "y"],
+        fig.colorbar(
+            cb2,
+            ax=[ax_3, ax_4],
+            location="right",
+            orientation="vertical",
+            extend="both",
+            anchor=(0.5, 0.5),
+            pad=0,
+            shrink=0.75,
+            label="mass (Gt)",
         )
-        with ProgressBar():
-            sum_filtered_ids = f.compute()
-        r.append(sum_filtered_ids)
+        fig.savefig(fig_dir / Path("dhdt.png"), dpi=600)
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        print(f"Finished in {elapsed_time:.2f} seconds")
+
+        # print(f"Importance sampling using {obs_mean_var}.")
+        # f = importance_sampling(
+        #     observed=obs.sum(dim="time", skipna=False),
+        #     simulated=sim.sum(dim="time", skipna=False),
+        #     log_likelihood=log_normal,
+        #     n_samples=len(sim.exp_id),
+        #     fudge_factor=fudge_factor,
+        #     obs_mean_var=obs_mean_var,
+        #     obs_std_var=obs_std_var,
+        #     sim_var=sim_var,
+        #     sum_dim=["x", "y"],
+        # )
+        # with ProgressBar():
+        #     sum_filtered_ids = f.compute()
+        # r.append(sum_filtered_ids)
 
     # s = sim_ds["velsurf_mag"]
     # o = obs_ds["v"]

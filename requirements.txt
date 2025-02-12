@@ -10,7 +10,6 @@ flox
 geocube
 geopandas
 gsl
-h5netcdf
 joblib
 jupyter
 matplotlib
