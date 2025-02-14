@@ -1,3 +1,22 @@
+export RAGIS_DIR=/anvil/projects/x-ees240003/pism-ragis
+export PISM_PREFIX=$HOME/local/pism
+export grid=1200
+export odir=${RAGIS_DIR}/hindcasts/2024_11_dem
+
+python $RAGIS_DIR/hindcasts/hindcast.py --start 1940-01-01 --end 1979-12-31 --boot_file $RAGIS_DIR/data/dem/BedMachineGreenland-v5_0.nc --exstep monthly --spatial_ts dem --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/data/grids/pism-bedmachine-greenland.nc -s anvil -n 128 -q wholenode -w 48:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_dem_w_posterior_lhs_10.csv $RAGIS_DIR/calibration/2024_11_grimp_tw/state/g1200m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
+
+
+export RAGIS_DIR=/anvil/projects/x-ees240003/pism-ragis
+export PISM_PREFIX=$HOME/local/pism
+export grid=1200
+export odir=${RAGIS_DIR}/hindcasts/2024_11_dem_training
+
+python $RAGIS_DIR/hindcasts/hindcast.py --start 1940-01-01 --end 1979-12-31 --boot_file $RAGIS_DIR/data/dem/BedMachineGreenland-v5_0.nc --exstep yearly --spatial_ts dem --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/data/grids/pism-bedmachine-greenland.nc -s anvil -n 128 -q wholenode -w 24:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_dem_w_posterior_lhs_10.csv $RAGIS_DIR/calibration/2024_11_grimp_tw/state/g1200m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
+
+
+
+
+
 for file in hindcasts/2024_07_ragis_tw/spatial/ex_gris_g1800m_v2024-02_RAGIS_id_*; do python analysis/compute_basins_stats_single.py --ensemble_dir hindcasts/ --result_dir analysis/2024_07_ragis_uq --n_jobs 12 $file; done
 
 grid=900

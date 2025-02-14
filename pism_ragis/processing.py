@@ -18,7 +18,7 @@
 # pylint: disable=too-many-positional-arguments
 
 """
-Module for data processing
+Module for data processing.
 """
 
 import contextlib
@@ -28,18 +28,18 @@ import pathlib
 import re
 import shutil
 import zipfile
-from calendar import isleap
+from collections import OrderedDict
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Dict, Hashable, List, Mapping, Union
+from typing import Any, Dict, Hashable, Mapping
 
-import dask
 import joblib
 import numpy as np
 import pandas as pd
 import xarray as xr
 from tqdm.auto import tqdm
 
-from pism_ragis.decorators import profileit
+from pism_ragis.decorators import timeit
 from pism_ragis.logger import get_logger
 
 logger = get_logger(__name__)
@@ -71,56 +71,6 @@ def unzip_file(zip_path: str, extract_to: str, overwrite: bool = False) -> None:
             file_path = Path(extract_to) / file
             if not file_path.exists() or overwrite:
                 zip_ref.extract(member=file, path=extract_to)
-
-
-def decimal_year_to_datetime(decimal_year: float) -> datetime.datetime:
-    """
-    Convert a decimal year to a datetime object.
-
-    Parameters
-    ----------
-    decimal_year : float
-        The decimal year to be converted.
-
-    Returns
-    -------
-    datetime.datetime
-        The corresponding datetime object.
-
-    Notes
-    -----
-    The function calculates the date by determining the start of the year and adding
-    the fractional part of the year as days. If the resulting date has an hour value
-    of 12 or more, it rounds up to the next day and sets the time to midnight.
-    """
-    year = int(decimal_year)
-    remainder = decimal_year - year
-    start_of_year = datetime.datetime(year, 1, 1)
-    days_in_year = (datetime.datetime(year + 1, 1, 1) - start_of_year).days
-    date = start_of_year + datetime.timedelta(days=remainder * days_in_year)
-    if date.hour >= 12:
-        date = date + datetime.timedelta(days=1)
-    return date.replace(hour=0, minute=0, second=0, microsecond=0)
-
-
-def days_in_year(year: int) -> int:
-    """
-    Calculate the number of days in a given year.
-
-    Parameters
-    ----------
-    year : int
-        The year for which to calculate the number of days.
-
-    Returns
-    -------
-    int
-        The number of days in the specified year. Returns 366 if the year is a leap year, otherwise returns 365.
-    """
-    if isleap(year):
-        return 366
-    else:
-        return 365
 
 
 def calculate_area(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
@@ -167,9 +117,9 @@ def preprocess_time(
     periods: int | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
-    drop_vars: List[str] | None = None,
-    drop_dims: List[str] = ["nv4"],
-):
+    drop_vars: list[str] | None = None,
+    drop_dims: list[str] = ["nv4"],
+) -> xr.Dataset:
     """
     Add correct time and time_bounds to the dataset.
 
@@ -185,9 +135,15 @@ def preprocess_time(
         The regular expression pattern to extract the year from the filename, by default "ERA5-(.+?).nc".
     freq : str, optional
         The frequency string to create the time range, by default "MS".
-    drop_vars : Union[List[str], None], optional
+    periods : int or None, optional
+        The number of periods in the time range, by default None.
+    start_date : str or None, optional
+        The start date for the time range, by default None.
+    end_date : str or None, optional
+        The end date for the time range, by default None.
+    drop_vars : list[str] or None, optional
         A list of variable names to be dropped from the dataset, by default None.
-    drop_dims : List[str], optional
+    drop_dims : list[str], optional
         A list of dimension names to be dropped from the dataset, by default ["nv4"].
 
     Returns
@@ -232,9 +188,9 @@ def preprocess_nc(
     ds,
     regexp: str = "id_(.+?)_",
     dim: str = "exp_id",
-    drop_vars: Union[List[str], None] = None,
-    drop_dims: List[str] = ["nv4"],
-):
+    drop_vars: list[str]| None = None,
+    drop_dims: list[str] = ["nv4"],
+) -> xr.Dataset:
     """
     Add experiment identifier to the dataset.
 
@@ -250,9 +206,9 @@ def preprocess_nc(
         The regular expression pattern to extract the experiment identifier from the filename, by default "id_(.+?)_".
     dim : str, optional
         The name of the new dimension to be added to the dataset, by default "exp_id".
-    drop_vars : Union[List[str], None], optional
+    drop_vars : list[str] | None, optional
         A list of variable names to be dropped from the dataset, by default None.
-    drop_dims : List[str], optional
+    drop_dims : list[str], optional
         A list of dimension names to be dropped from the dataset, by default ["nv4"].
 
     Returns
@@ -268,12 +224,108 @@ def preprocess_nc(
     m_id_re = re.search(regexp, ds.encoding["source"])
     ds = ds.expand_dims(dim)
     assert m_id_re is not None
-    m_id: Union[str, int]
+    m_id: str | int
     try:
         m_id = int(m_id_re.group(1))
     except:
         m_id = str(m_id_re.group(1))
     ds[dim] = [m_id]
+
+    return ds.drop_vars(drop_vars, errors="ignore").drop_dims(
+        drop_dims, errors="ignore"
+    )
+
+
+def preprocess_config(
+    ds,
+    regexp: str = "id_(.+?)_",
+    dim: str = "exp_id",
+    drop_vars: list[str]| None = None,
+    drop_dims: list[str] = ["nv4"],
+) -> xr.Dataset:
+    """
+    Add experiment identifier to the dataset.
+
+    This function processes the dataset by extracting an experiment identifier from the filename
+    using a regular expression, adding it as a new dimension, and optionally dropping specified
+    variables and dimensions from the dataset.
+
+    Parameters
+    ----------
+    ds : xarray.Dataset
+        The input dataset to be processed.
+    regexp : str, optional
+        The regular expression pattern to extract the experiment identifier from the filename, by default "id_(.+?)_".
+    dim : str, optional
+        The name of the new dimension to be added to the dataset, by default "exp_id".
+    drop_vars : list[str]| None, optional
+        A list of variable names to be dropped from the dataset, by default None.
+    drop_dims : list[str], optional
+        A list of dimension names to be dropped from the dataset, by default ["nv4"].
+
+    Returns
+    -------
+    xarray.Dataset
+        The processed dataset with the experiment identifier added as a new dimension, and specified variables and dimensions dropped.
+
+    Raises
+    ------
+    AssertionError
+        If the regular expression does not match any part of the filename.
+    """
+    m_id_re = re.search(regexp, ds.encoding["source"])
+    ds = ds.expand_dims(dim)
+    assert m_id_re is not None
+    m_id: str| int
+    try:
+        m_id = int(m_id_re.group(1))
+    except:
+        m_id = str(m_id_re.group(1))
+    ds[dim] = [m_id]
+
+    p_config = ds["pism_config"]
+    p_run_stats = ds["run_stats"]
+
+    # List of suffixes to exclude
+    suffixes_to_exclude = ["_doc", "_type", "_units", "_option", "_choices"]
+
+    # Filter the dictionary
+    config = {
+        k: v
+        for k, v in p_config.attrs.items()
+        if not any(k.endswith(suffix) for suffix in suffixes_to_exclude)
+    }
+    if "geometry.front_retreat.prescribed.file" not in config.keys():
+        config["geometry.front_retreat.prescribed.file"] = "false"
+
+    stats = p_run_stats
+    config_sorted = OrderedDict(sorted(config.items()))
+
+    pc_keys = list(config_sorted.keys())
+    pc_vals = list(config_sorted.values())
+    rs_keys = list(stats.attrs.keys())
+    rs_vals = list(stats.attrs.values())
+
+    pism_config = xr.DataArray(
+        pc_vals,
+        dims=["pism_config_axis"],
+        coords={"pism_config_axis": pc_keys, "exp_id": m_id},
+        name="pism_config",
+    )
+    run_stats = xr.DataArray(
+        rs_vals,
+        dims=["run_stats_axis"],
+        coords={"run_stats_axis": rs_keys, "exp_id": m_id},
+        name="run_stats",
+    )
+
+    ds = xr.merge(
+        [
+            ds.drop_vars(["pism_config", "run_stats"], errors="ignore"),
+            pism_config,
+            run_stats,
+        ]
+    )
 
     return ds.drop_vars(drop_vars, errors="ignore").drop_dims(
         drop_dims, errors="ignore"
@@ -288,9 +340,9 @@ def preprocess_scalar_nc(
     basin_dim: str = "basin",
     ensemble_id: str = "RAGIS",
     basin: str = "GIS",
-    drop_vars: Union[List[str], None] = None,
-    drop_dims: List[str] = ["nv4"],
-):
+    drop_vars: list[str] | None = None,
+    drop_dims: list[str] = ["nv4"],
+) -> xr.Dataset:
     """
     Add experiment identifier and additional dimensions to the dataset.
 
@@ -315,9 +367,9 @@ def preprocess_scalar_nc(
         The value of the ensemble identifier to be added, by default "RAGIS".
     basin : str, optional
         The value of the basin identifier to be added, by default "GIS".
-    drop_vars : Union[List[str], None], optional
+    drop_vars : list[str] | None, optional
         A list of variable names to be dropped from the dataset, by default None.
-    drop_dims : List[str], optional
+    drop_dims : list[str], optional
         A list of dimension names to be dropped from the dataset, by default ["nv4"].
 
     Returns
@@ -362,7 +414,7 @@ def preprocess_scalar_nc(
     ds = ds.expand_dims(basin_dim)
     ds[basin_dim] = [basin]
     assert m_id_re is not None
-    m_id: Union[str, int]
+    m_id: str | int
     try:
         m_id = int(m_id_re.group(1))
     except:
@@ -375,7 +427,7 @@ def preprocess_scalar_nc(
 
 
 def compute_basin(
-    ds: xr.Dataset, name: str = "basin", dim: List = ["x", "y"]
+    ds: xr.Dataset, name: str = "basin", dim: list = ["x", "y"]
 ) -> xr.Dataset:
     """
     Compute the sum of the dataset over the 'x' and 'y' dimensions and add a new dimension 'basin'.
@@ -386,6 +438,8 @@ def compute_basin(
         The input dataset.
     name : str
         The name to assign to the new 'basin' dimension.
+    dim : List
+        The dimensions to sum over.
 
     Returns
     -------
@@ -397,19 +451,46 @@ def compute_basin(
     >>> ds = xr.Dataset({'var': (('x', 'y'), np.random.rand(5, 5))})
     >>> compute_basin(ds, 'new_basin')
     """
-    ds = ds.sum(dim=dim).expand_dims("basin", axis=1)
+    ds = ds.sum(dim=dim).expand_dims("basin", axis=-1)
     ds["basin"] = [name]
     return ds.compute()
 
 
 @contextlib.contextmanager
 def tqdm_joblib(tqdm_object):
-    """Context manager to patch joblib to report into tqdm progress bar given as argument"""
+    """
+    Context manager to patch joblib to report into tqdm progress bar given as argument.
+
+    Parameters
+    ----------
+    tqdm_object : tqdm.tqdm
+        The tqdm progress bar object to use for reporting progress.
+    """
+    # ...existing code...
 
     class TqdmBatchCompletionCallback(joblib.parallel.BatchCompletionCallBack):
-        """TQDM Callback"""
+        """
+        TQDM Callback.
+
+        This callback updates the tqdm progress bar with the batch size.
+        """
 
         def __call__(self, *args, **kwargs):
+            """
+            Call the TQDM callback.
+
+            Parameters
+            ----------
+            *args : tuple
+                Positional arguments.
+            **kwargs : dict
+                Keyword arguments.
+
+            Returns
+            -------
+            Any
+                The result of the super class __call__ method.
+            """
             tqdm_object.update(n=self.batch_size)
             return super().__call__(*args, **kwargs)
 
@@ -422,8 +503,20 @@ def tqdm_joblib(tqdm_object):
         tqdm_object.close()
 
 
-def to_decimal_year(date):
-    """Convert datetime date to decimal year"""
+def to_decimal_year(date: datetime.datetime) -> float:
+    """
+    Convert datetime date to decimal year.
+
+    Parameters
+    ----------
+    date : datetime.datetime
+        The date to convert.
+
+    Returns
+    -------
+    float
+        The decimal year representation of the date.
+    """
     year = date.year
     start_of_this_year = datetime.datetime(year=year, month=1, day=1)
     start_of_next_year = datetime.datetime(year=year + 1, month=1, day=1)
@@ -435,9 +528,23 @@ def to_decimal_year(date):
 
 
 def check_file(
-    infile: Union[str, pathlib.Path], norm_year: Union[None, float] = None
+    infile: str | pathlib.Path, norm_year: None | float = None
 ) -> bool:
-    """Check netCDF file"""
+    """
+    Check netCDF file.
+
+    Parameters
+    ----------
+    infile : str | pathlib.Path
+        The path to the netCDF file.
+    norm_year : None | float, optional
+        The normalization year, by default None.
+
+    Returns
+    -------
+    bool
+        True if the file is valid, False otherwise.
+    """
     with xr.open_dataset(infile) as ds:
         is_ok: bool = False
         if "time" in ds.indexes:
@@ -459,9 +566,23 @@ def check_file(
 
 
 def check_paleo_file(
-    infile: Union[str, pathlib.Path], norm_year: Union[None, float] = None
+    infile: str | pathlib.Path, norm_year: None | float = None
 ) -> bool:
-    """Check netCDF file"""
+    """
+    Check netCDF file.
+
+    Parameters
+    ----------
+    infile : str | pathlib.Path
+        The path to the netCDF file.
+    norm_year : None, float, optional
+        The normalization year, by default None.
+
+    Returns
+    -------
+    bool
+        True if the file is valid, False otherwise.
+    """
     with xr.open_dataset(infile) as ds:
         is_ok: bool = False
         if "time" in ds.indexes:
@@ -481,10 +602,17 @@ def check_paleo_file(
 
 
 def copy_file(
-    infile: Union[str, pathlib.Path], outdir: Union[str, pathlib.Path]
+    infile: str | pathlib.Path, outdir: str | pathlib.Path
 ) -> None:
     """
-    Copy infile to outdir
+    Copy infile to outdir.
+
+    Parameters
+    ----------
+    infile : str | pathlib.Path
+        The input file path.
+    outdir : str, pathlib.Path
+        The output directory path.
     """
     if infile is not pathlib.Path:
         in_path = pathlib.Path(infile)
@@ -508,9 +636,8 @@ class UtilsMethods:
 
     Parameters
     ----------
-
     xarray_obj : xr.Dataset
-      The xarray Dataset to which to add the custom methods.
+        The xarray Dataset to which to add the custom methods.
     """
 
     def __init__(self, xarray_obj: xr.Dataset):
@@ -519,7 +646,6 @@ class UtilsMethods:
 
         Parameters
         ----------
-
         xarray_obj : xr.Dataset
             The xarray Dataset to which to add the custom methods.
         """
@@ -578,46 +704,45 @@ class UtilsMethods:
         return self._obj.drop_vars(nonnumeric_vars, errors=errors)
 
 
-@profileit
+@timeit
 def load_ensemble(
-    filenames: List[Union[Path, str]], parallel: bool = True, engine: str = "netcdf4"
+    filenames: list[Path | str],
+    parallel: bool = True,
+    engine: str = "h5netcdf",
+    preprocess: Callable | None = None,
 ) -> xr.Dataset:
     """
     Load an ensemble of NetCDF files into an xarray Dataset.
 
     Parameters
     ----------
-    filenames : List[Union[Path, str]]
+    filenames : list[Path | str]
         A list of file paths or strings representing the NetCDF files to be loaded.
     parallel : bool, optional
         Whether to load the files in parallel using Dask. Default is True.
+    engine : str, optional
+        The engine to use for loading the NetCDF files. Default is "h5netcdf".
+    preprocess : Callable or None, optional
+        A preprocessing function to apply to each dataset before concatenation. Default is None.
 
     Returns
     -------
     xr.Dataset
         The loaded xarray Dataset containing the ensemble data.
-
-    Notes
-    -----
-    This function uses Dask to load the dataset in parallel and handle large chunks efficiently.
-    It sets the Dask configuration to split large chunks during array slicing.
     """
-    with dask.config.set(**{"array.slicing.split_large_chunks": True}):
-        print("Loading ensemble files... ", end="", flush=True)
-        ds = xr.open_mfdataset(
-            filenames,
-            parallel=parallel,
-            chunks={"exp_id": -1, "time": -1},
-            engine=engine,
-        ).drop_vars(["spatial_ref", "mapping"], errors="ignore")
-    if "time" in ds["pism_config"].coords:
-        ds["pism_config"] = ds["pism_config"].isel(time=0).drop_vars("time")
+    print("Loading ensemble files... ", end="", flush=True)
+    ds = xr.open_mfdataset(
+        filenames,
+        parallel=parallel,
+        preprocess=preprocess,
+        engine=engine,
+    ).drop_vars(["spatial_ref", "mapping"], errors="ignore")
     print("Done.")
     return ds
 
 
 def normalize_cumulative_variables(
-    ds: xr.Dataset, variables, reference_year: float = 1992.0
+    ds: xr.Dataset, variables: str | list[str], reference_date: str = "1992-01-01"
 ) -> xr.Dataset:
     """
     Normalize cumulative variables in an xarray Dataset by subtracting their values at a reference year.
@@ -628,8 +753,8 @@ def normalize_cumulative_variables(
         The xarray Dataset containing the cumulative variables to be normalized.
     variables : str or list of str
         The name(s) of the cumulative variables to be normalized.
-    reference_year : float, optional
-        The reference year to use for normalization. Default is 1992.0.
+    reference_date : str, optional
+        The reference date to use for normalization. Default is "1992-01-01".
 
     Returns
     -------
@@ -644,7 +769,7 @@ def normalize_cumulative_variables(
     >>> data = xr.Dataset({
     ...     "cumulative_var": ("time", [10, 20, 30, 40, 50, 60]),
     ... }, coords={"time": time})
-    >>> normalize_cumulative_variables(data, "cumulative_var", reference_year=1992)
+    >>> normalize_cumulative_variables(data, "cumulative_var", reference_date="1992-01-01")
     <xarray.Dataset>
     Dimensions:         (time: 6)
     Coordinates:
@@ -652,13 +777,12 @@ def normalize_cumulative_variables(
     Data variables:
         cumulative_var  (time) int64 0 10 20 30 40 50
     """
-    reference_date = decimal_year_to_datetime(reference_year)
     ds[variables] -= ds[variables].sel(time=reference_date, method="nearest")
     return ds
 
 
 def standardize_variable_names(
-    ds: xr.Dataset, name_dict: Union[Mapping[Any, Hashable], None]
+    ds: xr.Dataset, name_dict: Mapping[Any, Hashable] | None
 ) -> xr.Dataset:
     """
     Standardize variable names in an xarray Dataset.
@@ -681,7 +805,7 @@ def standardize_variable_names(
     >>> import xarray as xr
     >>> ds = xr.Dataset({'temp': ('x', [1, 2, 3]), 'precip': ('x', [4, 5, 6])})
     >>> name_dict = {'temp': 'temperature', 'precip': 'precipitation'}
-    >>> standarize_variable_names(ds, name_dict)
+    >>> standardize_variable_names(ds, name_dict)
     <xarray.Dataset>
     Dimensions:      (x: 3)
     Dimensions without coordinates: x
@@ -692,7 +816,7 @@ def standardize_variable_names(
     return ds.rename_vars(name_dict)
 
 
-def select_experiments(df: pd.DataFrame, ids_to_select: List[int]) -> pd.DataFrame:
+def select_experiments(df: pd.DataFrame, ids_to_select: list[int]) -> pd.DataFrame:
     """
     Select rows from a DataFrame based on a list of experiment IDs, including duplicates.
 
@@ -700,7 +824,7 @@ def select_experiments(df: pd.DataFrame, ids_to_select: List[int]) -> pd.DataFra
     ----------
     df : pd.DataFrame
         The input DataFrame containing experiment data.
-    ids_to_select : List[int]
+    ids_to_select : list[int]
         A list of experiment IDs to select from the DataFrame. Duplicates in this list
         will result in duplicate rows in the output DataFrame.
 
@@ -801,7 +925,40 @@ def simplify_climate(my_str: str) -> str:
     return "HIRHAM"
 
 
-def simplify_ocean(my_str: str) -> str:
+def simplify_retreat(my_str: str) -> str:
+    """
+    Simplify retreat string.
+
+    This function simplifies the input retreat string by returning a standardized
+    retreat model name based on the presence of specific substrings.
+
+    Parameters
+    ----------
+    my_str : str
+        The input retreat string.
+
+    Returns
+    -------
+    str
+        The standardized retreat model name based on the input string.
+
+    Examples
+    --------
+    >>> simplify_retreat("false")
+    'Free'
+    >>> simplify_retreat("true")
+    'Prescribed'
+    """
+
+    if my_str in ("false", ""):
+        short_str = "Free"
+    else:
+        short_str = "Prescribed"
+
+    return short_str
+
+
+def simplify_ocean(my_str: str) -> int:
     """
     Simplify ocean string.
 
@@ -812,10 +969,23 @@ def simplify_ocean(my_str: str) -> str:
 
     Returns
     -------
-    str
-        The simplified ocean string.
+    int
+        The simplified ocean value.
     """
-    return "-".join(my_str.split("_")[1:2])
+    gcms: Dict[str, int] = {
+        "ACCESS1-3_rcp85": 0,
+        "CNRM-CM6_ssp126": 1,
+        "CNRM-ESM2_ssp585": 2,
+        "CSIRO-Mk3.6_rcp85": 3,
+        "HadGEM2-ES_rcp85": 4,
+        "IPSL-CM5-MR_rcp85": 5,
+        "MIROC-ESM-CHEM_rcp26": 6,
+        "NorESM1-M_rcp85": 7,
+        "UKESM1-CM6_ssp585": 8,
+    }
+
+    gcm = "_".join(my_str.split("_")[1:3])
+    return gcms[gcm]
 
 
 def simplify_calving(my_str: str) -> int:
@@ -876,3 +1046,405 @@ def transpose_dataframe(df: pd.DataFrame, exp_id: str) -> pd.DataFrame:
     df.columns = param_names
     df["exp_id"] = exp_id
     return df
+
+
+def filter_config(ds: xr.Dataset, params: list[str]) -> xr.DataArray:
+    """
+    Filter the configuration parameters from the dataset.
+
+    This function selects the specified configuration parameters from the dataset
+    and returns them as a DataArray.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        The input dataset containing the configuration parameters.
+    params : List[str]
+        A list of configuration parameter names to be selected.
+
+    Returns
+    -------
+    xr.DataArray
+        The selected configuration parameters as a DataArray.
+
+    Examples
+    --------
+    >>> ds = xr.Dataset({'pism_config': (('pism_config_axis',), [1, 2, 3])},
+                        coords={'pism_config_axis': ['param1', 'param2', 'param3']})
+    >>> filter_config(ds, ['param1', 'param3'])
+    <xarray.DataArray 'pism_config' (pism_config_axis: 2)>
+    array([1, 3])
+    Coordinates:
+      * pism_config_axis  (pism_config_axis) <U6 'param1' 'param3'
+    """
+    config = ds.sel(pism_config_axis=params).pism_config
+    return config
+
+
+def config_to_dataframe(
+    config: xr.DataArray, ensemble: str | None = None
+) -> pd.DataFrame:
+    """
+    Convert an xarray DataArray configuration to a pandas DataFrame.
+
+    This function converts the input DataArray containing configuration data into a
+    pandas DataFrame. The dimensions of the DataArray (excluding 'pism_config_axis')
+    are used as the index, and the 'pism_config_axis' values are used as columns.
+
+    Parameters
+    ----------
+    config : xr.DataArray
+        The input DataArray containing the configuration data.
+    ensemble : str | None, optional
+        An optional string to add as a column named 'ensemble' in the DataFrame, by default None.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame where the dimensions of the DataArray (excluding 'pism_config_axis')
+        are used as the index, and the 'pism_config_axis' values are used as columns.
+
+    Examples
+    --------
+    >>> config = xr.DataArray(
+    ...     data=[[1, 2, 3], [4, 5, 6]],
+    ...     dims=["time", "pism_config_axis"],
+    ...     coords={"time": [0, 1], "pism_config_axis": ["param1", "param2", "param3"]}
+    ... )
+    >>> df = config_to_dataframe(config)
+    >>> print(df)
+    pism_config_axis  time  param1  param2  param3
+    0                   0       1       2       3
+    1                   1       4       5       6
+
+    >>> df = config_to_dataframe(config, ensemble="ensemble1")
+    >>> print(df)
+    pism_config_axis  time  param1  param2  param3   ensemble
+    0                   0       1       2       3  ensemble1
+    1                   1       4       5       6  ensemble1
+    """
+    dims = [dim for dim in config.dims if dim != "pism_config_axis"]
+    df = config.to_dataframe().reset_index()
+    df = df.pivot(index=dims, columns="pism_config_axis", values="pism_config")
+    df.reset_index(inplace=True)
+    if ensemble:
+        df["ensemble"] = ensemble
+    return df
+
+
+@timeit
+def filter_retreat_experiments(ds: xr.Dataset, retreat_method: str) -> xr.Dataset:
+    """
+    Filter retreat experiments based on the retreat method.
+
+    This function filters the dataset to include only the experiments that match the specified
+    retreat method. The retreat method can be "free", "prescribed", or "all".
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        The input dataset containing the retreat experiments.
+    retreat_method : {"Free", "Prescribed", "All"}
+        The retreat method to filter by. "free" selects experiments with no prescribed retreat,
+        "Prescribed" selects experiments with a prescribed retreat, and "All" selects all experiments.
+
+    Returns
+    -------
+    xr.Dataset
+        The filtered dataset containing only the experiments that match the specified retreat method.
+
+    Examples
+    --------
+    >>> ds = xr.Dataset({'pism_config': (('exp_id', 'pism_config_axis'), [[1, 2], [3, 4]])},
+    ...                 coords={'exp_id': [0, 1], 'pism_config_axis': ['param1', 'geometry.front_retreat.prescribed.file']})
+    >>> filter_retreat_experiments(ds, 'Free')
+    <xarray.Dataset>
+    Dimensions:         (exp_id: 1, pism_config_axis: 2)
+    Coordinates:
+      * exp_id          (exp_id) int64 0
+      * pism_config_axis (pism_config_axis) <U36 'param1' 'geometry.front_retreat.prescribed.file'
+    Data variables:
+        pism_config     (exp_id, pism_config_axis) int64 1 2
+    """
+    # Select the relevant pism_config_axis
+    retreat = ds.sel(pism_config_axis="geometry.front_retreat.prescribed.file")
+
+    if retreat_method == "Free":
+        retreat_exp_ids = retreat.where(
+            retreat["pism_config"] == "false", drop=True
+        ).exp_id.values
+    elif retreat_method == "Prescribed":
+        retreat_exp_ids = retreat.where(
+            retreat["pism_config"] != "false", drop=True
+        ).exp_id.values
+    else:
+        retreat_exp_ids = ds.exp_id
+
+    # Select the Dataset with the filtered exp_ids
+    ds = ds.sel(exp_id=retreat_exp_ids)
+
+    return ds
+
+
+def sort_columns(df: pd.DataFrame, sorted_columns: list[str]) -> pd.DataFrame:
+    """
+    Sort columns of a DataFrame.
+
+    This function sorts the columns of a DataFrame such that the columns specified in
+    `sorted_columns` appear in the specified order, while all other columns appear before
+    the sorted columns in their original order.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The input DataFrame to be sorted.
+    sorted_columns : List[str]
+        A list of column names to be sorted.
+
+    Returns
+    -------
+    pd.DataFrame
+        The DataFrame with columns sorted as specified.
+    """
+    # Identify columns that are not in the list
+    other_columns = [col for col in df.columns if col not in sorted_columns]
+
+    # Concatenate other columns with the sorted columns
+    new_column_order = other_columns + sorted_columns
+
+    # Reindex the DataFrame
+    return df.reindex(columns=new_column_order)
+
+
+def add_prefix_coord(
+    sensitivity_indices: xr.Dataset, parameter_groups: Dict[str, str]
+) -> xr.Dataset:
+    """
+    Add prefix coordinates to an xarray Dataset.
+
+    This function extracts the prefix from each coordinate value in the 'pism_config_axis'
+    and adds it as a new coordinate. It also maps the prefixes to their corresponding
+    sensitivity indices groups.
+
+    Parameters
+    ----------
+    sensitivity_indices : xr.Dataset
+        The input dataset containing sensitivity indices.
+    parameter_groups : Dict[str, str]
+        A dictionary mapping parameter names to their corresponding groups.
+
+    Returns
+    -------
+    xr.Dataset
+        The dataset with added prefix coordinates and sensitivity indices groups.
+    """
+    prefixes = [
+        name.split(".")[0] for name in sensitivity_indices.pism_config_axis.values
+    ]
+
+    sensitivity_indices = sensitivity_indices.assign_coords(
+        prefix=("pism_config_axis", prefixes)
+    )
+    si_prefixes = [parameter_groups[name] for name in sensitivity_indices.prefix.values]
+
+    sensitivity_indices = sensitivity_indices.assign_coords(
+        sensitivity_indices_group=("pism_config_axis", si_prefixes)
+    )
+    return sensitivity_indices
+
+
+def prepare_input(
+    df: pd.DataFrame,
+    params: list[str] = [
+        "surface.given.file",
+        "ocean.th.file",
+        "geometry.front_retreat.prescribed.file",
+    ],
+) -> pd.DataFrame:
+    """
+    Prepare the input DataFrame by converting columns to numeric and mapping unique values to integers.
+
+    This function processes the input DataFrame by converting specified columns to numeric values,
+    dropping specified columns, and mapping unique values in the specified parameters to integers.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The input DataFrame to be processed.
+    params : list[str], optional
+        A list of column names to be processed. Unique values in these columns will be mapped to integers.
+        By default, the list includes:
+        ["surface.given.file", "ocean.th.file", "geometry.front_retreat.prescribed.file"].
+
+    Returns
+    -------
+    pd.DataFrame
+        The processed DataFrame with specified columns converted to numeric and unique values mapped to integers.
+
+    Examples
+    --------
+    >>> df = pd.DataFrame({
+    ...     "surface.given.file": ["file1", "file2", "file1"],
+    ...     "ocean.th.file": ["fileA", "fileB", "fileA"],
+    ...     "geometry.front_retreat.prescribed.file": ["fileM", "fileN", "fileM"],
+    ...     "ensemble": [1, 2, 3],
+    ...     "exp_id": [101, 102, 103]
+    ... })
+    >>> prepare_input(df)
+       surface.given.file  ocean.th.file  geometry.front_retreat.prescribed.file
+    0                   0              0                                      0
+    1                   1              1                                      1
+    2                   0              0                                      0
+    """
+    df = df.apply(convert_column_to_numeric).drop(
+        columns=["ensemble", "exp_id"], errors="ignore"
+    )
+
+    for param in params:
+        m_dict: Dict[str, int] = {v: k for k, v in enumerate(df[param].unique())}
+        df[param] = df[param].map(m_dict)
+
+    return df
+
+
+@timeit
+def prepare_simulations(
+    filenames: list[Path | str],
+    config: dict[str, Any],
+    reference_date: str,
+    parallel: bool = True,
+    engine: str = "h5netcdf",
+) -> xr.Dataset:
+    """
+    Prepare simulations by loading and processing ensemble datasets.
+
+    This function loads ensemble datasets from the specified filenames, processes them
+    according to the provided configuration, and returns the processed dataset. The
+    processing steps include sorting, converting byte strings to strings, dropping NaNs,
+    standardizing variable names, calculating cumulative variables, and normalizing
+    cumulative variables.
+
+    Parameters
+    ----------
+    filenames : list[[Path | str]
+        A list of file paths to the ensemble datasets.
+    config : Dict[str, Any]
+        A dictionary containing configuration settings for processing the datasets.
+    reference_date : str
+        The reference date for normalizing cumulative variables.
+    parallel : bool, optional
+        Whether to load the datasets in parallel, by default True.
+    engine : str, optional
+        The engine to use for loading the datasets, by default "h5netcdf".
+
+    Returns
+    -------
+    xr.Dataset
+        The processed xarray dataset.
+
+    Examples
+    --------
+    >>> filenames = ["file1.nc", "file2.nc"]
+    >>> config = {
+    ...     "PISM Spatial": {...},
+    ...     "Cumulative Variables": {
+    ...         "cumulative_grounding_line_flux": "cumulative_gl_flux",
+    ...         "cumulative_smb": "cumulative_smb_flux"
+    ...     },
+    ...     "Flux Variables": {
+    ...         "grounding_line_flux": "gl_flux",
+    ...         "smb_flux": "smb_flux"
+    ...     }
+    ... }
+    >>> reference_date = "2000-01-01"
+    >>> ds = prepare_simulations(filenames, config, reference_date)
+    """
+    ds = load_ensemble(filenames, parallel=parallel, engine=engine).sortby("basin")
+    ds = xr.apply_ufunc(np.vectorize(convert_bstrings_to_str), ds, dask="parallelized")
+
+    ds = standardize_variable_names(ds, config["PISM Spatial"])
+    ds[config["Cumulative Variables"]["cumulative_grounding_line_flux"]] = ds[
+        config["Flux Variables"]["grounding_line_flux"]
+    ].cumsum() / len(ds.time)
+    ds[config["Cumulative Variables"]["cumulative_smb"]] = ds[
+        config["Flux Variables"]["smb_flux"]
+    ].cumsum() / len(ds.time)
+    ds = normalize_cumulative_variables(
+        ds,
+        list(config["Cumulative Variables"].values()),
+        reference_date=reference_date,
+    )
+    return ds
+
+
+@timeit
+def prepare_observations(
+    url: Path | str,
+    config: dict[str, Any],
+    reference_date: str,
+    engine: str = "h5netcdf",
+) -> xr.Dataset:
+    """
+    Prepare observation datasets by normalizing cumulative variables.
+
+    This function loads observation datasets from the specified URLs, sorts them by basin,
+    normalizes the cumulative variables, and returns the processed datasets.
+
+    Parameters
+    ----------
+    url : Path or str
+        The URL or path to the basin observation dataset.
+    config : Dict[str, Any]
+        A dictionary containing configuration settings for processing the datasets.
+    reference_date : str
+        The reference date for normalizing cumulative variables.
+    engine : str, optional
+        The engine to use for loading the datasets, by default "h5netcdf".
+
+    Returns
+    -------
+    xr.Dataset
+        A observation datasets.
+
+    Examples
+    --------
+    >>> config = {
+    ...     "Cumulative Variables": {"cumulative_mass_balance": "mass_balance"},
+    ...     "Cumulative Uncertainty Variables": {"cumulative_mass_balance_uncertainty": "mass_balance_uncertainty"}
+    ... }
+    >>> prepare_observations("basin.nc", config, "2000-01-1")
+    <xarray.Dataset>
+    """
+    ds = xr.open_dataset(url, engine=engine, chunks=-1)
+    ds = ds.sortby("basin")
+
+    cumulative_vars = config["Cumulative Variables"]
+    cumulative_uncertainty_vars = config["Cumulative Uncertainty Variables"]
+
+    ds = normalize_cumulative_variables(
+        ds,
+        list(cumulative_vars.values()) + list(cumulative_uncertainty_vars.values()),
+        reference_date,
+    )
+
+    return ds
+
+
+def convert_bstrings_to_str(element: Any) -> Any:
+    """
+    Convert byte strings to regular strings.
+
+    Parameters
+    ----------
+    element : Any
+        The element to be checked and potentially converted. If the element is a byte string,
+        it will be converted to a regular string. Otherwise, the element will be returned as is.
+
+    Returns
+    -------
+    Any
+        The converted element if it was a byte string, otherwise the original element.
+    """
+    if isinstance(element, bytes):
+        return element.decode("utf-8")
+    return element

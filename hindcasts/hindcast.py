@@ -17,7 +17,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 """
-Generate scrips to hindcasts of the Greenland Ice Sheet using the Parallel Ice Sheet Model (PISM)
+Generate scripts to hindcast the Greenland Ice Sheet using the Parallel Ice Sheet Model (PISM).
 """
 
 import inspect
@@ -35,7 +35,12 @@ import xarray as xr
 
 def current_script_directory() -> str:
     """
-    Return the current directory
+    Return the current directory.
+
+    Returns
+    -------
+    str
+        The current directory.
     """
 
     m_filename = inspect.stack(0)[0][1]
@@ -51,7 +56,16 @@ from systems import Systems  # pylint: disable=C0413
 
 def create_offset_file(file_name: str, delta_T: float = 0.0, frac_P: float = 1.0):
     """
-    Generate offset file using xarray
+    Generate offset file using xarray.
+
+    Parameters
+    ----------
+    file_name : str
+        The name of the file to create.
+    delta_T : float, optional
+        The temperature offset, by default 0.0.
+    frac_P : float, optional
+        The precipitation fraction, by default 1.0.
     """
     dT = [delta_T]
     fP = [frac_P]
@@ -61,7 +75,7 @@ def create_offset_file(file_name: str, delta_T: float = 0.0, frac_P: float = 1.0
     ds = xr.Dataset(
         data_vars=dict(  # pylint: disable=R1735
             delta_T=(["time"], dT, {"units": "K"}),
-            frac_P=(["time"], fP, {"units": ""}),
+            frac_P=(["time"], fP, {"units": "1"}),
             time_bounds=(["time", "bnds"], time_bounds, {}),
         ),
         coords=dict(  # pylint: disable=R1735
@@ -161,6 +175,12 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
+        "--i_dir",
+        dest="input_dir",
+        help="input directory",
+        default=abspath(join(script_directory, "..")),
+    )
+    parser.add_argument(
         "--data_dir",
         dest="data_dir",
         help="data directory",
@@ -174,14 +194,7 @@ if __name__ == "__main__":
         dest="osize",
         choices=["small", "medium", "big", "big_2d", "custom", "none"],
         help="output size type",
-        default="custom",
-    )
-    parser.add_argument(
-        "--test_climate_models",
-        dest="test_climate_models",
-        action="store_true",
-        help="Turn off ice dynamics and mass transport to test climate models",
-        default=False,
+        default="none",
     )
     parser.add_argument(
         "-s",
@@ -264,7 +277,6 @@ if __name__ == "__main__":
     # system = available_systems[options.system]
 
     spatial_ts = options.spatial_ts
-    test_climate_models = options.test_climate_models
     exstep = options.exstep
     tsstep = options.tsstep
     float_kill_calve_near_grounding_line = options.float_kill_calve_near_grounding_line
@@ -272,7 +284,7 @@ if __name__ == "__main__":
 
     stress_balance = options.stress_balance
     ensemble_file = options.ensemble_file
-    pism_exec = "pismr"
+    pism_exec = "pism"
 
     assert options.FILE is not None
     input_file = abspath(options.FILE[0])
@@ -309,7 +321,7 @@ if __name__ == "__main__":
     pism_config = "pism"
     pism_config_nc = join(output_dir, pism_config + ".nc")
 
-    nc_cmd = f"ncgen -o {pism_config_nc} {input_dir}/config/{pism_config}.cdl"
+    nc_cmd = f"ncgen3 -o {pism_config_nc} {input_dir}/config/{pism_config}.cdl"
     sub.call(shlex.split(nc_cmd))
 
     m_dirs = " ".join(list(dirs.values()))
@@ -359,9 +371,10 @@ done\n\n
     else:
         pism_path = os.environ.get("PISM_PREFIX")  # type: ignore
 
-    print(os.environ.get("PISM_PREFIX"))
+    print(f"""Using PISM found in {os.environ.get("PISM_PREFIX")}""")
+    print("+++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n")
     tm_cmd: List[Any] = [
-        join(pism_path, "bin/create_timeline.py"),
+        join(pism_path, "bin/pism_create_timeline"),
         "-a",
         start_date,
         "-e",
@@ -369,7 +382,7 @@ done\n\n
         "-p",
         periodicity,
         "-d",
-        "2008-01-01",
+        "1980-01-01",
         pism_timefile,
     ]
     sub.call(tm_cmd)
@@ -448,19 +461,13 @@ done\n\n
             outfile = f"g{horizontal_resolution}m_{experiment}.nc"
 
             general_params_dict["output.file"] = join(dirs["state"], outfile)
-            general_params_dict["bootstrap"] = ""
-            #              general_params_dict["input.file"] = pism_dataname
-            general_params_dict["i"] = boot_file
-            if hasattr(combination, "input.regrid.file"):
-                regrid_file = (
-                    f"""$data_dir/initial_states/{combination["input.regrid.file"]}"""
-                )
-                general_params_dict["input.regrid.file"] = regrid_file
-            else:
+            if boot_file is not None:
+                general_params_dict["bootstrap"] = ""
+                general_params_dict["i"] = boot_file
                 general_params_dict["input.regrid.file"] = input_file
-            general_params_dict["input.regrid.vars"] = regridvars
-            if test_climate_models:
-                general_params_dict["test_climate_models"] = ""
+                general_params_dict["input.regrid.vars"] = regridvars
+            else:
+                general_params_dict["i"] = input_file
 
             if osize != "custom":
                 general_params_dict["output.size"] = osize
@@ -475,12 +482,13 @@ done\n\n
             grid["grid.dy"] = f"{horizontal_resolution}m"
             grid["grid.Lz"] = 4000
             grid["grid.Lbz"] = 2000
-            grid["grid.Mz"] = 201
+            grid["grid.Mz"] = 401
             grid["grid.Mbz"] = 21
 
             grid_params_dict = grid
 
             sb_params_dict: Dict[str, Union[str, int, float]] = {
+                "stress_balance.sia.bed_smoother.range": horizontal_resolution,
                 "stress_balance.sia.enhancement_factor": combination[
                     "stress_balance.sia.enhancement_factor"
                 ],
@@ -591,7 +599,7 @@ done\n\n
 
             ocean_file_p = f"""$data_dir/ocean/{combination["ocean_file"]}"""
             frontal_melt = combination["frontal_melt"]
-            if frontal_melt == "discharge_routing":
+            if frontal_melt == "routing":
                 hydrology_parameters["hydrology.surface_input.file"] = runoff_file_p
 
                 frontalmelt_parameters = {
@@ -710,7 +718,7 @@ done\n\n
             print("------------------------------------------------------------\n")
 
             all_params = " \\\n  ".join(
-                [f"-{k} {v}" for k, v in list(all_params_dict.items())]
+                [f"-{k} {v}" for k, v in sorted(list(all_params_dict.items()))]
             )
 
             if commandline_options is not None:
@@ -719,13 +727,13 @@ done\n\n
             print("\nChecking input files")
             print("------------------------------------------------------------")
             for key, m_f in all_params_dict.items():
-                if key.split(".")[-1] == "file":
+                if key.split(".")[-1] == "file" and m_f is not None:
                     m_f_abs = m_f.replace("$data_dir", options.data_dir)
                     print(f"  - {m_f_abs}: {os.path.isfile(m_f_abs)}")
             print("------------------------------------------------------------\n")
 
             if options.system == "debug":
-                redirect = " 2>&1 | tee {jobs}/job.${job_id}"
+                redirect = " 2>&1 | tee {jobs}/job"
             else:
                 redirect = " > {jobs}/job.${job_id} 2>&1"
 

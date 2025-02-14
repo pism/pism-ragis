@@ -71,6 +71,20 @@ geom = {
 def dissolve(ds, date, crs: str = "EPSG:3413"):
     """
     Dissolve geometries.
+
+    Parameters
+    ----------
+    ds : geopandas.GeoDataFrame
+        The GeoDataFrame containing geometries to dissolve.
+    date : pd.Timestamp
+        The date associated with the geometries.
+    crs : str, optional
+        Coordinate reference system, by default "EPSG:3413".
+
+    Returns
+    -------
+    geopandas.GeoDataFrame
+        The dissolved GeoDataFrame with the date set as the index.
     """
     ds = gp.GeoDataFrame(ds, crs=crs)
     geom_valid = ds.geometry.make_valid()
@@ -84,6 +98,18 @@ def dissolve(ds, date, crs: str = "EPSG:3413"):
 def aggregate(n, df):
     """
     Aggregate geometries.
+
+    Parameters
+    ----------
+    n : int
+        The number of geometries to aggregate.
+    df : geopandas.GeoDataFrame
+        The GeoDataFrame containing geometries to aggregate.
+
+    Returns
+    -------
+    geopandas.GeoDataFrame
+        The aggregated GeoDataFrame.
     """
     if n == 0:
         return df.iloc[[n]]
@@ -173,11 +199,13 @@ def create_ds(
         f"frontretreat_g{resolution}m_{start.year}-{start.month}-{start.day}.nc"
     )
     ds.to_netcdf(fn, encoding=encoding)
+    ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
+    ds.rio.write_crs(crs, inplace=True)
     return fn
 
 
 if __name__ == "__main__":
-    __spec__ = None
+    __spec__ = None  # type: ignore
 
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
@@ -277,13 +305,32 @@ if __name__ == "__main__":
     start = time.time()
     ds = xr.open_mfdataset(result_filtered).load()
     ds = ds.cf.add_bounds("time")
+    ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
+    ds.rio.write_crs(crs, inplace=True)
 
-    comp = {"zlib": True, "complevel": 2}
+    comp = {"zlib": True, "complevel": 2, "_FillValue": None}
     encoding_compression = {var: comp for var in ds.data_vars}
     encoding.update(encoding_compression)
 
     ds.to_netcdf(p_fn, encoding=encoding)
 
+    p = Path("front_retreat")
+    fn = Path(f"pism_g{resolution}m_frontretreat_calfin_1972_1979.nc")
+    p_fn = p / fn
+
+    ds.sel({"time": slice("1972", "1979")}).to_netcdf(p_fn, encoding=encoding)
+
+    p = Path("front_retreat")
+    fn = Path(f"pism_g{resolution}m_frontretreat_calfin_1972.nc")
+    p_fn = p / fn
+
+    ds.sel({"time": "1972"}).isel({"time": 0}).to_netcdf(p_fn, encoding=encoding)
+
+    p = Path("front_retreat")
+    fn = Path(f"pism_g{resolution}m_frontretreat_calfin_2007.nc")
+    p_fn = p / fn
+
+    ds.sel({"time": "2007"}).isel({"time": -1}).to_netcdf(p_fn, encoding=encoding)
     end = time.time()
     time_elapsed = end - start
     print(f"Time elapsed {time_elapsed:.0f}s")

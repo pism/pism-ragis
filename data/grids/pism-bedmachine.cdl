@@ -1,50 +1,32 @@
-netcdf pism-bedmachine-greenland {
+netcdf domain {
 dimensions:
-	x = 1 ;
-	nv2 = 2 ;
-	y = 1 ;
+  x = 1 ;
+  // length of the y dimension is not important
+  y = 1 ;
+  nv2 = 2 ;
 variables:
-	int64 mapping ;
-		mapping:grid_mapping_name = "polar_stereographic" ;
-		mapping:false_easting = 0. ;
-		mapping:false_northing = 0. ;
-		mapping:latitude_of_projection_origin = 90. ;
-		mapping:scale_factor_at_projection_origin = 1. ;
-		mapping:standard_parallel = 70. ;
-		mapping:straight_vertical_longitude_from_pole = -45. ;
-	int64 domain ;
-		domain:dimensions = "x y" ;
-		domain:grid_mapping = "mapping" ;
-	int64 x(x) ;
-		x:units = "m" ;
-		x:axis = "X" ;
-		x:bounds = "x_bnds" ;
-		x:standard_name = "projection_x_coordinate" ;
-		x:long_name = "x-coordinate in projected coordinate system" ;
-	double x_bnds(x, nv2) ;
-	int64 y(y) ;
-		y:units = "m" ;
-		y:axis = "Y" ;
-		y:bounds = "y_bnds" ;
-		y:standard_name = "projection_y_coordinate" ;
-		y:long_name = "y-coordinate in projected coordinate system" ;
-	double y_bnds(y, nv2) ;
-
-// global attributes:
-		:Conventions = "CF-1.8" ;
+  double x(x) ;
+    x:units = "m" ;
+    x:standard_name = "projection_x_coordinate" ;
+    x:bounds = "x_bnds";
+  double x_bnds(x, nv2);
+  double y(y) ;
+    y:units = "m" ;
+    y:standard_name = "projection_y_coordinate" ;
+    y:bounds = "y_bnds";
+  double y_bnds(y, nv2);
+  byte domain;
+    domain:dimensions = "x y";
+    domain:grid_mapping = "mapping";
+ byte mapping ;
+  mapping:grid_mapping_name = "polar_stereographic" ;
+  mapping:latitude_of_projection_origin = 90 ;
+  mapping:scale_factor_at_projection_origin = 1. ;
+  mapping:straight_vertical_longitude_from_pole = -45 ;
+  mapping:standard_parallel = 70 ;
+  mapping:false_northing = 0 ;
+  mapping:false_easting = 0 ;
 data:
-
- mapping = 0 ;
-
- domain = 0 ;
-
- x = 0 ;
-
- x_bnds =
-  -660650, 887350 ;
-
- y = 0 ;
-
- y_bnds =
-  -3376550, -640550 ;
+ x_bnds = -660650, 887350;
+ y_bnds = -3376550, -640550;
 }

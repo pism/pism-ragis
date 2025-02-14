@@ -1,0 +1,21 @@
+name: pism-ragis
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11.7
+  - hdf5
+  - netcdf4
+  - petsc
+  - petsc4py
+  - cdo
+  - nco
+  - ncview
+  - geos
+  - pre-commit
+  - mypy
+  - black
+  - pylint
+  - pytest
+  - pip
+  - pip:
+      - -r requirements.txt

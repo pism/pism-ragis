@@ -41,13 +41,14 @@ xr.set_options(keep_attrs=True)
 warnings.filterwarnings("ignore", category=UserWarning)
 
 if __name__ == "__main__":
-    __spec__ = None
+    __spec__ = None  # type: ignore
 
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Prepare GrIMP and BedMachine."
     options = parser.parse_args()
 
+    crs = "EPSG:3413"
     filter_str = "90m_v"
     result_dir = Path("dem")
     result_dir.mkdir(parents=True, exist_ok=True)
@@ -61,9 +62,9 @@ if __name__ == "__main__":
     print(
         f"Converting Ellipsoid to EGM96 and saving as {dem_file}...", end="", flush=True
     )
-    # dem = xdem.DEM(r)
-    # dem_egm96 = dem.to_vcrs("EGM96", force_source_vcrs="Ellipsoid")
-    # dem_egm96.save(dem_file)
+    dem = xdem.DEM(results[0])
+    dem_egm96 = dem.to_vcrs("EGM96", force_source_vcrs="Ellipsoid")
+    dem_egm96.save(dem_file)
     print("Done")
 
     doi = "10.5067/B8X58MQBFUPA"
@@ -78,13 +79,20 @@ if __name__ == "__main__":
     dem_uncertainty_da = xr.zeros_like(dem_da) + 30
     dem_uncertainty_da.name = "usurf_uncertainty"
     dem_uncertainty_da = dem_uncertainty_da.assign_attrs({"units": "m"})
+
     mask_da = rxr.open_rasterio(mask_file).squeeze()
     mask_da.name = "mask"
     mask_da = mask_da.assign_attrs({"mask": "m"})
-    grimp_ds = xr.merge([dem_da, dem_uncertainty_da, mask_da])
+
+    grimp_ds = xr.merge([dem_da, dem_uncertainty_da, mask_da]).drop_vars(
+        ["band", "spatial_ref"]
+    )
+    grimp_ds = grimp_ds.rio.set_spatial_dims(x_dim="x", y_dim="y")
+    grimp_ds.rio.write_crs(crs, inplace=True)
+
     grimp_file = result_dir / Path("grimp_90m.nc")
 
-    save_netcdf(grimp_file)
+    save_netcdf(grimp_ds, grimp_file)
 
     print("Preparing BedMachine")
     result_dir = Path("dem")

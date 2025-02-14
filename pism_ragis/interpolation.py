@@ -18,7 +18,7 @@
 
 # pylint: skip-file
 """
-Module for data processing
+Module for data processing.
 """
 
 import sys
@@ -35,14 +35,21 @@ from petsc4py import PETSc
 
 
 def assemble_matrix(mask):
-    """Assemble the matrix corresponding to the standard 5-point stencil
-    approximation of the Laplace operator on the domain defined by
-    mask == True, where mask is a 2D NumPy array.
+    """
+    Assemble the matrix corresponding to the standard 5-point stencil approximation of the Laplace operator.
 
-    Uses zero Neumann BC at grid edges.
-
-    The grid spacing is ignored, which is equivalent to assuming equal
+    Uses zero Neumann BC at grid edges. The grid spacing is ignored, which is equivalent to assuming equal
     spacing in x and y directions.
+
+    Parameters
+    ----------
+    mask : np.ndarray
+        A 2D NumPy array where True indicates the domain and False indicates the boundary.
+
+    Returns
+    -------
+    PETSc.Mat
+        The assembled matrix.
     """
     # grid size
     nrow, ncol = mask.shape
@@ -60,7 +67,21 @@ def assemble_matrix(mask):
     offdy = -1.0
 
     def R(i, j):
-        "Map from the (row,column) pair to the linear row number."
+        """
+        Map from the (row, column) pair to the linear row number.
+
+        Parameters
+        ----------
+        i : int
+            Row index.
+        j : int
+            Column index.
+
+        Returns
+        -------
+        int
+            Linear row number.
+        """
         return i * ncol + j
 
     # loop over owned block of rows on this
@@ -118,11 +139,17 @@ def assemble_matrix(mask):
 
 
 def assemble_rhs(rhs, X):
-    """Assemble the right-hand side of the system approximating the
-    Laplace equation.
+    """
+    Assemble the right-hand side of the system approximating the Laplace equation.
 
-    Modifies rhs in place; sets Dirichlet BC using X where X.mask ==
-    False.
+    Modifies rhs in place; sets Dirichlet BC using X where X.mask == False.
+
+    Parameters
+    ----------
+    rhs : PETSc.Vec
+        The right-hand side vector to be assembled.
+    X : np.ndarray
+        The array containing the Dirichlet boundary conditions.
     """
     import numpy as np
 
@@ -150,7 +177,14 @@ def assemble_rhs(rhs, X):
 
 
 def create_iterative_solver():
-    "Create the KSP solver"
+    """
+    Create the KSP iterative solver.
+
+    Returns
+    -------
+    PETSc.KSP
+        The KSP iterative solver.
+    """
     # create linear solver
     ksp = PETSc.KSP()
     ksp.create(PETSc.COMM_WORLD)
@@ -166,7 +200,14 @@ def create_iterative_solver():
 
 
 def create_direct_solver():
-    "Create the KSP solver"
+    """
+    Create the KSP direct solver.
+
+    Returns
+    -------
+    PETSc.KSP
+        The KSP direct solver.
+    """
     # create linear solver
     ksp = PETSc.KSP()
     ksp.create(PETSc.COMM_WORLD)
@@ -183,8 +224,23 @@ def create_direct_solver():
 
 def _fill_missing_petsc(field, matrix=None, method: str = "iterative"):
     """
-    Fill missing values in a NumPy array 'field' using the matrix
-    'matrix' approximating the Laplace operator.
+    Fill missing values in a NumPy array 'field' using the matrix 'matrix' approximating the Laplace operator.
+
+    Parameters
+    ----------
+    field : np.ndarray
+        The input array with missing values.
+    matrix : PETSc.Mat, optional
+        The matrix approximating the Laplace operator, by default None.
+    method : str, optional
+        The method to use for solving the system, by default "iterative".
+
+    Returns
+    -------
+    np.ndarray
+        The array with missing values filled.
+    PETSc.Mat
+        The assembled matrix.
     """
 
     if method == "iterative":
@@ -224,8 +280,19 @@ def _fill_missing_petsc(field, matrix=None, method: str = "iterative"):
 
 def fill_missing_petsc(data, method: str = "iterative"):
     """
-    Fill missing values in a NumPy array 'field' using the matrix
-    'matrix' approximating the Laplace operator.
+    Fill missing values in a NumPy array 'field' using the matrix 'matrix' approximating the Laplace operator.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        The input array with missing values.
+    method : str, optional
+        The method to use for solving the system, by default "iterative".
+
+    Returns
+    -------
+    np.ndarray
+        The array with missing values filled.
     """
 
     # try:
@@ -248,7 +315,21 @@ def fill_missing_petsc(data, method: str = "iterative"):
 
 
 def create_scatter(vector):
-    "Create the scatter to processor 0."
+    """
+    Create the scatter to processor 0.
+
+    Parameters
+    ----------
+    vector : PETSc.Vec
+        The distributed vector.
+
+    Returns
+    -------
+    PETSc.Vec
+        The vector on processor 0.
+    PETSc.Scatter
+        The scatter object.
+    """
     comm = vector.getComm()
     rank = comm.getRank()
     scatter, V0 = PETSc.Scatter.toZero(vector)
@@ -259,14 +340,36 @@ def create_scatter(vector):
 
 
 def scatter_to_0(vector, vector_0, scatter):
-    "Scatter a distributed 'vector' to 'vector_0' on processor 0 using 'scatter'."
+    """
+    Scatter a distributed 'vector' to 'vector_0' on processor 0 using 'scatter'.
+
+    Parameters
+    ----------
+    vector : PETSc.Vec
+        The distributed vector.
+    vector_0 : PETSc.Vec
+        The vector on processor 0.
+    scatter : PETSc.Scatter
+        The scatter object.
+    """
     comm = vector.getComm()
     scatter.scatter(vector, vector_0, False, PETSc.Scatter.Mode.FORWARD)
     comm.barrier()
 
 
 def scatter_from_0(vector_0, vector, scatter):
-    "Scatter 'vector_0' on processor 0 to a distributed 'vector' using 'scatter'."
+    """
+    Scatter 'vector_0' on processor 0 to a distributed 'vector' using 'scatter'.
+
+    Parameters
+    ----------
+    vector_0 : PETSc.Vec
+        The vector on processor 0.
+    vector : PETSc.Vec
+        The distributed vector.
+    scatter : PETSc.Scatter
+        The scatter object.
+    """
     comm = vector.getComm()
     scatter.scatter(vector, vector_0, False, PETSc.Scatter.Mode.REVERSE)
     comm.barrier()
@@ -422,15 +525,14 @@ def laplace(data: np.ndarray, mask: np.ndarray) -> np.ndarray:
 @xr.register_dataarray_accessor("utils")
 class InterpolationMethods:
     """
-    Interpolationes methods for xarray DataArray.
+    Interpolation methods for xarray DataArray.
 
     This class is used to add custom methods to xarray DataArray objects. The methods can be accessed via the 'interpolation' attribute.
 
     Parameters
     ----------
-
     xarray_obj : xr.DataArray
-      The xarray DataArray to which to add the custom methods.
+        The xarray DataArray to which to add the custom methods.
     """
 
     def __init__(self, xarray_obj: xr.DataArray):
@@ -439,7 +541,6 @@ class InterpolationMethods:
 
         Parameters
         ----------
-
         xarray_obj : xr.DataArray
             The xarray DataArray to which to add the custom methods.
         """
@@ -455,9 +556,14 @@ class InterpolationMethods:
     def __repr__(self):
         """
         Interpolation methods.
+
+        Returns
+        -------
+        str
+            Description of the interpolation methods.
         """
         return """
-Interpolationes methods for xarray DataArray.
+Interpolation methods for xarray DataArray.
 
 This class is used to add custom methods to xarray DataArray objects. The methods can be accessed via the 'interpolation' attribute.
 
@@ -472,9 +578,21 @@ xarray_obj : xr.DataArray
         self,
         dim: Optional[Union[str, Iterable[Hashable]]] = ["y", "x"],
         method: str = "laplace",
-    ):
+    ) -> xr.DataArray:
         """
         Fill missing values using Laplacian.
+
+        Parameters
+        ----------
+        dim : Optional[Union[str, Iterable[Hashable]]], optional
+            The dimensions along which to fill missing values, by default ["y", "x"].
+        method : str, optional
+            The method to use for filling missing values, by default "laplace".
+
+        Returns
+        -------
+        xr.DataArray
+            The DataArray with missing values filled.
         """
         da = self._obj.load()
         data = da.to_numpy()
@@ -493,6 +611,18 @@ xarray_obj : xr.DataArray
     def _fillna(self, data, mask):
         """
         Fill missing values.
+
+        Parameters
+        ----------
+        data : np.ndarray
+            The data array with missing values.
+        mask : np.ndarray
+            Boolean mask indicating the missing values.
+
+        Returns
+        -------
+        np.ndarray
+            The data array with missing values filled.
         """
 
         result = laplace(data, mask)

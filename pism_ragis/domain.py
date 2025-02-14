@@ -17,7 +17,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 """
-Module provides functions to deal domains
+Module provides functions to deal domains.
 """
 
 from typing import List, Union
@@ -87,7 +87,7 @@ def create_domain(
 
     Returns
     -------
-    ds : xarray.Dataset
+    xr.Dataset
         An xarray.Dataset containing the domain information, including coordinates,
         boundary data, and mapping attributes.
 

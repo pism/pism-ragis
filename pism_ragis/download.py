@@ -18,7 +18,7 @@
 # pylint: disable=too-many-positional-arguments
 
 """
-Module for data processing
+Module for data processing.
 """
 
 import tarfile
@@ -47,8 +47,19 @@ def unzip_files(
 
     Parameters
     ----------
+    files : List[Union[str, Path]]
+        List of file paths to unzip.
+    output_dir : Union[str, Path], optional
+        The directory where the unzipped files will be saved, by default ".".
+    overwrite : bool, optional
+        Whether to overwrite existing files, by default False.
     max_workers : int, optional
-        The maximum number of threads to use for downloading, by default 4.
+        The maximum number of threads to use for unzipping, by default 4.
+
+    Returns
+    -------
+    List[Path]
+        List of paths to the unzipped files.
     """
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = []
@@ -110,10 +121,6 @@ def save_netcdf(
         The output filename for the NetCDF file, by default "GRE_G0240_1985_2018_IDW_EXP_1.nc".
     comp : dict, optional
         Compression settings for the NetCDF file, by default {"zlib": True, "complevel": 2}.
-
-    Returns
-    -------
-    None
     """
     encoding = {var: comp for var in ds.data_vars}
     with ProgressBar():
@@ -135,7 +142,6 @@ def download_archive(url: str) -> Union[tarfile.TarFile, zipfile.ZipFile]:
         The downloaded archive file as a tarfile.TarFile object if the file is a .tar.gz,
         or as a ZipFile object if the file is a .zip.
     """
-    archive: Union[tarfile.TarFile, zipfile.ZipFile]
     with urlopen(url) as req:
         total_size = int(req.info().get("Content-Length").strip())
         buffer = BytesIO()
@@ -145,12 +151,10 @@ def download_archive(url: str) -> Union[tarfile.TarFile, zipfile.ZipFile]:
             buffer.write(chunk)
         buffer.seek(0)
 
-        if url.endswith("tar.gz"):
-            with tarfile.open(fileobj=buffer, mode="r|gz") as archive:
-                return archive
-        else:
-            with zipfile.ZipFile(buffer) as archive:
-                return archive
+    if url.endswith("tar.gz"):
+        return tarfile.open(fileobj=buffer, mode="r|gz")
+    else:
+        return zipfile.ZipFile(buffer)
 
 
 def download_earthaccess(

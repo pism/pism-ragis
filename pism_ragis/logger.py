@@ -18,11 +18,12 @@
 # pylint: disable=too-many-positional-arguments
 
 """
-Module for handling logging
+Module for handling logging.
 """
 
 import importlib.resources
 import logging
+import logging.config
 
 
 def get_logger(name: str) -> logging.Logger:
@@ -47,10 +48,9 @@ def get_logger(name: str) -> logging.Logger:
     >>> logger = get_logger("my_logger")
     >>> logger.info("This is an info message.")
     """
-    logger: logging.Logger = logging.getLogger(name)
     config_path = importlib.resources.files("pism_ragis").joinpath("logging.conf")
     with importlib.resources.as_file(config_path) as file_path:
-        logging.config.fileConfig(file_path)  # type: ignore [attr-defined]
-
+        logging.config.fileConfig(file_path)
+    logger: logging.Logger = logging.getLogger(name)
     logging.getLogger("matplotlib").disabled = True
     return logger

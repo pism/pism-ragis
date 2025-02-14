@@ -20,8 +20,6 @@
 Tests for filtering module.
 """
 
-# from typing import Tuple
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -124,14 +122,6 @@ def test_filter_outliers():
     - The function returns two xarray.Dataset objects.
     - The filtered dataset does not contain outliers.
     - The outliers dataset contains only outliers.
-
-    Parameters
-    ----------
-    None
-
-    Returns
-    -------
-    None
 
     Examples
     --------

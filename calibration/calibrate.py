@@ -17,7 +17,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 """
-Generate scrips to hindcasts of the Greenland Ice Sheet using the Parallel Ice Sheet Model (PISM)
+Generate scrips to calibrate initial states of the Greenland Ice Sheet using the Parallel Ice Sheet Model (PISM).
 """
 
 import inspect
@@ -35,7 +35,12 @@ import xarray as xr
 
 def current_script_directory() -> str:
     """
-    Return the current directory
+    Return the current directory of the current script.
+
+    Returns
+    -------
+    str
+        The absolute path of the directory containing the current script.
     """
 
     m_filename = inspect.stack(0)[0][1]
@@ -51,7 +56,16 @@ from systems import Systems  # pylint: disable=C0413
 
 def create_offset_file(file_name: str, delta_T: float = 0.0, frac_P: float = 1.0):
     """
-    Generate offset file using xarray
+    Generate an offset file using xarray.
+
+    Parameters
+    ----------
+    file_name : str
+        The name of the file to save the offset data.
+    delta_T : float, optional
+        Temperature offset, by default 0.0.
+    frac_P : float, optional
+        Precipitation fraction, by default 1.0.
     """
     dT = [delta_T]
     fP = [frac_P]
@@ -161,6 +175,12 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
+        "--force_to_thickness_file",
+        dest="ftt_file",
+        help="Force-to-thickness target file",
+        default=None,
+    )
+    parser.add_argument(
         "--i_dir",
         dest="input_dir",
         help="input directory",
@@ -235,7 +255,7 @@ if __name__ == "__main__":
         default="ssa+sia",
     )
     parser.add_argument("--start", help="Simulation start year", default="1980-1-1")
-    parser.add_argument("--end", help="Simulation end year", default="1990-1-1")
+    parser.add_argument("--end", help="Simulation end year", default="1989-12-31")
     parser.add_argument(
         "-e",
         "--ensemble_file",
@@ -255,6 +275,7 @@ if __name__ == "__main__":
     data_dir = abspath(options.data_dir)
     output_dir = abspath(options.output_dir)
     boot_file = options.boot_file
+    ftt_file = options.ftt_file
     grid_file = options.grid_file
     compression_level = options.compression_level
     oformat = options.oformat
@@ -272,7 +293,7 @@ if __name__ == "__main__":
 
     stress_balance = options.stress_balance
     ensemble_file = options.ensemble_file
-    pism_exec = "pismr"
+    pism_exec = "pism"
 
     assert options.FILE is not None
     input_file = abspath(options.FILE[0])
@@ -309,7 +330,7 @@ if __name__ == "__main__":
     pism_config = "pism"
     pism_config_nc = join(output_dir, pism_config + ".nc")
 
-    nc_cmd = f"ncgen -o {pism_config_nc} {input_dir}/config/{pism_config}.cdl"
+    nc_cmd = f"ncgen3 -o {pism_config_nc} {input_dir}/config/{pism_config}.cdl"
     sub.call(shlex.split(nc_cmd))
 
     m_dirs = " ".join(list(dirs.values()))
@@ -359,9 +380,10 @@ done\n\n
     else:
         pism_path = os.environ.get("PISM_PREFIX")  # type: ignore
 
-    print(os.environ.get("PISM_PREFIX"))
+    print(f"""Using PISM found in {os.environ.get("PISM_PREFIX")}""")
+    print("+++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n")
     tm_cmd: List[Any] = [
-        join(pism_path, "bin/create_timeline.py"),
+        join(pism_path, "bin/pism_create_timeline"),
         "-a",
         start_date,
         "-e",
@@ -448,25 +470,22 @@ done\n\n
             outfile = f"g{horizontal_resolution}m_{experiment}.nc"
 
             general_params_dict["output.file"] = join(dirs["state"], outfile)
-            general_params_dict["bootstrap"] = ""
-            general_params_dict["i"] = boot_file
-            if hasattr(combination, "input.regrid.file"):
-                regrid_file = (
-                    f"""$data_dir/initial_states/{combination["input.regrid.file"]}"""
-                )
-                general_params_dict["input.regrid.file"] = regrid_file
-            else:
+            if boot_file is not None:
+                general_params_dict["bootstrap"] = ""
+                general_params_dict["i"] = boot_file
                 general_params_dict["input.regrid.file"] = input_file
-            general_params_dict["input.regrid.vars"] = regridvars
+                general_params_dict["input.regrid.vars"] = regridvars
+            else:
+                general_params_dict["i"] = input_file
             if test_climate_models:
                 general_params_dict["test_climate_models"] = ""
 
             if osize != "custom":
                 general_params_dict["output.size"] = osize
             else:
-                general_params_dict[
-                    "output.sizes.medium"
-                ] = "sftgif,velsurf_mag,mask,usurf,bmelt"
+                general_params_dict["output.sizes.medium"] = (
+                    "velsurf_mag,mask,usurf,diffusivity"
+                )
 
             grid = {}
             grid["grid.file"] = grid_file
@@ -480,6 +499,7 @@ done\n\n
             grid_params_dict = grid
 
             sb_params_dict: Dict[str, Union[str, int, float]] = {
+                "stress_balance.sia.bed_smoother.range": horizontal_resolution,
                 "stress_balance.sia.enhancement_factor": combination[
                     "stress_balance.sia.enhancement_factor"
                 ],
@@ -503,18 +523,18 @@ done\n\n
             z_min = combination["basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min"]
             z_max = combination["basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max"]
 
-            sb_params_dict[
-                "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max"
-            ] = phi_max
-            sb_params_dict[
-                "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min"
-            ] = phi_min
-            sb_params_dict[
-                "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max"
-            ] = z_max
-            sb_params_dict[
-                "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min"
-            ] = z_min
+            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max"] = (
+                phi_max
+            )
+            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min"] = (
+                phi_min
+            )
+            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max"] = (
+                z_max
+            )
+            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min"] = (
+                z_min
+            )
 
             if (hasattr(combination, "fractures")) and (
                 combination["fractures"] is True
@@ -575,7 +595,7 @@ done\n\n
                 climate_parameters["atmosphere.frac_P.file"] = climate_offset_file_p
 
             if combination["climate"] in ("forcing_smb"):
-                climate_parameters["surface.force_to_thickness.file"] = boot_file
+                climate_parameters["surface.force_to_thickness.file"] = ftt_file
 
             climate_params_dict = computing.generate_climate(
                 combination["climate"], **climate_parameters
@@ -646,9 +666,9 @@ done\n\n
             if hasattr(combination, "prescribed_retreat_file") & (
                 combination["prescribed_retreat_file"] is not False
             ):
-                calving_parameters[
-                    "geometry.front_retreat.prescribed.file"
-                ] = f"""$data_dir/front_retreat/{combination["prescribed_retreat_file"]}"""
+                calving_parameters["geometry.front_retreat.prescribed.file"] = (
+                    f"""$data_dir/front_retreat/{combination["prescribed_retreat_file"]}"""
+                )
 
             calving_parameters["calving.vonmises_calving.sigma_max"] = combination[
                 "calving.vonmises_calving.sigma_max"
@@ -713,7 +733,7 @@ done\n\n
             print("------------------------------------------------------------\n")
 
             all_params = " \\\n  ".join(
-                [f"-{k} {v}" for k, v in list(all_params_dict.items())]
+                [f"-{k} {v}" for k, v in sorted(list(all_params_dict.items()))]
             )
 
             if commandline_options is not None:
@@ -722,13 +742,13 @@ done\n\n
             print("\nChecking input files")
             print("------------------------------------------------------------")
             for key, m_f in all_params_dict.items():
-                if key.split(".")[-1] == "file":
+                if key.split(".")[-1] == "file" and m_f is not None:
                     m_f_abs = m_f.replace("$data_dir", options.data_dir)
                     print(f"  - {m_f_abs}: {os.path.isfile(m_f_abs)}")
             print("------------------------------------------------------------\n")
 
             if options.system == "debug":
-                redirect = " 2>&1 | tee {jobs}/job.${job_id}"
+                redirect = " 2>&1 | tee {jobs}/job.debug"
             else:
                 redirect = " > {jobs}/job.${job_id} 2>&1"
 

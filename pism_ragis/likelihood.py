@@ -43,20 +43,17 @@ def log_normal(
     ----------
     x : Union[np.ndarray, xr.DataArray]
         The data for which the log-likelihood is to be calculated. Can be an array of values or an xarray.DataArray.
-    mu : Union[float, np.ndarray, xr.DataArray]
+    mu : Union[np.ndarray, xr.DataArray]
         The mean of the distribution. Can be a single value, an array of values or an xarray.DataArray.
-    std : Union[float, np.ndarray, xr.DataArray]
+    std : Union[np.ndarray, xr.DataArray]
         The standard deviation of the distribution. Can be a single value, an array of values, or an xarray.DataArray.
     n : int
         The number of data points.
-    kind : str, optional
-        The type of distribution. Currently, only "gaussian" is implemented. Default is "normal".
 
     Returns
     -------
     Union[np.ndarray, xr.DataArray]
         The log-likelihood of the data given the distribution parameters.
-
     """
 
     return -0.5 * ((x - mu) / std) ** 2 - n * 0.5 * np.log(2 * np.pi * std**2)
@@ -79,18 +76,19 @@ def log_pseudo_huber(
     ----------
     x : Union[np.ndarray, xr.DataArray]
         The data for which the log-likelihood is to be calculated. Can be an array of values or an xarray.DataArray.
-    mu : Union[float, np.ndarray, xr.DataArray]
+    mu : Union[np.ndarray, xr.DataArray]
         The mean of the distribution. Can be a single value, an array of values or an xarray.DataArray.
-    std : Union[float, np.ndarray, xr.DataArray]
+    std : Union[np.ndarray, xr.DataArray]
         The standard deviation of the distribution. Can be a single value, an array of values, or an xarray.DataArray.
-    n : int
-        The number of data points.
+    delta : Union[np.ndarray, xr.DataArray], optional
+        The delta parameter for the pseudo-Huber loss function, by default 2.0.
+    n : int, optional
+        The number of data points, by default 0.
 
     Returns
     -------
     Union[np.ndarray, xr.DataArray]
         The log-likelihood of the data given the distribution parameters.
-
     """
 
     return -pseudo_huber(delta, (x - mu) / std) - n

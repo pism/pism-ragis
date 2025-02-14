@@ -19,17 +19,19 @@
 Compute basins.
 """
 
-# pylint: disable=redefined-outer-name
+# pylint: disable=redefined-outer-name,unused-import
 
 import re
 import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from collections import OrderedDict
 from pathlib import Path
 from typing import Union
 
 import dask
 import geopandas as gp
 import numpy as np
+import pint_xarray
 import xarray as xr
 from dask.distributed import Client, progress
 
@@ -38,17 +40,11 @@ from pism_ragis.processing import compute_basin
 xr.set_options(keep_attrs=True)
 
 if __name__ == "__main__":
-    __spec__ = None
+    __spec__ = None  # type: ignore
 
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Compute ensemble statistics."
-    parser.add_argument(
-        "--no_config",
-        help="""Do not add pism_config and run_stats. Default=False.""",
-        action="store_false",
-        default=True,
-    )
     parser.add_argument(
         "--cf",
         help="""Make output file CF Convetions compliant. Default="False".""",
@@ -95,7 +91,6 @@ if __name__ == "__main__":
     parser.add_argument("FILE", nargs=1, help="netCDF file to process", default=None)
 
     options = parser.parse_args()
-    add_config = options.no_config
     cf = options.cf
     crs = options.crs
     engine = options.engine
@@ -137,9 +132,7 @@ if __name__ == "__main__":
             m_id = str(m_id_re.group(1))
 
         n_ensemble = len(ensemble)
-        ds = ds.expand_dims(
-            {"ensemble_id": [ensemble], "exp_id": [m_id]}, axis=[-1, -2]
-        )
+        ds = ds.expand_dims({"exp_id": [m_id]}, axis=-1)
 
         if "ice_mass" in ds:
             ds["ice_mass"] /= 1e12
@@ -149,6 +142,47 @@ if __name__ == "__main__":
             ds = ds.sel(
                 time=slice(options.temporal_range[0], options.temporal_range[1])
             )
+    p_config = ds["pism_config"]
+    p_run_stats = ds["run_stats"]
+
+    # List of suffixes to exclude
+    suffixes_to_exclude = ["_doc", "_type", "_units", "_option", "_choices"]
+
+    # Filter the dictionary
+    config = {
+        k: v
+        for k, v in p_config.attrs.items()
+        if not any(k.endswith(suffix) for suffix in suffixes_to_exclude)
+    }
+    if "geometry.front_retreat.prescribed.file" not in config.keys():
+        config["geometry.front_retreat.prescribed.file"] = "false"
+
+    stats = p_run_stats
+    config_sorted = OrderedDict(sorted(config.items()))
+    if cf:
+        pc_keys = np.array(list(config_sorted.keys()), dtype="S1024")
+        pc_vals = np.array(list(config_sorted.values()), dtype="S128")
+        rs_keys = np.array(list(stats.attrs.keys()), dtype="S1024")
+        rs_vals = np.array(list(stats.attrs.values()), dtype="S128")
+    else:
+        pc_keys = list(config_sorted.keys())
+        pc_vals = list(config_sorted.values())
+        rs_keys = list(stats.attrs.keys())
+        rs_vals = list(stats.attrs.values())
+
+    pism_config = xr.DataArray(
+        pc_vals,
+        dims=["pism_config_axis"],
+        coords={"pism_config_axis": pc_keys, "exp_id": m_id},
+        name="pism_config",
+    )
+    run_stats = xr.DataArray(
+        rs_vals,
+        dims=["run_stats_axis"],
+        coords={"run_stats_axis": rs_keys, "exp_id": m_id},
+        name="run_stats",
+    )
+
     bmb_var = "tendency_of_ice_mass_due_to_basal_mass_flux"
     if bmb_var in ds:
         bmb_grounded_da = ds[bmb_var].where(ds["mask"] == 2)
@@ -157,50 +191,43 @@ if __name__ == "__main__":
         bmb_floating_da.name = "tendency_of_ice_mass_due_to_basal_mass_flux_floating"
         ds = xr.merge([ds, bmb_grounded_da, bmb_floating_da])
 
-    ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
+    fm_var = "tendency_of_ice_mass_due_to_frontal_melt"
+    if fm_var in ds:
+        fm_da = ds[fm_var].pint.quantify()
+        fm_da = fm_da.where(fm_da != 0, np.nan)
+        config_ice_density = float(
+            pism_config.sel({"pism_config_axis": "constants.ice.density"}).values
+        )
+        dx = float(pism_config.sel({"pism_config_axis": "grid.dx"}).values)
+        dy = float(pism_config.sel({"pism_config_axis": "grid.dy"}).values)
+
+        area = xr.DataArray(dx * dy).pint.quantify("m^2")
+        ice_density = (
+            xr.DataArray(config_ice_density).pint.quantify("kg m^-3").pint.to("Gt m^-3")
+        )
+        fm_rate_da = (fm_da / area / ice_density).pint.to("m day^-1").pint.dequantify()
+        fm_rate_da.name = "frontal_melt_rate"
+        fm_rate_ds = (
+            fm_rate_da.to_dataset()
+            .drop_vars(["time_bounds", "timestamp"], errors="ignore")
+            .rio.set_spatial_dims(x_dim="x", y_dim="y")
+        )
+        fm_rate_ds.rio.write_crs(crs, inplace=True)
+        del fm_rate_ds["time"].attrs["bounds"]
+
+    del ds["time"].attrs["bounds"]
+    ds = ds.drop_vars(
+        ["time_bounds", "timestamp"], errors="ignore"
+    ).rio.set_spatial_dims(x_dim="x", y_dim="y")
     ds.rio.write_crs(crs, inplace=True)
 
-    if add_config:
-        pism_config = ds["pism_config"]
-
-        # List of suffixes to exclude
-        suffixes_to_exclude = ["_doc", "_type", "_units", "_option", "_choices"]
-
-        # Filter the dictionary
-        config = {
-            k: v
-            for k, v in pism_config.attrs.items()
-            if not any(k.endswith(suffix) for suffix in suffixes_to_exclude)
-        }
-
-        stats = ds["run_stats"]
-        if cf:
-            pc_keys = np.array(list(config.keys()), dtype="S1024")
-            pc_vals = np.array(list(config.values()), dtype="S128")
-            rs_keys = np.array(list(stats.attrs.keys()), dtype="S1024")
-            rs_vals = np.array(list(stats.attrs.values()), dtype="S128")
-        else:
-            pc_keys = list(config.keys())
-            pc_vals = list(config.values())
-            rs_keys = list(stats.attrs.keys())
-            rs_vals = list(stats.attrs.values())
-
-        pism_config = xr.DataArray(
-            pc_vals,
-            dims=["pism_config_axis"],
-            coords={"pism_config_axis": pc_keys},
-            name="pism_config",
-        )
-        run_stats = xr.DataArray(
-            rs_vals,
-            dims=["run_stats_axis"],
-            coords={"run_stats_axis": rs_keys},
-            name="run_stats",
-        )
-        ds = xr.merge([ds[mb_vars], pism_config, run_stats])
-    else:
-        ds = ds[mb_vars]
-
+    ds = xr.merge(
+        [
+            ds[mb_vars].drop_vars(["pism_config", "run_stats"], errors="ignore"),
+            pism_config,
+            run_stats,
+        ]
+    )
     print(f"Size in memory: {(ds.nbytes / 1024**3):.1f} GB")
 
     basins_file = result_dir / f"basins_sums_ensemble_{ensemble}_id_{m_id}.nc"
@@ -215,21 +242,44 @@ if __name__ == "__main__":
     )
     basin_names = ["GRACE"] + [basin["SUBREGION1"] for _, basin in basins.iterrows()]
     n_basins = len(basin_names)
-    futures = client.map(compute_basin, basins_ds_scattered, basin_names)
+    futures = client.map(compute_basin, basins_ds_scattered, basin_names, reduce="sum")
     progress(futures)
-    basin_sums = xr.concat(client.gather(futures), dim="basin").drop_vars(
-        ["mapping", "spatial_ref"]
+
+    basin_sums = (
+        xr.concat(client.gather(futures), dim="basin")
+        .drop_vars(["mapping", "spatial_ref"])
+        .sortby(["basin", "pism_config_axis"])
     )
-    del basin_sums["time"].attrs["bounds"]
+
+    if fm_var in ds:
+        basins_ds_scattered = client.scatter(
+            [fm_rate_ds]
+            + [fm_rate_ds.rio.clip([basin.geometry]) for _, basin in basins.iterrows()]
+        )
+        basin_names = ["GRACE"] + [
+            basin["SUBREGION1"] for _, basin in basins.iterrows()
+        ]
+        n_basins = len(basin_names)
+        futures = client.map(
+            compute_basin, basins_ds_scattered, basin_names, reduce="mean"
+        )
+        progress(futures)
+
+        fm_basin_sums = (
+            xr.concat(client.gather(futures), dim="basin")
+            .drop_vars(["mapping", "spatial_ref"])
+            .sortby(["basin"])
+        )
+
+        basin_sums = xr.merge([basin_sums, fm_basin_sums])
+
     if cf:
         basin_sums["basin"] = basin_sums["basin"].astype(f"S{n_basins}")
-        basin_sums["ensemble_id"] = basin_sums["ensemble_id"].astype(f"S{n_ensemble}")
         basin_sums.attrs["Conventions"] = "CF-1.8"
+
     basin_sums.to_netcdf(basins_file, engine=engine)
 
     client.close()
     end = time.time()
     time_elapsed = end - start
     print(f"Time elapsed {time_elapsed:.0f}s")
-
-    client.close()
