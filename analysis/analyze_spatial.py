@@ -231,6 +231,19 @@ if __name__ == "__main__":
     start_date = "2003"
     end_date = "2020"
 
+    # m_file = "/media/andy/LHS800DATA/ragis/hindcasts/2025_01_lhs_800/spatial/ex_g1200m_id_0_1978-01-01_2020-12-31.nc"
+    # m_file_2 = "/media/andy/LHS800DATA/ragis/hindcasts/2025_01_lhs_800/spatial/ex_g1200m_id_1_1978-01-01_2020-12-31.nc"
+    # m_file_3 = "/media/andy/LHS800DATA/ragis/hindcasts/2025_01_lhs_800/spatial/ex_g1200m_id_2_1978-01-01_2020-12-31.nc"
+    # m_ds = xr.open_mfdataset([m_file, m_file_2, m_file_3], 
+    #                          parallel=True,            
+    #                          decode_cf=True,
+    #                          decode_timedelta=True,
+    #                          preprocess=preprocess_config)
+
+
+
+    # print(m_ds.pism_config)
+
     print("Loading ensemble.")
     with ProgressBar():
         simulated = xr.open_mfdataset(
@@ -240,7 +253,7 @@ if __name__ == "__main__":
             decode_timedelta=True,
         )
 
-    print(simulated.pism_config)    
+ 
     simulated = simulated.sel(time=slice(start_date, end_date)).pint.quantify()
     simulated[sim_var] = simulated["dHdt"] * 1000.0 / 910.0
     simulated[sim_var] = simulated[sim_var].pint.to("m year^-1")
@@ -272,7 +285,11 @@ if __name__ == "__main__":
         simulated_retreat = simulated_retreat[["dhdt", "pism_config", "run_stats"]]
 
         pism_config = simulated_retreat["pism_config"]
+        if "time" in pism_config.dims:
+            pism_config = pism_config.isel(time=-1)
         run_stats = simulated_retreat["run_stats"]
+        if "time" in run_stats.dims:
+            run_stats = run_stats.isel(time=-1)
 
         simulated_retreat_resampled = (
             simulated_retreat.resample({"time": resampling_frequency})
@@ -293,12 +310,20 @@ if __name__ == "__main__":
 
         sim = simulated_retreat_resampled.where(~obs_mask)
 
-        save_netcdf(obs, result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"observed_dhdt_{start_date}_{end_date}.nc"))            
-        save_netcdf(sim, result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"simulated_dhdt_{start_date}_{end_date}.nc"))
-
+        obs_file_nc = result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"observed_dhdt_{start_date}_{end_date}.nc")
+        sim_file_nc = result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"observed_dhdt_{start_date}_{end_date}.nc")
         with ProgressBar():
-            obs.to_zarr(result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"observed_dhdt_{start_date}_{end_date}.zarr"), mode="w")
-            sim.to_zarr(result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"simulated_dhdt_{start_date}_{end_date}.zarr"), mode="w")
+            obs.to_netcdf(obs_file_nc)            
+            sim.to_netcdf(sim_file_nc)
+            
+        #save_netcdf(obs, obs_file_nc)            
+        #save_netcdf(sim, sim_file_nc)
+
+        # obs_file_zarr = result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"observed_dhdt_{start_date}_{end_date}.zarr")
+        # sim_file_zarr = result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"observed_dhdt_{start_date}_{end_date}.zarr")
+        # with ProgressBar():
+        #     obs.to_zarr(obs_file_zarr, mode="w")
+        #     sim.to_zarr(sim_file_zarr, mode="w")
 
         # start_time = time.time()
 
