@@ -188,7 +188,7 @@ spatial_ts_vars["calibrate"] = [
     "flux_divergence",
 ]
 
-spatial_ts_vars["qaamerujup"] = [
+spatial_ts_vars["ml"] = [
     "climatic_mass_balance",
     "dHdt",
     "mask",
@@ -197,8 +197,8 @@ spatial_ts_vars["qaamerujup"] = [
     "usurf",
     "velsurf_mag",
     "velbase_mag",
+    "topg",
 ]
-
 
 spatial_ts_vars["standard"] = [
     "bmelt",
