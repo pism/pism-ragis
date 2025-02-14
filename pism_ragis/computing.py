@@ -707,9 +707,8 @@ systems["stampede3"] = {
     "work_dir": "SLURM_SUBMIT_DIR",
     "job_id": "SLURM_JOBID",
     "queue": {
-        "small": 56,
-        "normal": 56,
-        "development": 56,
+        "skx": 48,
+        "spr":  128,
     },
 }
 

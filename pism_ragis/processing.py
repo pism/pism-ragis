@@ -31,7 +31,7 @@ import zipfile
 from collections import OrderedDict
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Dict, Hashable, List, Mapping, Union
+from typing import Any, Dict, Hashable, Mapping
 
 import joblib
 import numpy as np
@@ -117,8 +117,8 @@ def preprocess_time(
     periods: int | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
-    drop_vars: List[str] | None = None,
-    drop_dims: List[str] = ["nv4"],
+    drop_vars: list[str] | None = None,
+    drop_dims: list[str] = ["nv4"],
 ) -> xr.Dataset:
     """
     Add correct time and time_bounds to the dataset.
@@ -141,9 +141,9 @@ def preprocess_time(
         The start date for the time range, by default None.
     end_date : str or None, optional
         The end date for the time range, by default None.
-    drop_vars : List[str] or None, optional
+    drop_vars : list[str] or None, optional
         A list of variable names to be dropped from the dataset, by default None.
-    drop_dims : List[str], optional
+    drop_dims : list[str], optional
         A list of dimension names to be dropped from the dataset, by default ["nv4"].
 
     Returns
@@ -188,8 +188,8 @@ def preprocess_nc(
     ds,
     regexp: str = "id_(.+?)_",
     dim: str = "exp_id",
-    drop_vars: Union[List[str], None] = None,
-    drop_dims: List[str] = ["nv4"],
+    drop_vars: list[str]| None = None,
+    drop_dims: list[str] = ["nv4"],
 ) -> xr.Dataset:
     """
     Add experiment identifier to the dataset.
@@ -206,9 +206,9 @@ def preprocess_nc(
         The regular expression pattern to extract the experiment identifier from the filename, by default "id_(.+?)_".
     dim : str, optional
         The name of the new dimension to be added to the dataset, by default "exp_id".
-    drop_vars : Union[List[str], None], optional
+    drop_vars : list[str] | None, optional
         A list of variable names to be dropped from the dataset, by default None.
-    drop_dims : List[str], optional
+    drop_dims : list[str], optional
         A list of dimension names to be dropped from the dataset, by default ["nv4"].
 
     Returns
@@ -224,7 +224,7 @@ def preprocess_nc(
     m_id_re = re.search(regexp, ds.encoding["source"])
     ds = ds.expand_dims(dim)
     assert m_id_re is not None
-    m_id: Union[str, int]
+    m_id: str | int
     try:
         m_id = int(m_id_re.group(1))
     except:
@@ -240,8 +240,8 @@ def preprocess_config(
     ds,
     regexp: str = "id_(.+?)_",
     dim: str = "exp_id",
-    drop_vars: Union[List[str], None] = None,
-    drop_dims: List[str] = ["nv4"],
+    drop_vars: list[str]| None = None,
+    drop_dims: list[str] = ["nv4"],
 ) -> xr.Dataset:
     """
     Add experiment identifier to the dataset.
@@ -258,9 +258,9 @@ def preprocess_config(
         The regular expression pattern to extract the experiment identifier from the filename, by default "id_(.+?)_".
     dim : str, optional
         The name of the new dimension to be added to the dataset, by default "exp_id".
-    drop_vars : Union[List[str], None], optional
+    drop_vars : list[str]| None, optional
         A list of variable names to be dropped from the dataset, by default None.
-    drop_dims : List[str], optional
+    drop_dims : list[str], optional
         A list of dimension names to be dropped from the dataset, by default ["nv4"].
 
     Returns
@@ -276,7 +276,7 @@ def preprocess_config(
     m_id_re = re.search(regexp, ds.encoding["source"])
     ds = ds.expand_dims(dim)
     assert m_id_re is not None
-    m_id: Union[str, int]
+    m_id: str| int
     try:
         m_id = int(m_id_re.group(1))
     except:
@@ -340,8 +340,8 @@ def preprocess_scalar_nc(
     basin_dim: str = "basin",
     ensemble_id: str = "RAGIS",
     basin: str = "GIS",
-    drop_vars: Union[List[str], None] = None,
-    drop_dims: List[str] = ["nv4"],
+    drop_vars: list[str] | None = None,
+    drop_dims: list[str] = ["nv4"],
 ) -> xr.Dataset:
     """
     Add experiment identifier and additional dimensions to the dataset.
@@ -367,9 +367,9 @@ def preprocess_scalar_nc(
         The value of the ensemble identifier to be added, by default "RAGIS".
     basin : str, optional
         The value of the basin identifier to be added, by default "GIS".
-    drop_vars : Union[List[str], None], optional
+    drop_vars : list[str] | None, optional
         A list of variable names to be dropped from the dataset, by default None.
-    drop_dims : List[str], optional
+    drop_dims : list[str], optional
         A list of dimension names to be dropped from the dataset, by default ["nv4"].
 
     Returns
@@ -414,7 +414,7 @@ def preprocess_scalar_nc(
     ds = ds.expand_dims(basin_dim)
     ds[basin_dim] = [basin]
     assert m_id_re is not None
-    m_id: Union[str, int]
+    m_id: str | int
     try:
         m_id = int(m_id_re.group(1))
     except:
@@ -427,7 +427,7 @@ def preprocess_scalar_nc(
 
 
 def compute_basin(
-    ds: xr.Dataset, name: str = "basin", dim: List = ["x", "y"]
+    ds: xr.Dataset, name: str = "basin", dim: list = ["x", "y"]
 ) -> xr.Dataset:
     """
     Compute the sum of the dataset over the 'x' and 'y' dimensions and add a new dimension 'basin'.
@@ -528,16 +528,16 @@ def to_decimal_year(date: datetime.datetime) -> float:
 
 
 def check_file(
-    infile: Union[str, pathlib.Path], norm_year: Union[None, float] = None
+    infile: str | pathlib.Path, norm_year: None | float = None
 ) -> bool:
     """
     Check netCDF file.
 
     Parameters
     ----------
-    infile : Union[str, pathlib.Path]
+    infile : str | pathlib.Path
         The path to the netCDF file.
-    norm_year : Union[None, float], optional
+    norm_year : None | float, optional
         The normalization year, by default None.
 
     Returns
@@ -566,16 +566,16 @@ def check_file(
 
 
 def check_paleo_file(
-    infile: Union[str, pathlib.Path], norm_year: Union[None, float] = None
+    infile: str | pathlib.Path, norm_year: None | float = None
 ) -> bool:
     """
     Check netCDF file.
 
     Parameters
     ----------
-    infile : Union[str, pathlib.Path]
+    infile : str | pathlib.Path
         The path to the netCDF file.
-    norm_year : Union[None, float], optional
+    norm_year : None, float, optional
         The normalization year, by default None.
 
     Returns
@@ -602,16 +602,16 @@ def check_paleo_file(
 
 
 def copy_file(
-    infile: Union[str, pathlib.Path], outdir: Union[str, pathlib.Path]
+    infile: str | pathlib.Path, outdir: str | pathlib.Path
 ) -> None:
     """
     Copy infile to outdir.
 
     Parameters
     ----------
-    infile : Union[str, pathlib.Path]
+    infile : str | pathlib.Path
         The input file path.
-    outdir : Union[str, pathlib.Path]
+    outdir : str, pathlib.Path
         The output directory path.
     """
     if infile is not pathlib.Path:
@@ -706,7 +706,7 @@ class UtilsMethods:
 
 @timeit
 def load_ensemble(
-    filenames: List[Union[Path, str]],
+    filenames: list[Path | str],
     parallel: bool = True,
     engine: str = "h5netcdf",
     preprocess: Callable | None = None,
@@ -716,7 +716,7 @@ def load_ensemble(
 
     Parameters
     ----------
-    filenames : List[Union[Path, str]]
+    filenames : list[Path | str]
         A list of file paths or strings representing the NetCDF files to be loaded.
     parallel : bool, optional
         Whether to load the files in parallel using Dask. Default is True.
@@ -742,7 +742,7 @@ def load_ensemble(
 
 
 def normalize_cumulative_variables(
-    ds: xr.Dataset, variables: Union[str, List[str]], reference_date: str = "1992-01-01"
+    ds: xr.Dataset, variables: str | list[str], reference_date: str = "1992-01-01"
 ) -> xr.Dataset:
     """
     Normalize cumulative variables in an xarray Dataset by subtracting their values at a reference year.
@@ -782,7 +782,7 @@ def normalize_cumulative_variables(
 
 
 def standardize_variable_names(
-    ds: xr.Dataset, name_dict: Union[Mapping[Any, Hashable], None]
+    ds: xr.Dataset, name_dict: Mapping[Any, Hashable] | None
 ) -> xr.Dataset:
     """
     Standardize variable names in an xarray Dataset.
@@ -816,7 +816,7 @@ def standardize_variable_names(
     return ds.rename_vars(name_dict)
 
 
-def select_experiments(df: pd.DataFrame, ids_to_select: List[int]) -> pd.DataFrame:
+def select_experiments(df: pd.DataFrame, ids_to_select: list[int]) -> pd.DataFrame:
     """
     Select rows from a DataFrame based on a list of experiment IDs, including duplicates.
 
@@ -824,7 +824,7 @@ def select_experiments(df: pd.DataFrame, ids_to_select: List[int]) -> pd.DataFra
     ----------
     df : pd.DataFrame
         The input DataFrame containing experiment data.
-    ids_to_select : List[int]
+    ids_to_select : list[int]
         A list of experiment IDs to select from the DataFrame. Duplicates in this list
         will result in duplicate rows in the output DataFrame.
 
@@ -1082,7 +1082,7 @@ def filter_config(ds: xr.Dataset, params: list[str]) -> xr.DataArray:
 
 
 def config_to_dataframe(
-    config: xr.DataArray, ensemble: Union[str, None] = None
+    config: xr.DataArray, ensemble: str | None = None
 ) -> pd.DataFrame:
     """
     Convert an xarray DataArray configuration to a pandas DataFrame.
@@ -1095,7 +1095,7 @@ def config_to_dataframe(
     ----------
     config : xr.DataArray
         The input DataArray containing the configuration data.
-    ensemble : Union[str, None], optional
+    ensemble : str | None, optional
         An optional string to add as a column named 'ensemble' in the DataFrame, by default None.
 
     Returns
@@ -1186,7 +1186,7 @@ def filter_retreat_experiments(ds: xr.Dataset, retreat_method: str) -> xr.Datase
     return ds
 
 
-def sort_columns(df: pd.DataFrame, sorted_columns: List[str]) -> pd.DataFrame:
+def sort_columns(df: pd.DataFrame, sorted_columns: list[str]) -> pd.DataFrame:
     """
     Sort columns of a DataFrame.
 
@@ -1255,7 +1255,7 @@ def add_prefix_coord(
 
 def prepare_input(
     df: pd.DataFrame,
-    params: List[str] = [
+    params: list[str] = [
         "surface.given.file",
         "ocean.th.file",
         "geometry.front_retreat.prescribed.file",
@@ -1271,7 +1271,7 @@ def prepare_input(
     ----------
     df : pd.DataFrame
         The input DataFrame to be processed.
-    params : List[str], optional
+    params : list[str], optional
         A list of column names to be processed. Unique values in these columns will be mapped to integers.
         By default, the list includes:
         ["surface.given.file", "ocean.th.file", "geometry.front_retreat.prescribed.file"].
@@ -1309,8 +1309,8 @@ def prepare_input(
 
 @timeit
 def prepare_simulations(
-    filenames: List[Union[Path, str]],
-    config: Dict[str, Any],
+    filenames: list[Path | str],
+    config: dict[str, Any],
     reference_date: str,
     parallel: bool = True,
     engine: str = "h5netcdf",
@@ -1326,7 +1326,7 @@ def prepare_simulations(
 
     Parameters
     ----------
-    filenames : List[Union[Path, str]]
+    filenames : list[[Path | str]
         A list of file paths to the ensemble datasets.
     config : Dict[str, Any]
         A dictionary containing configuration settings for processing the datasets.
@@ -1380,7 +1380,7 @@ def prepare_simulations(
 @timeit
 def prepare_observations(
     url: Path | str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
     reference_date: str,
     engine: str = "h5netcdf",
 ) -> xr.Dataset:
@@ -1392,7 +1392,7 @@ def prepare_observations(
 
     Parameters
     ----------
-    url : Union[Path, str]
+    url : Path or str
         The URL or path to the basin observation dataset.
     config : Dict[str, Any]
         A dictionary containing configuration settings for processing the datasets.

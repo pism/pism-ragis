@@ -44,7 +44,7 @@ from pism_ragis.filtering import importance_sampling
 from pism_ragis.likelihood import log_normal
 from pism_ragis.logger import get_logger
 from pism_ragis.processing import filter_retreat_experiments, preprocess_config
-
+from pism_ragis.download import save_netcdf
 xr.set_options(keep_attrs=True)
 
 plt.style.use("tableau-colorblind10")
@@ -61,6 +61,78 @@ hist_cmap = ["#a6cee3", "#1f78b4"]
 cartopy_crs = ccrs.NorthPolarStereo(
     central_longitude=-45, true_scale_latitude=70, globe=None
 )
+
+def plot_spatial_median(sim: xr.DataArray, obs: xr.DataArray, 
+                        sim_var: str = "dhdt",       
+                        obs_mean_var: str = "dhdt",
+                        smb_var = "tendency_of_ice_mass_due_to_surface_mass_flux",
+                        flow_var = "tendency_of_ice_mass_due_to_flow", 
+                        fig_dir: Path = Path("figures")):
+    
+    o = obs.sum(dim="time")[obs_mean_var]
+    s = sim.median(dim="exp_id").sum(dim="time")[sim_var]
+    smb = sim.median(dim="exp_id").sum(dim="time")[smb_var]
+    flow = sim.median(dim="exp_id").sum(dim="time")[flow_var]
+
+    fig = plt.figure(figsize=(6.4, 7.2))
+    fig.set_dpi(600)
+    ax_1 = fig.add_subplot(2, 2, 1, projection=cartopy_crs)
+    ax_2 = fig.add_subplot(2, 2, 2, projection=cartopy_crs)
+    ax_3 = fig.add_subplot(2, 2, 3, projection=cartopy_crs)
+    ax_4 = fig.add_subplot(2, 2, 4, projection=cartopy_crs)
+    cb = o.plot(
+        ax=ax_1, vmin=-20, vmax=20, cmap="RdBu_r", extend="both", add_colorbar=False
+    )
+    s.plot(
+        ax=ax_2, vmin=-20, vmax=20, cmap="RdBu_r", extend="both", add_colorbar=False
+    )
+    cb2 = smb.plot(
+        ax=ax_3, vmin=-0.05, vmax=0.05, cmap="RdBu_r", extend="both", add_colorbar=False
+    )
+    flow.plot(
+        ax=ax_4, vmin=-0.05, vmax=0.05, cmap="RdBu_r", extend="both", add_colorbar=False
+    )
+    for ax in [ax_1, ax_2, ax_3, ax_4]:
+        ax.gridlines(
+            draw_labels={"top": "x", "left": "y"},
+            dms=True,
+            xlocs=np.arange(-60, 60, 10),
+            ylocs=np.arange(50, 88, 10),
+            x_inline=False,
+            y_inline=False,
+            rotate_labels=20,
+            ls="dotted",
+            color="k",
+        )
+        ax.coastlines()
+    ax_1.set_title("Observed dhdt")
+    ax_2.set_title("Simulated Median dhdt")
+    ax_3.set_title("Simulated Median SMB")
+    ax_4.set_title("Simulated Median Flow")
+
+    fig.colorbar(
+        cb,
+        ax=[ax_1, ax_2],
+        location="right",
+        orientation="vertical",
+        extend="both",
+        anchor=(0.5, 0.5),
+        pad=0,
+        shrink=0.75,
+        label="dh/dt (m)",
+    )
+    fig.colorbar(
+        cb2,
+        ax=[ax_3, ax_4],
+        location="right",
+        orientation="vertical",
+        extend="both",
+        anchor=(0.5, 0.5),
+        pad=0,
+        shrink=0.75,
+        label="mass (Gt)",
+    )
+    fig.savefig(fig_dir / Path("dhdt.png"), dpi=600)
 
 
 if __name__ == "__main__":
@@ -151,8 +223,10 @@ if __name__ == "__main__":
     obs_mean_var = "dhdt"
     obs_std_var = "dhdt_err"
     sim_var = "dhdt"
+    smb_var = "tendency_of_ice_mass_due_to_surface_mass_flux"
+    flow_var = "tendency_of_ice_mass_due_to_flow"
 
-    retreat_methods = ["Free", "Prescribed"]
+    retreat_methods = ["Prescribed"]
 
     start_date = "2003"
     end_date = "2020"
@@ -162,16 +236,19 @@ if __name__ == "__main__":
         simulated = xr.open_mfdataset(
             spatial_files, preprocess=preprocess_config,
             parallel=True,
-            decode_cf=True
-        ).sel(time=slice(start_date, end_date))
+            decode_cf=True,
+            decode_timedelta=True,
+        )
 
-    simulated = simulated.pint.quantify()
+    print(simulated.pism_config)    
+    simulated = simulated.sel(time=slice(start_date, end_date)).pint.quantify()
     simulated[sim_var] = simulated["dHdt"] * 1000.0 / 910.0
     simulated[sim_var] = simulated[sim_var].pint.to("m year^-1")
     simulated = simulated.pint.dequantify()
 
     observed = xr.open_mfdataset(
         "~/base/pism-ragis/data/mass_balance/Greenland_dhdt_mass*_1kmgrid_DB.nc",
+        # chunks={"time": -1, "x": -1, "y": -1},
         chunks="auto",
     ).sel(time=slice(start_date, end_date))
     observed_resampled = observed.resample({"time": resampling_frequency}).mean()
@@ -192,10 +269,16 @@ if __name__ == "__main__":
         fig_dir.mkdir(parents=True, exist_ok=True)
 
         simulated_retreat = filter_retreat_experiments(simulated, retreat_method)
+        simulated_retreat = simulated_retreat[["dhdt", "pism_config", "run_stats"]]
+
+        pism_config = simulated_retreat["pism_config"]
+        run_stats = simulated_retreat["run_stats"]
+
         simulated_retreat_resampled = (
             simulated_retreat.resample({"time": resampling_frequency})
             .mean(dim="time")
         )
+        simulated_retreat_resampled = xr.merge([simulated_retreat_resampled, pism_config, run_stats])
 
         obs = observed_resampled.interp_like(
             simulated_retreat_resampled
@@ -206,93 +289,35 @@ if __name__ == "__main__":
 
         obs_dhdt = obs["dhdt"]
         obs_mask = obs_dhdt.isnull()
-        obs_mask = obs_mask.any(dim="time").compute()
+        obs_mask = obs_mask.any(dim="time")
 
         sim = simulated_retreat_resampled.where(~obs_mask)
 
-        start_time = time.time()
-        o = obs.sum(dim="time")[obs_mean_var]
-        smb_var = "tendency_of_ice_mass_due_to_surface_mass_flux"
-        flow_var = "tendency_of_ice_mass_due_to_flow"
-        
-        s = sim.median(dim="exp_id").sum(dim="time")[sim_var]
-        smb = sim.median(dim="exp_id").sum(dim="time")[smb_var]
-        flow = sim.median(dim="exp_id").sum(dim="time")[flow_var]
+        save_netcdf(obs, result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"observed_dhdt_{start_date}_{end_date}.nc"))            
+        save_netcdf(sim, result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"simulated_dhdt_{start_date}_{end_date}.nc"))
 
-        fig = plt.figure(figsize=(6.4, 7.2))
-        fig.set_dpi(600)
-        ax_1 = fig.add_subplot(2, 2, 1, projection=cartopy_crs)
-        ax_2 = fig.add_subplot(2, 2, 2, projection=cartopy_crs)
-        ax_3 = fig.add_subplot(2, 2, 3, projection=cartopy_crs)
-        ax_4 = fig.add_subplot(2, 2, 4, projection=cartopy_crs)
-        cb = o.plot(
-            ax=ax_1, vmin=-20, vmax=20, cmap="RdBu_r", extend="both", add_colorbar=False
-        )
-        s.plot(
-            ax=ax_2, vmin=-20, vmax=20, cmap="RdBu_r", extend="both", add_colorbar=False
-        )
-        cb2 = smb.plot(
-            ax=ax_3, vmin=-0.05, vmax=0.05, cmap="RdBu_r", extend="both", add_colorbar=False
-        )
-        flow.plot(
-            ax=ax_4, vmin=-0.05, vmax=0.05, cmap="RdBu_r", extend="both", add_colorbar=False
-        )
-        for ax in [ax_1, ax_2, ax_3, ax_4]:
-            ax.gridlines(
-                draw_labels={"top": "x", "left": "y"},
-                dms=True,
-                xlocs=np.arange(-60, 60, 10),
-                ylocs=np.arange(50, 88, 10),
-                x_inline=False,
-                y_inline=False,
-                rotate_labels=20,
-                ls="dotted",
-                color="k",
-            )
-            ax.coastlines()
-        ax_1.set_title("Observed dhdt")
-        ax_2.set_title("Simulated Median dhdt")
-        ax_3.set_title("Simulated Median SMB")
-        ax_4.set_title("Simulated Median Flow")
+        with ProgressBar():
+            obs.to_zarr(result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"observed_dhdt_{start_date}_{end_date}.zarr"), mode="w")
+            sim.to_zarr(result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"simulated_dhdt_{start_date}_{end_date}.zarr"), mode="w")
 
-        fig.colorbar(
-            cb,
-            ax=[ax_1, ax_2],
-            location="right",
-            orientation="vertical",
-            extend="both",
-            anchor=(0.5, 0.5),
-            pad=0,
-            shrink=0.75,
-            label="dh/dt (m)",
-        )
-        fig.colorbar(
-            cb2,
-            ax=[ax_3, ax_4],
-            location="right",
-            orientation="vertical",
-            extend="both",
-            anchor=(0.5, 0.5),
-            pad=0,
-            shrink=0.75,
-            label="mass (Gt)",
-        )
-        fig.savefig(fig_dir / Path("dhdt.png"), dpi=600)
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        print(f"Finished in {elapsed_time:.2f} seconds")
+        # start_time = time.time()
+
+        # plot_spatial_median(sim, obs, sim_var=sim_var, obs_mean_var=obs_mean_var, smb_var=smb_var, flow_var=flow_var, fig_dir=fig_dir)        
+        # end_time = time.time()
+        # elapsed_time = end_time - start_time
+        # print(f"Plotting finished in {elapsed_time:.2f} seconds")
 
         # print(f"Importance sampling using {obs_mean_var}.")
         # f = importance_sampling(
-        #     observed=obs.sum(dim="time", skipna=False),
-        #     simulated=sim.sum(dim="time", skipna=False),
+        #     observed=obs,
+        #     simulated=sim,
         #     log_likelihood=log_normal,
         #     n_samples=len(sim.exp_id),
         #     fudge_factor=fudge_factor,
         #     obs_mean_var=obs_mean_var,
         #     obs_std_var=obs_std_var,
         #     sim_var=sim_var,
-        #     sum_dim=["x", "y"],
+        #     sum_dim=["time", "y", "x"],
         # )
         # with ProgressBar():
         #     sum_filtered_ids = f.compute()

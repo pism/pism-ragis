@@ -30,3 +30,4 @@ tqdm
 types-toml
 xarray
 xdem
+xskillscore
