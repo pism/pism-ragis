@@ -188,7 +188,7 @@ def preprocess_nc(
     ds,
     regexp: str = "id_(.+?)_",
     dim: str = "exp_id",
-    drop_vars: list[str]| None = None,
+    drop_vars: list[str] | None = None,
     drop_dims: list[str] = ["nv4"],
 ) -> xr.Dataset:
     """
@@ -240,7 +240,7 @@ def preprocess_config(
     ds,
     regexp: str = "id_(.+?)_",
     dim: str = "exp_id",
-    drop_vars: list[str]| None = None,
+    drop_vars: list[str] | None = None,
     drop_dims: list[str] = ["nv4"],
 ) -> xr.Dataset:
     """
@@ -276,7 +276,7 @@ def preprocess_config(
     m_id_re = re.search(regexp, ds.encoding["source"])
     ds = ds.expand_dims(dim)
     assert m_id_re is not None
-    m_id: str| int
+    m_id: str | int
     try:
         m_id = int(m_id_re.group(1))
     except:
@@ -527,9 +527,7 @@ def to_decimal_year(date: datetime.datetime) -> float:
     return date.year + fraction
 
 
-def check_file(
-    infile: str | pathlib.Path, norm_year: None | float = None
-) -> bool:
+def check_file(infile: str | pathlib.Path, norm_year: None | float = None) -> bool:
     """
     Check netCDF file.
 
@@ -601,9 +599,7 @@ def check_paleo_file(
         return is_ok
 
 
-def copy_file(
-    infile: str | pathlib.Path, outdir: str | pathlib.Path
-) -> None:
+def copy_file(infile: str | pathlib.Path, outdir: str | pathlib.Path) -> None:
     """
     Copy infile to outdir.
 
