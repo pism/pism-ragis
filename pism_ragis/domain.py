@@ -20,8 +20,6 @@
 Module provides functions to deal domains.
 """
 
-from typing import List, Union
-
 import numpy as np
 import xarray as xr
 
@@ -72,18 +70,72 @@ def new_range(x: np.array, dx: float):
     return center, Lx, int(N)
 
 
+def get_bounds(
+    ds: xr.Dataset,
+    base_resolution: int = 150,
+    multipliers: list | np.ndarray = [1, 2, 3, 6, 8, 10, 12, 16, 20, 24, 30],
+):
+    """
+    Compute the x and y boundaries for a given dataset and set of grid resolutions.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        The input dataset containing the x and y coordinates.
+    base_resolution : int, optional
+        The base resolution in meters, by default 150.
+    multipliers : list | np.ndarray, optional
+        A list or array of multipliers to compute the set of grid resolutions, by default [1, 2, 3, 6, 8, 10, 12, 16, 20, 24, 30].
+
+    Returns
+    -------
+    tuple
+        A tuple containing the x boundaries and y boundaries as lists.
+
+    Examples
+    --------
+    >>> ds = xr.Dataset({'x': ('x', np.linspace(0, 1000, 11)), 'y': ('y', np.linspace(0, 2000, 21))})
+    >>> x_bnds, y_bnds = get_bounds(ds)
+    >>> print(x_bnds, y_bnds)
+    """
+    x = ds.variables["x"][:]
+    y = ds.variables["y"][:]
+
+    # set of grid resolutions, in meters
+    dx = base_resolution * np.array(multipliers)
+
+    # compute x_bnds for this set of resolutions
+    center, Lx, _ = new_range(x.values, np.lcm.reduce(dx))
+    x_bnds = [center - Lx, center + Lx]
+
+    # compute y_bnds for this set of resolutions
+    center, Ly, _ = new_range(y.values, np.lcm.reduce(dx))
+    y_bnds = np.minimum(center - Ly, center + Ly), np.maximum(center - Ly, center + Ly)
+    return x_bnds, y_bnds
+
+
 def create_domain(
-    x_bnds: Union[List, np.ndarray], y_bnds: Union[List, np.ndarray]
+    x_bnds: list | np.ndarray,
+    y_bnds: list | np.ndarray,
+    x_dim: str = "x",
+    y_dim: str = "y",
+    crs: str = "EPSG:3413",
 ) -> xr.Dataset:
     """
     Create an xarray.Dataset representing a domain with specified x and y boundaries.
 
     Parameters
     ----------
-    x_bnds : Union[List, np.ndarray]
+    x_bnds : list | np.ndarray
         A list or array containing the minimum and maximum x-coordinate boundaries.
-    y_bnds : Union[List, np.ndarray]
+    y_bnds : list | np.ndarray
         A list or array containing the minimum and maximum y-coordinate boundaries.
+    x_dim : str, optional
+        The name of the x dimension, by default "x".
+    y_dim : str, optional
+        The name of the y dimension, by default "y".
+    crs : str, optional
+        The coordinate reference system (CRS) for the domain, by default "EPSG:3413".
 
     Returns
     -------
@@ -98,65 +150,62 @@ def create_domain(
     - A `mapping` DataArray with polar stereographic projection attributes.
     - A `domain` DataArray with a reference to the `mapping`.
     - `x_bnds` and `y_bnds` DataArrays representing the boundaries of the domain.
+
+    Examples
+    --------
+    >>> x_bnds = [0, 1000]
+    >>> y_bnds = [0, 2000]
+    >>> ds = create_domain(x_bnds, y_bnds)
+    >>> print(ds)
     """
+    x_bnds_dim = f"{x_dim}_bnds"
+    y_bnds_dim = f"{y_dim}_bnds"
     coords = {
-        "x": (
-            ["x"],
+        x_dim: (
+            [x_dim],
             [0],
             {
                 "units": "m",
-                "axis": "X",
-                "bounds": "x_bnds",
+                "axis": x_dim.upper(),
+                "bounds": x_bnds_dim,
                 "standard_name": "projection_x_coordinate",
-                "long_name": "x-coordinate in projected coordinate system",
+                "long_name": f"{x_dim}-coordinate in projected coordinate system",
             },
         ),
-        "y": (
-            ["y"],
+        y_dim: (
+            [y_dim],
             [0],
             {
                 "units": "m",
-                "axis": "Y",
-                "bounds": "y_bnds",
+                "axis": y_dim.upper(),
+                "bounds": y_bnds_dim,
                 "standard_name": "projection_y_coordinate",
-                "long_name": "y-coordinate in projected coordinate system",
+                "long_name": f"{y_dim}-coordinate in projected coordinate system",
             },
         ),
     }
     ds = xr.Dataset(
         {
-            "mapping": xr.DataArray(
-                data=0,
-                attrs={
-                    "grid_mapping_name": "polar_stereographic",
-                    "false_easting": 0.0,
-                    "false_northing": 0.0,
-                    "latitude_of_projection_origin": 90.0,
-                    "scale_factor_at_projection_origin": 1.0,
-                    "standard_parallel": 70.0,
-                    "straight_vertical_longitude_from_pole": -45.0,
-                },
-            ),
             "domain": xr.DataArray(
                 data=0,
                 attrs={
-                    "dimensions": "x y",
-                    "grid_mapping": "mapping",
+                    "dimensions": f"{x_dim} {y_dim}",
                 },
             ),
-            "x_bnds": xr.DataArray(
+            x_bnds_dim: xr.DataArray(
                 data=[[x_bnds[0], x_bnds[1]]],
-                dims=["x", "nv2"],
-                coords={"x": coords["x"]},
+                dims=[x_dim, "nv2"],
+                coords={x_dim: coords[x_dim]},
                 attrs={"_FillValue": False},
             ),
-            "y_bnds": xr.DataArray(
+            y_bnds_dim: xr.DataArray(
                 data=[[y_bnds[0], y_bnds[1]]],
-                dims=["y", "nv2"],
-                coords={"y": coords["y"]},
+                dims=[y_dim, "nv2"],
+                coords={y_dim: coords[y_dim]},
                 attrs={"_FillValue": False},
             ),
         },
         attrs={"Conventions": "CF-1.8"},
-    )
+    ).rio.set_spatial_dims(x_dim=x_dim, y_dim=y_dim)
+    ds.rio.write_crs(crs, inplace=True)
     return ds

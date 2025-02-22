@@ -295,30 +295,26 @@ def preprocess_config(
         for k, v in p_config.attrs.items()
         if not any(k.endswith(suffix) for suffix in suffixes_to_exclude)
     }
-    if "geometry.front_retreat.prescribed.file" not in config.keys():
-        config["geometry.front_retreat.prescribed.file"] = "false"
-
     stats = p_run_stats
     config_sorted = OrderedDict(sorted(config.items()))
 
-    pc_keys = list(config_sorted.keys())
-    pc_vals = list(config_sorted.values())
-    rs_keys = list(stats.attrs.keys())
-    rs_vals = list(stats.attrs.values())
+    pc_keys = np.array(list(config_sorted.keys()))
+    pc_vals = np.array(list(config_sorted.values()))
+    rs_keys = np.array(list(stats.attrs.keys()))
+    rs_vals = np.array(list(stats.attrs.values()))
 
     pism_config = xr.DataArray(
-        pc_vals,
-        dims=["pism_config_axis"],
-        coords={"pism_config_axis": pc_keys, "exp_id": m_id},
+        pc_vals.reshape(-1, 1),
+        dims=["pism_config_axis", "exp_id"],
+        coords={"pism_config_axis": pc_keys, "exp_id": [m_id]},
         name="pism_config",
     )
     run_stats = xr.DataArray(
-        rs_vals,
-        dims=["run_stats_axis"],
-        coords={"run_stats_axis": rs_keys, "exp_id": m_id},
+        rs_vals.reshape(-1, 1),
+        dims=["run_stats_axis", "exp_id"],
+        coords={"run_stats_axis": rs_keys, "exp_id": [m_id]},
         name="run_stats",
     )
-
     ds = xr.merge(
         [
             ds.drop_vars(["pism_config", "run_stats"], errors="ignore"),
@@ -326,7 +322,6 @@ def preprocess_config(
             run_stats,
         ]
     )
-
     return ds.drop_vars(drop_vars, errors="ignore").drop_dims(
         drop_dims, errors="ignore"
     )
@@ -1163,7 +1158,9 @@ def filter_retreat_experiments(ds: xr.Dataset, retreat_method: str) -> xr.Datase
         pism_config     (exp_id, pism_config_axis) int64 1 2
     """
     # Select the relevant pism_config_axis
-    retreat = ds.sel(pism_config_axis="geometry.front_retreat.prescribed.file")
+    retreat = ds.sel(
+        pism_config_axis="geometry.front_retreat.prescribed.file"
+    ).compute()
 
     if retreat_method == "Free":
         retreat_exp_ids = retreat.where(
