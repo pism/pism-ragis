@@ -1,9 +1,21 @@
+export PISM_PREFIX=$HOME/local/pism
+export RAGIS_DIR=/work2/08523/aaschwa/stampede3/pism-ragis/
+export odir=${SCRATCH}/hindcasts/2025_02_mode
+export grid=4500
+
+python $RAGIS_DIR/hindcasts/hindcast.py --start 1978-01-01 --end 2020-12-31 --boot_file $RAGIS_DIR/data/dem/BedMachineGreenland-v5_0.nc --exstep monthly --spatial_ts ml --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/data/grids/pism-bedmachine-greenland.nc -s stampede3 -n 96 -q skx -w 1:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_mode.csv $RAGIS_DIR/calibration/2024_11_grimp_tw/state/g1200m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
+
+
+
+
+
 export PISM_PREFIX=$HOME/local-intel/pism
 export RAGIS_DIR=/import/c1/ICESHEET/ICESHEET/pism-ragis/
 export odir=${RAGIS_DIR}/hindcasts/2025_02_mode
 export grid=4500
 
 python $RAGIS_DIR/hindcasts/hindcast.py --start 1978-01-01 --end 2020-12-31 --boot_file $RAGIS_DIR/data/dem/BedMachineGreenland-v5_0.nc --exstep monthly --spatial_ts ml --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/data/grids/pism-bedmachine-greenland.nc -s chinook-rl8 -n 80 -q t1small -w 2:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_mode.csv $RAGIS_DIR/calibration/2024_11_grimp_tw/state/g1200m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
+
 
 export PISM_PREFIX=$HOME/local-intel/pism
 export RAGIS_DIR=/import/c1/ICESHEET/ICESHEET/pism-ragis/
