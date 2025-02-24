@@ -16,11 +16,12 @@
 # along with PISM; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-# pylint: disable=unused-import
+# pylint: disable=unused-import,too-many-positional-arguments
 """
 Analyze RAGIS ensemble.
 """
 
+import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from importlib.resources import files
 from pathlib import Path
@@ -38,13 +39,13 @@ import xarray as xr
 import xskillscore
 from dask.diagnostics import ProgressBar
 from tqdm.auto import tqdm
-import time
 
+from pism_ragis.download import save_netcdf
 from pism_ragis.filtering import importance_sampling
 from pism_ragis.likelihood import log_normal
 from pism_ragis.logger import get_logger
 from pism_ragis.processing import filter_retreat_experiments, preprocess_config
-from pism_ragis.download import save_netcdf
+
 xr.set_options(keep_attrs=True)
 
 plt.style.use("tableau-colorblind10")
@@ -62,13 +63,36 @@ cartopy_crs = ccrs.NorthPolarStereo(
     central_longitude=-45, true_scale_latitude=70, globe=None
 )
 
-def plot_spatial_median(sim: xr.DataArray, obs: xr.DataArray, 
-                        sim_var: str = "dhdt",       
-                        obs_mean_var: str = "dhdt",
-                        smb_var = "tendency_of_ice_mass_due_to_surface_mass_flux",
-                        flow_var = "tendency_of_ice_mass_due_to_flow", 
-                        fig_dir: Path = Path("figures")):
-    
+
+def plot_spatial_median(
+    sim: xr.DataArray,
+    obs: xr.DataArray,
+    sim_var: str = "dhdt",
+    obs_mean_var: str = "dhdt",
+    smb_var="tendency_of_ice_mass_due_to_surface_mass_flux",
+    flow_var="tendency_of_ice_mass_due_to_flow",
+    fig_dir: Path = Path("figures"),
+):
+    """
+    Plot the spatial median of simulated and observed data.
+
+    Parameters
+    ----------
+    sim : xr.DataArray
+        Simulated data array.
+    obs : xr.DataArray
+        Observed data array.
+    sim_var : str, optional
+        Variable name for the simulated data, by default "dhdt".
+    obs_mean_var : str, optional
+        Variable name for the observed mean data, by default "dhdt".
+    smb_var : str, optional
+        Variable name for the surface mass balance data, by default "tendency_of_ice_mass_due_to_surface_mass_flux".
+    flow_var : str, optional
+        Variable name for the flow data, by default "tendency_of_ice_mass_due_to_flow".
+    fig_dir : Path, optional
+        Directory to save the figures, by default "figures".
+    """
     o = obs.sum(dim="time")[obs_mean_var]
     s = sim.median(dim="exp_id").sum(dim="time")[sim_var]
     smb = sim.median(dim="exp_id").sum(dim="time")[smb_var]
@@ -83,9 +107,7 @@ def plot_spatial_median(sim: xr.DataArray, obs: xr.DataArray,
     cb = o.plot(
         ax=ax_1, vmin=-20, vmax=20, cmap="RdBu_r", extend="both", add_colorbar=False
     )
-    s.plot(
-        ax=ax_2, vmin=-20, vmax=20, cmap="RdBu_r", extend="both", add_colorbar=False
-    )
+    s.plot(ax=ax_2, vmin=-20, vmax=20, cmap="RdBu_r", extend="both", add_colorbar=False)
     cb2 = smb.plot(
         ax=ax_3, vmin=-0.05, vmax=0.05, cmap="RdBu_r", extend="both", add_colorbar=False
     )
@@ -234,26 +256,25 @@ if __name__ == "__main__":
     # m_file = "/media/andy/LHS800DATA/ragis/hindcasts/2025_01_lhs_800/spatial/ex_g1200m_id_0_1978-01-01_2020-12-31.nc"
     # m_file_2 = "/media/andy/LHS800DATA/ragis/hindcasts/2025_01_lhs_800/spatial/ex_g1200m_id_1_1978-01-01_2020-12-31.nc"
     # m_file_3 = "/media/andy/LHS800DATA/ragis/hindcasts/2025_01_lhs_800/spatial/ex_g1200m_id_2_1978-01-01_2020-12-31.nc"
-    # m_ds = xr.open_mfdataset([m_file, m_file_2, m_file_3], 
-    #                          parallel=True,            
+    # m_ds = xr.open_mfdataset([m_file, m_file_2, m_file_3],
+    #                          parallel=True,
     #                          decode_cf=True,
     #                          decode_timedelta=True,
     #                          preprocess=preprocess_config)
-
-
 
     # print(m_ds.pism_config)
 
     print("Loading ensemble.")
     with ProgressBar():
         simulated = xr.open_mfdataset(
-            spatial_files, preprocess=preprocess_config,
+            spatial_files,
+            preprocess=preprocess_config,
             parallel=True,
             decode_cf=True,
             decode_timedelta=True,
+            engine="h5netcdf",
         )
 
- 
     simulated = simulated.sel(time=slice(start_date, end_date)).pint.quantify()
     simulated[sim_var] = simulated["dHdt"] * 1000.0 / 910.0
     simulated[sim_var] = simulated[sim_var].pint.to("m year^-1")
@@ -270,7 +291,7 @@ if __name__ == "__main__":
     x_max, y_max = 525929, -2528980
     # obs_ds = obs_ds.sel({"x": slice(x_min, x_max), "y": slice(y_min, y_max)})
     # sim_ds = sim_ds.sel({"x": slice(x_min, x_max), "y": slice(y_min, y_max)})
-    r = []
+    r: list = []
     for retreat_method in retreat_methods:
         print("-" * 80)
         print(f"Retreat method: {retreat_method}")
@@ -291,11 +312,12 @@ if __name__ == "__main__":
         if "time" in run_stats.dims:
             run_stats = run_stats.isel(time=-1)
 
-        simulated_retreat_resampled = (
-            simulated_retreat.resample({"time": resampling_frequency})
-            .mean(dim="time")
+        simulated_retreat_resampled = simulated_retreat.resample(
+            {"time": resampling_frequency}
+        ).mean(dim="time")
+        simulated_retreat_resampled = xr.merge(
+            [simulated_retreat_resampled, pism_config, run_stats]
         )
-        simulated_retreat_resampled = xr.merge([simulated_retreat_resampled, pism_config, run_stats])
 
         obs = observed_resampled.interp_like(
             simulated_retreat_resampled
@@ -310,14 +332,23 @@ if __name__ == "__main__":
 
         sim = simulated_retreat_resampled.where(~obs_mask)
 
-        obs_file_nc = result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"observed_dhdt_{start_date}_{end_date}.nc")
-        sim_file_nc = result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"observed_dhdt_{start_date}_{end_date}.nc")
+        obs_file_nc = (
+            result_dir
+            / Path(f"retreat_{retreat_method.lower()}")
+            / Path(f"observed_dhdt_{start_date}_{end_date}.nc")
+        )
+        sim_file_nc = (
+            result_dir
+            / Path(f"retreat_{retreat_method.lower()}")
+            / Path(f"observed_dhdt_{start_date}_{end_date}.nc")
+        )
         with ProgressBar():
-            obs.to_netcdf(obs_file_nc)            
+            obs.to_netcdf(obs_file_nc)
+        with ProgressBar():
             sim.to_netcdf(sim_file_nc)
-            
-        #save_netcdf(obs, obs_file_nc)            
-        #save_netcdf(sim, sim_file_nc)
+
+        # save_netcdf(obs, obs_file_nc)
+        # save_netcdf(sim, sim_file_nc)
 
         # obs_file_zarr = result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"observed_dhdt_{start_date}_{end_date}.zarr")
         # sim_file_zarr = result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"observed_dhdt_{start_date}_{end_date}.zarr")
@@ -327,7 +358,7 @@ if __name__ == "__main__":
 
         # start_time = time.time()
 
-        # plot_spatial_median(sim, obs, sim_var=sim_var, obs_mean_var=obs_mean_var, smb_var=smb_var, flow_var=flow_var, fig_dir=fig_dir)        
+        # plot_spatial_median(sim, obs, sim_var=sim_var, obs_mean_var=obs_mean_var, smb_var=smb_var, flow_var=flow_var, fig_dir=fig_dir)
         # end_time = time.time()
         # elapsed_time = end_time - start_time
         # print(f"Plotting finished in {elapsed_time:.2f} seconds")

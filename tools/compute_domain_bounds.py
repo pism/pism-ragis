@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 import xarray as xr
 
-from pism_ragis.domain import create_domain, new_range
+from pism_ragis.domain import create_domain, get_bounds
 
 if __name__ == "__main__":
     __spec__ = None  # type: ignore
@@ -39,6 +39,12 @@ if __name__ == "__main__":
         help="Base resolution in meters. Default=150.",
         type=int,
         default=150,
+    )
+    parser.add_argument(
+        "--crs",
+        help="Coordinate reference system. Default: epsg:3413.",
+        type=str,
+        default="EPSG:3413",
     )
     parser.add_argument(
         "--resolution_multipliers",
@@ -60,33 +66,13 @@ if __name__ == "__main__":
     )
     options = parser.parse_args()
     base_resolution = options.base_resolution
+    crs = options.crs
     multipliers = np.array(options.resolution_multipliers)
     infile = options.INFILE
     outfile = options.OUTFILE
     f = Path(infile).expanduser()
 
     ds = xr.open_dataset(f)
-    x = ds.variables["x"][:]
-    y = ds.variables["y"][:]
-
-    # set of grid resolutions, in meters
-    dx = base_resolution * np.array(multipliers)
-    print(f"resolutions: {dx} meters")
-
-    # compute x_bnds for this set of resolutions
-    center, Lx, _ = new_range(x.values, np.lcm.reduce(dx))
-    x_bnds = [center - Lx, center + Lx]
-    print(f"new x bounds: {x_bnds}")
-
-    # compute x_bnds for this set of resolutions
-    center, Ly, _ = new_range(y.values, np.lcm.reduce(dx))
-    y_bnds = np.minimum(center - Ly, center + Ly), np.maximum(center - Ly, center + Ly)
-    print(f"new y bounds: {y_bnds}")
-
-    # resulting set of -Mx values
-    print(f"Mx values: {(2 * abs(Lx)) / dx}")
-    # resulting set of -My values
-    print(f"My values: {(2 * abs(Ly)) / dx}")
-
+    x_bnds, y_bnds = get_bounds(ds)
     domain_ds = create_domain(x_bnds, y_bnds)
     domain_ds.to_netcdf(outfile)

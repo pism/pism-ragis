@@ -252,21 +252,21 @@ if __name__ == "__main__":
 
     mpl.rcParams.update(rcparams)
 
-    simulated_ds = prp.prepare_simulations(
+    simulated = prp.prepare_simulations(
         basin_files, config, reference_date, parallel=parallel, engine=engine
     )
-    simulated_ds = simulated_ds.dropna(dim="exp_id")
-    observed_ds = prp.prepare_observations(
+    simulated = simulated.dropna(dim="exp_id")
+    observed = prp.prepare_observations(
         options.observed_url,
         config,
         reference_date,
         engine=engine,
     )
 
-    da = observed_ds.sel(time=slice(f"{filter_range[0]}", f"{filter_range[-1]}"))[
+    da = observed.sel(time=slice(f"{filter_range[0]}", f"{filter_range[-1]}"))[
         "grounding_line_flux"
     ].mean(dim="time")
-    posterior_basins_sorted = observed_ds.basin.sortby(da).values
+    posterior_basins_sorted = observed.basin.sortby(da).values
 
     bins_dict = config["Posterior Bins"]
     parameter_categories = config["Parameter Categories"]
@@ -299,40 +299,49 @@ if __name__ == "__main__":
         )
         fig_dir.mkdir(parents=True, exist_ok=True)
 
-        simulated_retreat_ds = prp.filter_retreat_experiments(
-            simulated_ds, retreat_method
-        )
+        simulated_retreat = prp.filter_retreat_experiments(simulated, retreat_method)
 
-        valid_ds, outliers_ds = filter_outliers(
-            simulated_retreat_ds,
+        pism_config = simulated_retreat["pism_config"]
+        if "time" in pism_config.dims:
+            pism_config = pism_config.isel(time=-1)
+        run_stats = simulated_retreat["run_stats"]
+        if "time" in run_stats.dims:
+            run_stats = run_stats.isel(time=-1)
+
+        simulated_valid, simulated_outliers = filter_outliers(
+            simulated_retreat,
             valid_range=valid_range,
             outlier_variable=outlier_variable,
             subset={"basin": "GIS"},
         )
 
-        outliers_config = prp.filter_config(outliers_ds, params)
+        outliers_config = prp.filter_config(simulated_outliers, params)
         outliers_df = prp.config_to_dataframe(outliers_config, ensemble="Outliers")
 
-        valid_config = prp.filter_config(valid_ds, params)
+        valid_config = prp.filter_config(simulated_valid, params)
         valid_df = prp.config_to_dataframe(valid_config, ensemble="Valid")
 
-        obs_basins = set(observed_ds.basin.values)
-
-        simulated = valid_ds
-
+        obs_basins = set(observed.basin.values)
         sim_basins = set(simulated.basin.values)
 
         intersection = list(sim_basins.intersection(obs_basins))
 
-        observed_basins_ds = observed_ds.sel({"basin": intersection})
-        simulated_basins_ds = simulated.sel({"basin": intersection})
+        observed_basins = observed.sel({"basin": intersection})
+        simulated_basins = simulated_valid.sel({"basin": intersection})
 
-        observed_basins_resampled_ds = observed_basins_ds.resample(
+        observed_basins_resampled = observed_basins.resample(
             {"time": resampling_frequency}
         ).mean()
-        simulated_basins_resampled_ds = simulated_basins_ds.resample(
+        simulated_basins_resampled = simulated_basins.resample(
             {"time": resampling_frequency}
         ).mean()
+        simulated_basins_resampled = xr.merge(
+            [
+                simulated_basins_resampled,
+                pism_config.sel({"basin": intersection}),
+                run_stats.sel({"basin": intersection}),
+            ]
+        )
 
         obs_mean_vars: list[str] = [
             "grounding_line_flux",
@@ -358,8 +367,8 @@ if __name__ == "__main__":
             simulated_prior,
             simulated_posterior,
         ) = run_importance_sampling(
-            observed=observed_basins_resampled_ds,
-            simulated=simulated_basins_resampled_ds,
+            observed=observed_basins_resampled,
+            simulated=simulated_basins_resampled,
             obs_mean_vars=obs_mean_vars,
             obs_std_vars=obs_std_vars,
             sim_vars=sim_vars,
@@ -370,14 +379,14 @@ if __name__ == "__main__":
 
         for filter_var in obs_mean_vars:
             plot_basins(
-                observed_basins_resampled_ds.load(),
+                observed_basins_resampled.load(),
                 simulated_prior[sim_plot_vars].load(),
                 simulated_posterior.sel({"filtered_by": filter_var})[
                     sim_plot_vars
                 ].load(),
                 filter_var=filter_var,
                 filter_range=filter_range,
-                figsize=(2.4, 1.0),
+                figsize=(3.2, 1.2),
                 fig_dir=fig_dir,
                 fontsize=5,
                 fudge_factor=fudge_factor,
@@ -388,14 +397,14 @@ if __name__ == "__main__":
                 config=config,
             )
             plot_basins(
-                observed_basins_resampled_ds.load(),
+                observed_basins_resampled.load(),
                 simulated_prior[sim_plot_vars].load(),
                 simulated_posterior.sel({"filtered_by": filter_var})[
                     sim_plot_vars
                 ].load(),
                 filter_var=filter_var,
                 filter_range=filter_range,
-                figsize=(2.4, 1.4),
+                figsize=(3.2, 1.6),
                 fig_dir=fig_dir,
                 fontsize=5,
                 fudge_factor=fudge_factor,
@@ -406,14 +415,14 @@ if __name__ == "__main__":
                 config=config,
             )
             plot_basins(
-                observed_basins_resampled_ds.load(),
+                observed_basins_resampled.load(),
                 simulated_prior[sim_plot_vars].load(),
                 simulated_posterior.sel({"filtered_by": filter_var})[
                     sim_plot_vars
                 ].load(),
                 filter_var=filter_var,
                 filter_range=filter_range,
-                figsize=(2.4, 1.6),
+                figsize=(3.2, 2.0),
                 fig_dir=fig_dir,
                 fontsize=5,
                 fudge_factor=fudge_factor,
@@ -457,7 +466,7 @@ if __name__ == "__main__":
             .sel(time=slice(str(filter_range[0]), str(filter_range[-1])))[sim_vars]
             .sum(dim="time")
         )
-        obs_sum = observed_basins_resampled_ds.sel(
+        obs_sum = observed_basins_resampled.sel(
             time=slice(str(filter_range[0]), str(filter_range[-1]))
         )[sim_vars].sum(dim="time")
         # post_sum_norm = post_sum - obs_sum
@@ -473,7 +482,7 @@ if __name__ == "__main__":
                 fig, ax = plt.subplots(1, 1, figsize=(1.2, 1.2))
 
                 obs_data = (
-                    observed_basins_resampled_ds.sel(basin=basin)
+                    observed_basins_resampled.sel(basin=basin)
                     .sel(time=slice(str(filter_range[0]), str(filter_range[-1])))
                     .sum(dim="time")
                 )
@@ -654,17 +663,17 @@ if __name__ == "__main__":
 
     sensitivity_indices_list = []
     for basin_group, intersection, filtering_vars in zip(
-        [simulated_basins_ds],
+        [simulated_basins],
         [intersection],
         [["mass_balance", "grounding_line_flux"]],
     ):
-        sobol_response_ds = basin_group
+        sobol_response = basin_group
         sobol_input_df = params_df[params_df["basin"].isin(intersection)]
 
         sensitivity_indices_list.append(
             run_sensitivity_analysis(
                 sobol_input_df,
-                sobol_response_ds,
+                sobol_response,
                 filtering_vars,
                 notebook=notebook,
             )
@@ -694,14 +703,14 @@ if __name__ == "__main__":
         .sum()
         .apply(np.sqrt)
     )
-    aggregated_ds = xr.merge([aggregated_indices, aggregated_conf])
-    aggregated_ds.to_netcdf(si_dir / Path("aggregated_sensitivity_indices.nc"))
+    aggregated = xr.merge([aggregated_indices, aggregated_conf])
+    aggregated.to_netcdf(si_dir / Path("aggregated_sensitivity_indices.nc"))
 
     for indices_var, indices_conf_var in zip(indices_vars, indices_conf):
-        for basin in aggregated_ds.basin.values:
-            for filter_var in aggregated_ds.filtered_by.values:
+        for basin in aggregated.basin.values:
+            for filter_var in aggregated.filtered_by.values:
                 plot_sensitivity_indices(
-                    aggregated_ds.sel(basin=basin, filtered_by=filter_var)
+                    aggregated.sel(basin=basin, filtered_by=filter_var)
                     .rolling({"time": 13})
                     .mean()
                     .sel(time=slice("1980-01-01", "2020-01-01")),

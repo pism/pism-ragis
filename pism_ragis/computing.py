@@ -1,4 +1,4 @@
-# Copyright (C) 2023 Andy Aschwanden
+# Copyright (C) 2025 Andy Aschwanden
 #
 # This file is part of pism-ragis.
 #
