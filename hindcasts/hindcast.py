@@ -222,6 +222,13 @@ if __name__ == "__main__":
         default="ragis",
     )
     parser.add_argument(
+        "--gid",
+        dest="gid",
+        choices=["s2457", "s2524"],
+        help="Choose GID for Pleiades",
+        default="s2524",
+    )
+    parser.add_argument(
         "--calving",
         dest="calving",
         choices=["vonmises_calving", "hayhurst_calving"],
@@ -275,6 +282,7 @@ if __name__ == "__main__":
     queue = options.queue
     walltime = options.walltime
     # system = available_systems[options.system]
+    gid = options.gid
 
     spatial_ts = options.spatial_ts
     exstep = options.exstep
@@ -403,7 +411,7 @@ done\n\n
     simulation_end_year = options.end
 
     batch_header, batch_system = computing.make_batch_header(
-        options.system, nn, walltime, queue
+        options.system, nn, walltime, queue, gid=gid
     )
     post_header = computing.make_batch_post_header(options.system)
 
