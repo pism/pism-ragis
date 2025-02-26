@@ -84,18 +84,10 @@ def test_log_normal_ndarray() -> None:
     mu: np.ndarray = np.array([0.0, 0.0, 0.0])
     std: np.ndarray = np.array([1.0, 1.0, 1.0])
 
-    n: int = 0
-    expected: np.ndarray = -0.5 * ((x - mu) / std) ** 2 - n * 0.5 * np.log(
+    expected: np.ndarray = -0.5 * ((x - mu) / std) ** 2 - 0.5 * np.log(
         2 * np.pi * std**2
     )
-    result: np.ndarray = log_normal(x, mu, std, n)
-    assert np.allclose(result, expected), f"Expected {expected}, got {result}"
-
-    n: int = 3
-    expected: np.ndarray = -0.5 * ((x - mu) / std) ** 2 - n * 0.5 * np.log(
-        2 * np.pi * std**2
-    )
-    result: np.ndarray = log_normal(x, mu, std, n)
+    result: np.ndarray = log_normal(x, mu, std)
     assert np.allclose(result, expected), f"Expected {expected}, got {result}"
 
 
@@ -110,16 +102,14 @@ def test_log_pseudo_huber_ndarray() -> None:
     mu: np.ndarray = np.array([0.0, 0.0, 0.0])
     std: np.ndarray = np.array([1.0, 1.0, 1.0])
 
-    n: int = 3
     delta: float = 2
-    expected: np.ndarray = -pseudo_huber(delta, (x - mu) / std) - n
-    result: np.ndarray = log_pseudo_huber(x, mu, std, delta=delta, n=n)
+    expected: np.ndarray = -pseudo_huber(delta, (x - mu) / std) - 1
+    result: np.ndarray = log_pseudo_huber(x, mu, std, delta=delta)
     assert np.allclose(result, expected), f"Expected {expected}, got {result}"
 
-    n: int = 0
     delta: float = 0
-    expected: np.ndarray = -pseudo_huber(delta, (x - mu) / std) - n
-    result: np.ndarray = log_pseudo_huber(x, mu, std, delta=delta, n=n)
+    expected: np.ndarray = -pseudo_huber(delta, (x - mu) / std) - 1
+    result: np.ndarray = log_pseudo_huber(x, mu, std, delta=delta)
     assert np.allclose(result, expected), f"Expected {expected}, got {result}"
 
 
@@ -145,11 +135,10 @@ def test_log_normal_xarray() -> None:
         coords={"x": [0, 1], "y": [0, 1, 2]},
         name="std",
     )
-    n: int = 6
-    expected: xr.DataArray = -0.5 * ((x - mu) / std) ** 2 - n * 0.5 * np.log(
+    expected: xr.DataArray = -0.5 * ((x - mu) / std) ** 2 - 0.5 * np.log(
         2 * np.pi * std**2
     )
-    result: xr.DataArray = log_normal(x, mu, std, n)
+    result: xr.DataArray = log_normal(x, mu, std)
     assert np.allclose(result, expected), f"Expected {expected}, got {result}"
 
 
@@ -175,8 +164,7 @@ def test_log_pseudo_huber_xarray() -> None:
         coords={"x": [0, 1], "y": [0, 1, 2]},
         name="std",
     )
-    n: int = 6
     delta: float = 2.0
-    expected = -pseudo_huber(delta, (x - mu) / std) - n
-    result: xr.DataArray = log_pseudo_huber(x, mu, std, delta=delta, n=n)
+    expected = -pseudo_huber(delta, (x - mu) / std) - 1
+    result: xr.DataArray = log_pseudo_huber(x, mu, std, delta=delta)
     assert np.allclose(result, expected), f"Expected {expected}, got {result}"

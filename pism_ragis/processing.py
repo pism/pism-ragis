@@ -1124,7 +1124,9 @@ def config_to_dataframe(
 
 
 @timeit
-def filter_retreat_experiments(ds: xr.Dataset, retreat_method: str) -> xr.Dataset:
+def filter_by_retreat_method(
+    ds: xr.Dataset, retreat_method: str, compute: bool = False
+) -> xr.Dataset:
     """
     Filter retreat experiments based on the retreat method.
 
@@ -1136,8 +1138,10 @@ def filter_retreat_experiments(ds: xr.Dataset, retreat_method: str) -> xr.Datase
     ds : xr.Dataset
         The input dataset containing the retreat experiments.
     retreat_method : {"Free", "Prescribed", "All"}
-        The retreat method to filter by. "free" selects experiments with no prescribed retreat,
+        The retreat method to filter by. "Free" selects experiments with no prescribed retreat,
         "Prescribed" selects experiments with a prescribed retreat, and "All" selects all experiments.
+    compute : bool, optional
+        Whether to compute the dataset immediately, by default False.
 
     Returns
     -------
@@ -1148,7 +1152,7 @@ def filter_retreat_experiments(ds: xr.Dataset, retreat_method: str) -> xr.Datase
     --------
     >>> ds = xr.Dataset({'pism_config': (('exp_id', 'pism_config_axis'), [[1, 2], [3, 4]])},
     ...                 coords={'exp_id': [0, 1], 'pism_config_axis': ['param1', 'geometry.front_retreat.prescribed.file']})
-    >>> filter_retreat_experiments(ds, 'Free')
+    >>> filter_by_retreat_method(ds, 'Free')
     <xarray.Dataset>
     Dimensions:         (exp_id: 1, pism_config_axis: 2)
     Coordinates:
@@ -1158,9 +1162,9 @@ def filter_retreat_experiments(ds: xr.Dataset, retreat_method: str) -> xr.Datase
         pism_config     (exp_id, pism_config_axis) int64 1 2
     """
     # Select the relevant pism_config_axis
-    retreat = ds.sel(
-        pism_config_axis="geometry.front_retreat.prescribed.file"
-    ).compute()
+    retreat = ds.sel(pism_config_axis="geometry.front_retreat.prescribed.file")
+    if compute:
+        retreat = retreat.compute()
 
     if retreat_method == "Free":
         retreat_exp_ids = retreat.where(

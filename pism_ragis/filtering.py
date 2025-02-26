@@ -183,8 +183,7 @@ def importance_sampling(
     sim = simulated[sim_var]
 
     # Compute the log-likelihood of each simulated data point
-    n = np.prod([observed.sizes[d] for d in sum_dim])
-    log_likes = log_likelihood(sim, obs_mean, obs_std, n=n, **likelihood_kwargs)
+    log_likes = log_likelihood(sim, obs_mean, obs_std, **likelihood_kwargs)
     log_likes = log_likes.where(log_likes != 0, np.nan)
     log_likes.name = "log_likes"
     log_likes_sum = log_likes.sum(dim=sum_dim)

@@ -2,6 +2,7 @@ name: pism-ragis
 channels:
   - conda-forge
 dependencies:
+  - wget
   - python=3.11.7
   - pip
   - pip:

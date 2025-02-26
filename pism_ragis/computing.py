@@ -708,7 +708,7 @@ systems["stampede3"] = {
     "job_id": "SLURM_JOBID",
     "queue": {
         "skx": 48,
-        "spr":  112,
+        "spr": 112,
     },
 }
 

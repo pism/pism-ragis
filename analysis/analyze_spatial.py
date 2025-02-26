@@ -1,4 +1,4 @@
-# Copyright (C) 2024 Andy Aschwanden, Constantine Khroulev
+# Copyright (C) 2024-25 Andy Aschwanden, Constantine Khroulev
 #
 # This file is part of pism-ragis.
 #
@@ -44,7 +44,7 @@ from pism_ragis.download import save_netcdf
 from pism_ragis.filtering import importance_sampling
 from pism_ragis.likelihood import log_normal
 from pism_ragis.logger import get_logger
-from pism_ragis.processing import filter_retreat_experiments, preprocess_config
+from pism_ragis.processing import filter_by_retreat_method, preprocess_config
 
 xr.set_options(keep_attrs=True)
 
@@ -273,6 +273,8 @@ if __name__ == "__main__":
             decode_cf=True,
             decode_timedelta=True,
             engine="h5netcdf",
+            combine="nested",
+            concat_dim="exp_id",
         )
 
     simulated = simulated.sel(time=slice(start_date, end_date)).pint.quantify()
@@ -287,10 +289,6 @@ if __name__ == "__main__":
     ).sel(time=slice(start_date, end_date))
     observed_resampled = observed.resample({"time": resampling_frequency}).mean()
 
-    x_min, y_min = -65517, -3317968
-    x_max, y_max = 525929, -2528980
-    # obs_ds = obs_ds.sel({"x": slice(x_min, x_max), "y": slice(y_min, y_max)})
-    # sim_ds = sim_ds.sel({"x": slice(x_min, x_max), "y": slice(y_min, y_max)})
     r: list = []
     for retreat_method in retreat_methods:
         print("-" * 80)
@@ -302,21 +300,25 @@ if __name__ == "__main__":
         )
         fig_dir.mkdir(parents=True, exist_ok=True)
 
-        simulated_retreat = filter_retreat_experiments(simulated, retreat_method)
-        simulated_retreat = simulated_retreat[["dhdt", "pism_config", "run_stats"]]
+        simulated_retreat_filtered = filter_by_retreat_method(simulated, retreat_method)
 
-        pism_config = simulated_retreat["pism_config"]
+        pism_config = simulated_retreat_filtered["pism_config"]
         if "time" in pism_config.dims:
             pism_config = pism_config.isel(time=-1)
-        run_stats = simulated_retreat["run_stats"]
+        run_stats = simulated_retreat_filtered["run_stats"]
         if "time" in run_stats.dims:
             run_stats = run_stats.isel(time=-1)
 
-        simulated_retreat_resampled = simulated_retreat.resample(
+        simulated_retreat_resampled = simulated_retreat_filtered.resample(
             {"time": resampling_frequency}
         ).mean(dim="time")
+
         simulated_retreat_resampled = xr.merge(
-            [simulated_retreat_resampled, pism_config, run_stats]
+            [
+                simulated_retreat_resampled,
+                pism_config,
+                run_stats,
+            ]
         )
 
         obs = observed_resampled.interp_like(
@@ -331,53 +333,23 @@ if __name__ == "__main__":
         obs_mask = obs_mask.any(dim="time")
 
         sim = simulated_retreat_resampled.where(~obs_mask)
+        print(f"Size in memory: {(sim.nbytes / 1024**3):.1f} GB")
 
-        obs_file_nc = (
-            result_dir
-            / Path(f"retreat_{retreat_method.lower()}")
-            / Path(f"observed_dhdt_{start_date}_{end_date}.nc")
-        )
-        sim_file_nc = (
-            result_dir
-            / Path(f"retreat_{retreat_method.lower()}")
-            / Path(f"observed_dhdt_{start_date}_{end_date}.nc")
+        print(f"Importance sampling using {obs_mean_var}.")
+        f = importance_sampling(
+            observed=obs,
+            simulated=sim,
+            log_likelihood=log_normal,
+            n_samples=len(sim.exp_id),
+            fudge_factor=fudge_factor,
+            obs_mean_var=obs_mean_var,
+            obs_std_var=obs_std_var,
+            sim_var=sim_var,
+            sum_dim=["y", "x"],
         )
         with ProgressBar():
-            obs.to_netcdf(obs_file_nc)
-        with ProgressBar():
-            sim.to_netcdf(sim_file_nc)
-
-        # save_netcdf(obs, obs_file_nc)
-        # save_netcdf(sim, sim_file_nc)
-
-        # obs_file_zarr = result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"observed_dhdt_{start_date}_{end_date}.zarr")
-        # sim_file_zarr = result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"observed_dhdt_{start_date}_{end_date}.zarr")
-        # with ProgressBar():
-        #     obs.to_zarr(obs_file_zarr, mode="w")
-        #     sim.to_zarr(sim_file_zarr, mode="w")
-
-        # start_time = time.time()
-
-        # plot_spatial_median(sim, obs, sim_var=sim_var, obs_mean_var=obs_mean_var, smb_var=smb_var, flow_var=flow_var, fig_dir=fig_dir)
-        # end_time = time.time()
-        # elapsed_time = end_time - start_time
-        # print(f"Plotting finished in {elapsed_time:.2f} seconds")
-
-        # print(f"Importance sampling using {obs_mean_var}.")
-        # f = importance_sampling(
-        #     observed=obs,
-        #     simulated=sim,
-        #     log_likelihood=log_normal,
-        #     n_samples=len(sim.exp_id),
-        #     fudge_factor=fudge_factor,
-        #     obs_mean_var=obs_mean_var,
-        #     obs_std_var=obs_std_var,
-        #     sim_var=sim_var,
-        #     sum_dim=["time", "y", "x"],
-        # )
-        # with ProgressBar():
-        #     sum_filtered_ids = f.compute()
-        # r.append(sum_filtered_ids)
+            sum_filtered_ids = f.compute()
+        r.append(sum_filtered_ids)
 
     # s = sim_ds["velsurf_mag"]
     # o = obs_ds["v"]
@@ -393,3 +365,43 @@ if __name__ == "__main__":
     #     .sel({"time": str(sampling_year)})
     #     .mean(dim="time")
     # )
+    # obs_file_nc = (
+    #     result_dir
+    #     / Path(f"retreat_{retreat_method.lower()}")
+    #     / Path(f"observed_dhdt_{start_date}_{end_date}.nc")
+    # )
+    # sim_file_nc = (
+    #     result_dir
+    #     / Path(f"retreat_{retreat_method.lower()}")
+    #     / Path(f"simulated_dhdt_{start_date}_{end_date}.nc")
+    # )
+    # print(f"Saving observations to {obs_file_nc}")
+    # with ProgressBar():
+    #     obs.to_netcdf(obs_file_nc)
+    # print(f"Saving simulations to {sim_file_nc}")
+    # with ProgressBar():
+    #     sim.to_netcdf(sim_file_nc)
+
+    # save_netcdf(obs, obs_file_nc)
+    # save_netcdf(sim, sim_file_nc)
+
+    # obs_file_zarr = result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"observed_dhdt_{start_date}_{end_date}.zarr")
+    # sim_file_zarr = result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"observed_dhdt_{start_date}_{end_date}.zarr")
+    # with ProgressBar():
+    #     obs.to_zarr(obs_file_zarr, mode="w")
+    #     sim.to_zarr(sim_file_zarr, mode="w")
+
+    # start_time = time.time()
+
+    # plot_spatial_median(
+    #     sim,
+    #     obs,
+    #     sim_var=sim_var,
+    #     obs_mean_var=obs_mean_var,
+    #     smb_var=smb_var,
+    #     flow_var=flow_var,
+    #     fig_dir=fig_dir,
+    # )
+    # end_time = time.time()
+    # elapsed_time = end_time - start_time
+    # print(f"Plotting finished in {elapsed_time:.2f} seconds")

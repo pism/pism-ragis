@@ -299,21 +299,23 @@ if __name__ == "__main__":
         )
         fig_dir.mkdir(parents=True, exist_ok=True)
 
-        simulated_retreat = prp.filter_retreat_experiments(simulated, retreat_method)
-
-        pism_config = simulated_retreat["pism_config"]
-        if "time" in pism_config.dims:
-            pism_config = pism_config.isel(time=-1)
-        run_stats = simulated_retreat["run_stats"]
-        if "time" in run_stats.dims:
-            run_stats = run_stats.isel(time=-1)
+        simulated_retreat_filtered = prp.filter_by_retreat_method(
+            simulated, retreat_method, compute=True
+        )
 
         simulated_valid, simulated_outliers = filter_outliers(
-            simulated_retreat,
+            simulated_retreat_filtered,
             valid_range=valid_range,
             outlier_variable=outlier_variable,
             subset={"basin": "GIS"},
         )
+
+        pism_config = simulated_valid["pism_config"]
+        if "time" in pism_config.dims:
+            pism_config = pism_config.isel(time=-1)
+        run_stats = simulated_valid["run_stats"]
+        if "time" in run_stats.dims:
+            run_stats = run_stats.isel(time=-1)
 
         outliers_config = prp.filter_config(simulated_outliers, params)
         outliers_df = prp.config_to_dataframe(outliers_config, ensemble="Outliers")
