@@ -1,9 +1,56 @@
 export PISM_PREFIX=$HOME/local/pism
+<<<<<<< Updated upstream
 export RAGIS_DIR=/work2/08523/aaschwa/stampede3/pism-ragis/
 export odir=${SCRATCH}/hindcasts/2025_02_mode
 export grid=4500
 
 python $RAGIS_DIR/hindcasts/hindcast.py --start 1978-01-01 --end 2020-12-31 --boot_file $RAGIS_DIR/data/dem/BedMachineGreenland-v5_0.nc --exstep monthly --spatial_ts ml --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/data/grids/pism-bedmachine-greenland.nc -s stampede3 -n 96 -q skx -w 1:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_mode.csv $RAGIS_DIR/calibration/2024_11_grimp_tw/state/g1200m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
+
+
+
+
+export PISM_PREFIX=$HOME/local/pism
+export RAGIS_DIR=/nobackup/aaschwan/pism-ragis/
+export odir=${RAGIS_DIR}/hindcasts/2025_02_mode
+export grid=4500
+
+python $RAGIS_DIR/hindcasts/hindcast.py --start 1978-01-01 --end 2020-12-31 --boot_file $RAGIS_DIR/data/dem/BedMachineGreenland-v5_0.nc --exstep monthly --spatial_ts ml --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/data/grids/pism-bedmachine-greenland.nc -s electra_skylake -n 80 -q normal -w 1:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_mode.csv $RAGIS_DIR/calibration/2024_11_grimp_tw/state/g1200m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
+
+export PISM_PREFIX=$HOME/local/pism
+export RAGIS_DIR=/nobackup/aaschwan/pism-ragis/
+export odir=${RAGIS_DIR}/hindcasts/2025_02_mode
+export grid=3600
+
+python $RAGIS_DIR/hindcasts/hindcast.py --start 1978-01-01 --end 2020-12-31 --boot_file $RAGIS_DIR/data/dem/BedMachineGreenland-v5_0.nc --exstep monthly --spatial_ts ml --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/data/grids/pism-bedmachine-greenland.nc -s electra_skylake -n 80 -q normal -w 2:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_mode.csv $RAGIS_DIR/calibration/2024_11_grimp_tw/state/g1200m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
+
+export PISM_PREFIX=$HOME/local/pism
+export RAGIS_DIR=/nobackup/aaschwan/pism-ragis/
+export odir=${RAGIS_DIR}/hindcasts/2025_02_mode
+export grid=2400
+
+python $RAGIS_DIR/hindcasts/hindcast.py --start 1978-01-01 --end 2020-12-31 --boot_file $RAGIS_DIR/data/dem/BedMachineGreenland-v5_0.nc --exstep monthly --spatial_ts ml --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/data/grids/pism-bedmachine-greenland.nc -s electra_skylake -n 80 -q normal -w 4:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_mode.csv $RAGIS_DIR/calibration/2024_11_grimp_tw/state/g1200m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
+
+export PISM_PREFIX=$HOME/local/pism
+export RAGIS_DIR=/nobackup/aaschwan/pism-ragis/
+export odir=${RAGIS_DIR}/hindcasts/2025_02_mode
+export grid=1800
+
+python $RAGIS_DIR/hindcasts/hindcast.py --start 1978-01-01 --end 2020-12-31 --boot_file $RAGIS_DIR/data/dem/BedMachineGreenland-v5_0.nc --exstep monthly --spatial_ts ml --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/data/grids/pism-bedmachine-greenland.nc -s electra_skylake -n 80 -q normal -w 8:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_mode.csv $RAGIS_DIR/calibration/2024_11_grimp_tw/state/g1200m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
+
+export PISM_PREFIX=$HOME/local/pism
+export RAGIS_DIR=/nobackup/aaschwan/pism-ragis/
+export odir=${RAGIS_DIR}/hindcasts/2025_02_mode
+export grid=1200
+
+
+python $RAGIS_DIR/hindcasts/hindcast.py --start 1978-01-01 --end 2020-12-31 --boot_file $RAGIS_DIR/data/dem/BedMachineGreenland-v5_0.nc --exstep monthly --spatial_ts ml --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/data/grids/pism-bedmachine-greenland.nc -s electra_skylake -n 160 -q long -w 36:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_mode.csv $RAGIS_DIR/calibration/2024_11_grimp_tw/state/g1200m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
+
+export PISM_PREFIX=$HOME/local/pism
+export RAGIS_DIR=/nobackup/aaschwan/pism-ragis/
+export odir=${RAGIS_DIR}/hindcasts/2025_02_mode
+export grid=900
+
+python $RAGIS_DIR/hindcasts/hindcast.py --start 1978-01-01 --end 2020-12-31 --boot_file $RAGIS_DIR/data/dem/BedMachineGreenland-v5_0.nc --exstep monthly --spatial_ts ml --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/data/grids/pism-bedmachine-greenland.nc -s electra_skylake -n 240 -q long -w 72:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_mode.csv $RAGIS_DIR/calibration/2024_11_grimp_tw/state/g1200m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
 
 
 
@@ -52,6 +99,17 @@ export odir=${RAGIS_DIR}/hindcasts/2025_02_mode
 export grid=900
 
 python $RAGIS_DIR/hindcasts/hindcast.py --start 1978-01-01 --end 2020-12-31 --boot_file $RAGIS_DIR/data/dem/BedMachineGreenland-v5_0.nc --exstep monthly --spatial_ts ml --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/data/grids/pism-bedmachine-greenland.nc -s electra_skylake -n 240 -q long -w 72:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_mode.csv $RAGIS_DIR/calibration/2024_11_grimp_tw/state/g1200m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
+=======
+export RAGIS_DIR=/nobackup/aaschwan/pism-ragis/
+export odir=${RAGIS_DIR}/hindcasts/2025_01_lhs_800
+export grid=1200
+
+python $RAGIS_DIR/hindcasts/hindcast.py --start 1978-01-01 --end 2020-12-31 --boot_file $RAGIS_DIR/data/dem/BedMachineGreenland-v5_0.nc --exstep yearly --spatial_ts ragis --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/data/grids/pism-bedmachine-greenland.nc -s electra_skylake -n 160 -q long -w 72:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_w_posterior_lhs_800.csv $RAGIS_DIR/calibration/2024_11_grimp_tw/state/g1200m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
+
+for file in $odir/spatial/ex_g1200m_id_*_1978-01-01_2020-12-31.nc; do
+qsub -v result_dir=$odir/basins,file=$file /nobackup/aaschwan/pism-ragis/hindcasts/extract_basins.sh ;
+done
+>>>>>>> Stashed changes
 
 
 
@@ -60,9 +118,13 @@ export RAGIS_DIR=/nobackup/aaschwan/pism-ragis/
 export odir=${RAGIS_DIR}/hindcasts/2024_12_mode
 export grid=4500
 
+<<<<<<< Updated upstream
 python $RAGIS_DIR/hindcasts/hindcast.py --start 1978-01-01 --end 2020-12-31 --boot_file $RAGIS_DIR/data/dem/BedM
 achineGreenland-v5_0.nc --exstep monthly --spatial_ts ragis --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/d
 ata/grids/pism-bedmachine-greenland.nc -s electra_skylake -n 80 -q normal -w 1:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_mode.csv $RAGIS_DIR/calibration/2024_11_grimp_tw/state/g1200m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
+=======
+python $RAGIS_DIR/hindcasts/hindcast.py --start 1978-01-01 --end 2020-12-31 --boot_file $RAGIS_DIR/data/dem/BedMachineGreenland-v5_0.nc --exstep monthly --spatial_ts ragis --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/data/grids/pism-bedmachine-greenland.nc -s electra_skylake -n 80 -q normal -w 1:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_mode.csv $RAGIS_DIR/calibration/2024_11_grimp_tw/state/g1200m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
+>>>>>>> Stashed changes
 
 export PISM_PREFIX=$HOME/local/pism
 export RAGIS_DIR=/nobackup/aaschwan/pism-ragis/
@@ -85,7 +147,10 @@ export grid=1800
 
 python $RAGIS_DIR/hindcasts/hindcast.py --start 1978-01-01 --end 2020-12-31 --boot_file $RAGIS_DIR/data/dem/BedMachineGreenland-v5_0.nc --exstep monthly --spatial_ts ragis --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/data/grids/pism-bedmachine-greenland.nc -s electra_skylake -n 80 -q normal -w 8:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_mode.csv $RAGIS_DIR/calibration/2024_11_grimp_tw/state/g1200m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
 
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
 export PISM_PREFIX=$HOME/local/pism
 export RAGIS_DIR=/nobackup/aaschwan/pism-ragis/
 export odir=${RAGIS_DIR}/hindcasts/2024_12_mode
@@ -104,6 +169,10 @@ python $RAGIS_DIR/hindcasts/hindcast.py --start 1978-01-01 --end 2020-12-31 --bo
 
 
 
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
 export RAGIS_DIR=/anvil/projects/x-ees240003/pism-ragis
 export PISM_PREFIX=$HOME/local/pism
 export grid=1200
