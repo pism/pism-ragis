@@ -141,7 +141,6 @@ dists: Dict[str, Any] = {
             "climate": "given_pdd_delta",
             "hydrology": "routing",
             "ocean": "constant",
-            "calving.rate_scaling.file": "seasonal_calving_id_1_1900_2025.nc",
             "climate_file": "RACMO2.3p2_ERA5_FGRN055_1940_2023.nc",
             "salinity": 34,
             "fractures": "false",
@@ -277,12 +276,7 @@ def convert_samples(unif_sample):
 
     # For each variable, transform with the inverse of the CDF (inv(CDF)=ppf)
     for i, key in enumerate(keys_prior):
-        if key == "calving.rate_scaling.file":
-            dist_sample[:, i] = [
-                f"seasonal_calving_id_{int(id)}_1900_2025.nc"
-                for id in distributions[key].ppf(unif_sample[:, i])
-            ]
-        elif key == "sliding_law":
+        if key == "sliding_law":
             dist_sample[:, i] = [
                 slidinglaw[id] for id in distributions[key].ppf(unif_sample[:, i])
             ]
@@ -317,7 +311,6 @@ def convert_samples(unif_sample):
 dist_sample, n_samples = convert_samples(unif_sample)
 dist_median_sample, _ = convert_samples(np.median(unif_sample, axis=0, keepdims=True))
 
-dist_median_sample[0, 1] = "seasonal_calving_id_2_1900_2025.nc"
 dist_median_sample[0, 3] = gcms[0]
 dist_median_sample = np.vstack([dist_median_sample] * 2)
 dist_median_sample[:, -1] = retreatfiles.values()

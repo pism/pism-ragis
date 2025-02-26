@@ -627,7 +627,7 @@ systems["debug"] = {
 }
 
 systems["chinook"] = {
-    "mpido": "mpirun -np {cores} -machinefile ./nodes_$SLURM_JOBID",
+    "mpido": "mpirun -np {cores} ./nodes_$SLURM_JOBID",
     "submit": "sbatch",
     "work_dir": "SLURM_SUBMIT_DIR",
     "job_id": "SLURM_JOBID",
