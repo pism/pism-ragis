@@ -124,6 +124,7 @@ dists: Dict[str, Any] = {
     },
     "dem": {
         "uq": {
+            "prescribed_retreat_file": randint(0, len(retreatfiles)),
             "calving.vonmises_calving.sigma_max": uniform(loc=300_000, scale=300_000),
             "ocean.th.gamma_T": uniform(loc=0.5e-4, scale=1.00e-4),
             "ocean_file": randint(0, len(gcms)),
@@ -149,7 +150,6 @@ dists: Dict[str, Any] = {
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
             "surface.pdd.refreeze": 0.6,
             "sliding_law": "pseudo_plastic",
-            "prescribed_retreat_file": "pism_g450m_frontretreat_calfin_1972.nc",
         },
     },
 }
