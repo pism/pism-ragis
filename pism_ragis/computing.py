@@ -190,6 +190,7 @@ spatial_ts_vars["calibrate"] = [
 
 spatial_ts_vars["ml"] = [
     "climatic_mass_balance",
+    "ice_surface_temp",
     "dHdt",
     "mask",
     "mass_fluxes",
@@ -383,7 +384,7 @@ def generate_stress_balance(
 
     if stress_balance == "ssa+sia":
         params_dict["time_stepping.skip.enabled"] = ""
-        params_dict["time_stepping.skip.max"] = "100"
+        params_dict["time_stepping.skip.max"] = "500"
 
     if stress_balance == "blatter":
         params_dict["stress_balance.blatter.coarsening_factor"] = "4"
@@ -400,7 +401,7 @@ def generate_stress_balance(
         params_dict["bp_ksp_view_singularvalues"] = ""
         params_dict["bp_snes_ksp_ew"] = "1"
         params_dict["bp_snes_ksp_ew_version"] = "3"
-        params_dict["time_stepping.adaptive_ratio"] = "25"
+        params_dict["time_stepping.adaptive_ratio"] = "100"
 
     return merge_dicts(additional_params_dict, params_dict)
 
