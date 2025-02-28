@@ -317,7 +317,9 @@ def preprocess_config(
     )
     ds = xr.merge(
         [
-            ds.drop_vars(["pism_config", "run_stats"], errors="ignore"),
+            ds.drop_vars(["pism_config", "run_stats"], errors="ignore").drop_dims(
+                ["pism_config_axis", "run_stats_axis"], errors="ignore"
+            ),
             pism_config,
             run_stats,
         ]
@@ -1039,7 +1041,7 @@ def transpose_dataframe(df: pd.DataFrame, exp_id: str) -> pd.DataFrame:
     return df
 
 
-def filter_config(ds: xr.Dataset, params: list[str]) -> xr.DataArray:
+def filter_config(da: xr.DataArray, params: list[str]) -> xr.DataArray:
     """
     Filter the configuration parameters from the dataset.
 
@@ -1048,8 +1050,8 @@ def filter_config(ds: xr.Dataset, params: list[str]) -> xr.DataArray:
 
     Parameters
     ----------
-    ds : xr.Dataset
-        The input dataset containing the configuration parameters.
+    da : xr.DataArray
+        The input data array containing the configuration parameters.
     params : List[str]
         A list of configuration parameter names to be selected.
 
@@ -1068,7 +1070,7 @@ def filter_config(ds: xr.Dataset, params: list[str]) -> xr.DataArray:
     Coordinates:
       * pism_config_axis  (pism_config_axis) <U6 'param1' 'param3'
     """
-    config = ds.sel(pism_config_axis=params).pism_config
+    config = da.sel(pism_config_axis=params)
     return config
 
 
@@ -1114,7 +1116,11 @@ def config_to_dataframe(
     0                   0       1       2       3  ensemble1
     1                   1       4       5       6  ensemble1
     """
-    dims = [dim for dim in config.dims if dim != "pism_config_axis"]
+
+    n_exp = config.sizes["exp_id"]
+    da = xr.DataArray(data=range(n_exp), dims=["exp_id"])
+    config.coords["aux_id"] = da.broadcast_like(config["exp_id"])
+    dims = [dim for dim in config.dims if dim != "pism_config_axis"] + ["aux_id"]
     df = config.to_dataframe().reset_index()
     df = df.pivot(index=dims, columns="pism_config_axis", values="pism_config")
     df.reset_index(inplace=True)

@@ -20,7 +20,7 @@
 """
 Analyze RAGIS ensemble.
 """
-
+import json
 import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from importlib.resources import files
@@ -36,13 +36,12 @@ import rioxarray as rxr
 import seaborn as sns
 import toml
 import xarray as xr
-import xskillscore
 from dask.diagnostics import ProgressBar
 from tqdm.auto import tqdm
 
 from pism_ragis.download import save_netcdf
-from pism_ragis.filtering import importance_sampling
-from pism_ragis.likelihood import log_normal
+from pism_ragis.filtering import importance_sampling, run_importance_sampling
+from pism_ragis.likelihood import log_normal, log_pseudo_huber
 from pism_ragis.logger import get_logger
 from pism_ragis.processing import filter_by_retreat_method, preprocess_config
 
@@ -240,28 +239,17 @@ if __name__ == "__main__":
         str(files("pism_ragis.data").joinpath("ragis_config.toml"))
     )
     ragis_config = toml.load(ragis_config_file)
-    sampling_year = 2018
+    config = json.loads(json.dumps(ragis_config))
+    params_short_dict = config["Parameters"]
+    params = list(params_short_dict.keys())
 
     obs_mean_var = "dhdt"
     obs_std_var = "dhdt_err"
     sim_var = "dhdt"
-    smb_var = "tendency_of_ice_mass_due_to_surface_mass_flux"
-    flow_var = "tendency_of_ice_mass_due_to_flow"
-
+    sum_dims = ["time", "y", "x"]
     retreat_methods = ["Prescribed"]
 
-    start_date = "2003"
-    end_date = "2020"
-
-    # m_file = "/media/andy/LHS800DATA/ragis/hindcasts/2025_01_lhs_800/spatial/ex_g1200m_id_0_1978-01-01_2020-12-31.nc"
-    # m_file_2 = "/media/andy/LHS800DATA/ragis/hindcasts/2025_01_lhs_800/spatial/ex_g1200m_id_1_1978-01-01_2020-12-31.nc"
-    # m_file_3 = "/media/andy/LHS800DATA/ragis/hindcasts/2025_01_lhs_800/spatial/ex_g1200m_id_2_1978-01-01_2020-12-31.nc"
-    # m_ds = xr.open_mfdataset([m_file, m_file_2, m_file_3],
-    #                          parallel=True,
-    #                          decode_cf=True,
-    #                          decode_timedelta=True,
-    #                          preprocess=preprocess_config)
-
+    filter_range = ["2003", "2020"]
     # print(m_ds.pism_config)
 
     print("Loading ensemble.")
@@ -277,7 +265,7 @@ if __name__ == "__main__":
             concat_dim="exp_id",
         )
 
-    simulated = simulated.sel(time=slice(start_date, end_date)).pint.quantify()
+    simulated = simulated.sel(time=slice(*filter_range)).pint.quantify()
     simulated[sim_var] = simulated["dHdt"] * 1000.0 / 910.0
     simulated[sim_var] = simulated[sim_var].pint.to("m year^-1")
     simulated = simulated.pint.dequantify()
@@ -286,10 +274,11 @@ if __name__ == "__main__":
         "~/base/pism-ragis/data/mass_balance/Greenland_dhdt_mass*_1kmgrid_DB.nc",
         # chunks={"time": -1, "x": -1, "y": -1},
         chunks="auto",
-    ).sel(time=slice(start_date, end_date))
+    ).sel(time=slice(*filter_range))
     observed_resampled = observed.resample({"time": resampling_frequency}).mean()
 
-    r: list = []
+    r_normal: list = []
+    r_huber: list = []
     for retreat_method in retreat_methods:
         print("-" * 80)
         print(f"Retreat method: {retreat_method}")
@@ -302,23 +291,13 @@ if __name__ == "__main__":
 
         simulated_retreat_filtered = filter_by_retreat_method(simulated, retreat_method)
 
-        pism_config = simulated_retreat_filtered["pism_config"]
-        if "time" in pism_config.dims:
-            pism_config = pism_config.isel(time=-1)
-        run_stats = simulated_retreat_filtered["run_stats"]
-        if "time" in run_stats.dims:
-            run_stats = run_stats.isel(time=-1)
+        stats = simulated_retreat_filtered[["pism_config", "run_stats"]]
 
-        simulated_retreat_resampled = simulated_retreat_filtered.resample(
-            {"time": resampling_frequency}
-        ).mean(dim="time")
-
-        simulated_retreat_resampled = xr.merge(
-            [
-                simulated_retreat_resampled,
-                pism_config,
-                run_stats,
-            ]
+        simulated_retreat_resampled = (
+            simulated_retreat_filtered.drop_vars(["pism_config", "run_stats"])
+            .drop_dims(["pism_config_axis", "run_stats_axis"])
+            .resample({"time": resampling_frequency})
+            .mean(dim="time")
         )
 
         obs = observed_resampled.interp_like(
@@ -333,23 +312,56 @@ if __name__ == "__main__":
         obs_mask = obs_mask.any(dim="time")
 
         sim = simulated_retreat_resampled.where(~obs_mask)
-        print(f"Size in memory: {(sim.nbytes / 1024**3):.1f} GB")
+        sim = xr.merge([sim, stats])
 
-        print(f"Importance sampling using {obs_mean_var}.")
-        f = importance_sampling(
+        (
+            prior_posterior,
+            simulated_prior,
+            simulated_posterior,
+        ) = run_importance_sampling(
             observed=obs,
             simulated=sim,
-            log_likelihood=log_normal,
-            n_samples=len(sim.exp_id),
+            obs_mean_vars=[obs_mean_var],
+            obs_std_vars=[obs_std_var],
+            sim_vars=[sim_var],
+            filter_range=filter_range,
             fudge_factor=fudge_factor,
-            obs_mean_var=obs_mean_var,
-            obs_std_var=obs_std_var,
-            sim_var=sim_var,
-            sum_dim=["y", "x"],
+            sum_dims=sum_dims,
+            params=params,
         )
-        with ProgressBar():
-            sum_filtered_ids = f.compute()
-        r.append(sum_filtered_ids)
+
+        simulated_posterior.to_netcdf("posterior.nc")
+        # print(f"Importance sampling using {obs_mean_var}.")
+        # f = importance_sampling(
+        #     observed=obs,
+        #     simulated=sim,
+        #     log_likelihood=log_normal,
+        #     n_samples=len(sim.exp_id),
+        #     fudge_factor=fudge_factor,
+        #     obs_mean_var=obs_mean_var,
+        #     obs_std_var=obs_std_var,
+        #     sim_var=sim_var,
+        #     sum_dim=["time", "y", "x"],
+        # )
+        # with ProgressBar():
+        #     sum_filtered_ids = f.compute()
+        # r_normal.append(sum_filtered_ids)
+
+        # print(f"Importance sampling using {obs_mean_var}.")
+        # f = importance_sampling(
+        #     observed=obs,
+        #     simulated=sim,
+        #     log_likelihood=log_pseudo_huber,
+        #     n_samples=len(sim.exp_id),
+        #     fudge_factor=fudge_factor,
+        #     obs_mean_var=obs_mean_var,
+        #     obs_std_var=obs_std_var,
+        #     sim_var=sim_var,
+        #     sum_dim=["time", "y", "x"],
+        # )
+        # with ProgressBar():
+        #     sum_filtered_ids = f.compute()
+        # r_huber.append(sum_filtered_ids)
 
     # s = sim_ds["velsurf_mag"]
     # o = obs_ds["v"]

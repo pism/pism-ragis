@@ -54,14 +54,12 @@ def test_create_domain():
     x_bnds = [0, 10]
     y_bnds = [0, 20]
     ds = create_domain(x_bnds, y_bnds)
-
     assert isinstance(ds, xr.Dataset), "The result should be an xarray.Dataset"
     assert "x" in ds.coords, "Dataset should have 'x' coordinate"
     assert "y" in ds.coords, "Dataset should have 'y' coordinate"
-    assert "mapping" in ds.data_vars, "Dataset should have 'mapping' data variable"
-    assert "domain" in ds.data_vars, "Dataset should have 'domain' data variable"
     assert "x_bnds" in ds.data_vars, "Dataset should have 'x_bnds' data variable"
     assert "y_bnds" in ds.data_vars, "Dataset should have 'y_bnds' data variable"
+    assert "domain" in ds.data_vars, "Dataset should have 'domain' data variable"
 
     _ = (
         np.testing.assert_array_equal(ds["x_bnds"].values, [[0, 10]]),

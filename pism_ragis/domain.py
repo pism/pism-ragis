@@ -16,11 +16,14 @@
 # along with PISM; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
+# pylint: disable=unused-import
+
 """
 Module provides functions to deal domains.
 """
 
 import numpy as np
+import rioxarray
 import xarray as xr
 
 
@@ -188,6 +191,8 @@ def create_domain(
         {
             "domain": xr.DataArray(
                 data=0,
+                dims=[x_dim, y_dim],
+                coords={x_dim: coords[x_dim], y_dim: coords[y_dim]},
                 attrs={
                     "dimensions": f"{x_dim} {y_dim}",
                 },

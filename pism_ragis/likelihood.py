@@ -20,8 +20,6 @@
 Log likelihood models.
 """
 
-from typing import Union
-
 import numpy as np
 import xarray as xr
 from scipy.special import pseudo_huber
@@ -57,11 +55,11 @@ def log_normal(
 
 
 def log_pseudo_huber(
-    x: Union[np.ndarray, xr.DataArray],
-    mu: Union[np.ndarray, xr.DataArray],
-    std: Union[np.ndarray, xr.DataArray],
-    delta: Union[np.ndarray, xr.DataArray] = 2.0,
-) -> Union[np.ndarray, xr.DataArray]:
+    x: np.ndarray | xr.DataArray,
+    mu: np.ndarray | xr.DataArray,
+    std: np.ndarray | xr.DataArray,
+    delta: float | np.ndarray | xr.DataArray = 2.0,
+) -> np.ndarray | xr.DataArray:
     """
     Calculate the log-likelihood of data given a distribution.
 

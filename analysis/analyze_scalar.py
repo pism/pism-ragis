@@ -309,13 +309,7 @@ if __name__ == "__main__":
             outlier_variable=outlier_variable,
             subset={"basin": "GIS"},
         )
-
-        pism_config = simulated_valid["pism_config"]
-        if "time" in pism_config.dims:
-            pism_config = pism_config.isel(time=-1)
-        run_stats = simulated_valid["run_stats"]
-        if "time" in run_stats.dims:
-            run_stats = run_stats.isel(time=-1)
+        stats = simulated_valid[["pism_config", "run_stats"]]
 
         outliers_config = prp.filter_config(simulated_outliers, params)
         outliers_df = prp.config_to_dataframe(outliers_config, ensemble="Outliers")
@@ -334,15 +328,14 @@ if __name__ == "__main__":
         observed_basins_resampled = observed_basins.resample(
             {"time": resampling_frequency}
         ).mean()
-        simulated_basins_resampled = simulated_basins.resample(
-            {"time": resampling_frequency}
-        ).mean()
+        simulated_basins_resampled = (
+            simulated_basins.drop_vars(["pism_config", "run_stats"])
+            .drop_dims(["pism_config_axis", "run_stats_axis"])
+            .resample({"time": resampling_frequency})
+            .mean()
+        )
         simulated_basins_resampled = xr.merge(
-            [
-                simulated_basins_resampled,
-                pism_config.sel({"basin": intersection}),
-                run_stats.sel({"basin": intersection}),
-            ]
+            [simulated_basins_resampled, stats.sel({"basin": intersection})]
         )
 
         obs_mean_vars: list[str] = [
@@ -659,9 +652,9 @@ if __name__ == "__main__":
             fig_dir=fig_p_dir,
         )
 
-    prior_config = prp.filter_config(simulated.isel({"time": 0}), params)
+    prior_config = prp.filter_config(simulated["pism_config"], params)
     prior_df = prp.config_to_dataframe(prior_config, ensemble="Prior")
-    params_df = prp.prepare_input(prior_df)
+    params_df = prp.prepare_input(prior_df).drop(columns=["aux_id"])
 
     sensitivity_indices_list = []
     for basin_group, intersection, filtering_vars in zip(
