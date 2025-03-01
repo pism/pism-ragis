@@ -357,19 +357,17 @@ if __name__ == "__main__":
             + ["ensemble"]
         )
 
-        (
-            prior_posterior,
-            simulated_prior,
-            simulated_posterior,
-        ) = run_importance_sampling(
-            observed=observed_basins_resampled,
-            simulated=simulated_basins_resampled,
-            obs_mean_vars=obs_mean_vars,
-            obs_std_vars=obs_std_vars,
-            sim_vars=sim_vars,
-            filter_range=filter_range,
-            fudge_factor=fudge_factor,
-            params=params,
+        (prior_posterior, simulated_prior, simulated_posterior, weights) = (
+            run_importance_sampling(
+                observed=observed_basins_resampled,
+                simulated=simulated_basins_resampled,
+                obs_mean_vars=obs_mean_vars,
+                obs_std_vars=obs_std_vars,
+                sim_vars=sim_vars,
+                filter_range=filter_range,
+                fudge_factor=fudge_factor,
+                params=params,
+            )
         )
 
         for filter_var in obs_mean_vars:

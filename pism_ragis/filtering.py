@@ -283,7 +283,7 @@ def run_importance_sampling(
     fudge_factor: float = 3.0,
     sum_dims: list = ["time"],
     params: list[str] = [],
-) -> Tuple[pd.DataFrame, xr.Dataset, xr.Dataset]:
+) -> Tuple[pd.DataFrame, xr.Dataset, xr.Dataset, xr.Dataset]:
     """
     Run sampling to process observed and simulated datasets.
 
@@ -318,6 +318,7 @@ def run_importance_sampling(
         - A DataFrame with the prior and posterior configurations.
         - The prior simulated dataset.
         - The posterior simulated dataset.
+        - The weights.
     """
 
     print("-" * 80)
@@ -337,6 +338,7 @@ def run_importance_sampling(
 
     prior_posterior_list = []
     posterior_list = []
+    weights_list = []
     for obs_mean_var, obs_std_var, sim_var in zip(
         obs_mean_vars, obs_std_vars, sim_vars
     ):
@@ -364,7 +366,6 @@ def run_importance_sampling(
             )
 
         importance_sampled_ids = result["exp_id_sampled"]
-
         simulated_posterior = simulated.sel(exp_id=importance_sampled_ids)
         simulated_posterior["ensemble"] = "Posterior"
         simulated_posterior = simulated_posterior.expand_dims(
@@ -377,11 +378,14 @@ def run_importance_sampling(
         prior_posterior_f = pd.concat([prior_df, posterior_df]).reset_index(drop=True)
         prior_posterior_f["filtered_by"] = obs_mean_var
         prior_posterior_list.append(prior_posterior_f)
-
         posterior_list.append(simulated_posterior)
+        weights_f = result["weights"]
+        weights_f["filtered_by"] = obs_mean_var
+        weights_list.append(weights_f)
 
     prior_posterior = pd.concat(prior_posterior_list).reset_index(drop=True)
     prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)
     prior = simulated_prior
     posterior = xr.concat(posterior_list, dim="filtered_by")
-    return prior_posterior, prior, posterior
+    weights = xr.concat(weights_list, dim="filtered_by")
+    return prior_posterior, prior, posterior, weights
