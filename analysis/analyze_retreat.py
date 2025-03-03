@@ -145,7 +145,6 @@ if __name__ == "__main__":
     parallel = options.parallel
     reference_year = options.reference_year
     resampling_frequency = options.resampling_frequency
-    result_dir = Path(options.result_dir)
     outlier_variable = options.outlier_variable
     ragis_config_file = Path(
         str(files("pism_ragis.data").joinpath("ragis_config.toml"))
@@ -155,12 +154,11 @@ if __name__ == "__main__":
     params_short_dict = config["Parameters"]
     params = list(params_short_dict.keys())
 
+    result_dir = Path(options.result_dir)
+    result_dir.mkdir(parents=True, exist_ok=True)
+
     obs_cmap = config["Plotting"]["obs_cmap"]
     sim_cmap = config["Plotting"]["sim_cmap"]
-
-    result_dir = Path(options.result_dir)
-    data_dir = result_dir / Path("retreat_posteriors")
-    data_dir.mkdir(parents=True, exist_ok=True)
 
     column_function_mapping: dict[str, list[Callable]] = {
         "surface.given.file": [prp.simplify_path, prp.simplify_climate],
@@ -232,9 +230,11 @@ if __name__ == "__main__":
         print(f"Retreat method: {retreat_method}")
         print("-" * 80)
 
-        fig_dir = (
-            result_dir / Path(f"retreat_{retreat_method.lower()}") / Path("figures")
-        )
+        retreat_dir = result_dir / Path(f"retreat_{retreat_method.lower()}")
+        retreat_dir.mkdir(parents=True, exist_ok=True)
+        data_dir = retreat_dir / Path("posteriors")
+        data_dir.mkdir(parents=True, exist_ok=True)
+        fig_dir = retreat_dir / Path("figures")
         fig_dir.mkdir(parents=True, exist_ok=True)
 
         simulated_retreat_filtered = filter_by_retreat_method(simulated, retreat_method)
@@ -293,7 +293,7 @@ if __name__ == "__main__":
         prior_posterior.to_parquet(
             data_dir
             / Path(
-                f"""prior_posterior_retreat_{retreat_method}_{filter_range[0]}-{filter_range[1]}.parquet"""
+                f"""prior_posterior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.parquet"""
             )
         )
 

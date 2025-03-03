@@ -24,10 +24,13 @@ import json
 import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from importlib.resources import files
+from itertools import chain
 from pathlib import Path
+from typing import Callable
 
 import cartopy.crs as ccrs
 import cf_xarray.units  # pylint: disable=unused-import
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -39,10 +42,12 @@ import xarray as xr
 from dask.diagnostics import ProgressBar
 from tqdm.auto import tqdm
 
+import pism_ragis.processing as prp
 from pism_ragis.download import save_netcdf
 from pism_ragis.filtering import importance_sampling, run_importance_sampling
 from pism_ragis.likelihood import log_normal, log_pseudo_huber
 from pism_ragis.logger import get_logger
+from pism_ragis.plotting import plot_prior_posteriors
 from pism_ragis.processing import filter_by_retreat_method, preprocess_config
 
 xr.set_options(keep_attrs=True)
@@ -61,99 +66,6 @@ hist_cmap = ["#a6cee3", "#1f78b4"]
 cartopy_crs = ccrs.NorthPolarStereo(
     central_longitude=-45, true_scale_latitude=70, globe=None
 )
-
-
-def plot_spatial_median(
-    sim: xr.DataArray,
-    obs: xr.DataArray,
-    sim_var: str = "dhdt",
-    obs_mean_var: str = "dhdt",
-    smb_var="tendency_of_ice_mass_due_to_surface_mass_flux",
-    flow_var="tendency_of_ice_mass_due_to_flow",
-    fig_dir: Path = Path("figures"),
-):
-    """
-    Plot the spatial median of simulated and observed data.
-
-    Parameters
-    ----------
-    sim : xr.DataArray
-        Simulated data array.
-    obs : xr.DataArray
-        Observed data array.
-    sim_var : str, optional
-        Variable name for the simulated data, by default "dhdt".
-    obs_mean_var : str, optional
-        Variable name for the observed mean data, by default "dhdt".
-    smb_var : str, optional
-        Variable name for the surface mass balance data, by default "tendency_of_ice_mass_due_to_surface_mass_flux".
-    flow_var : str, optional
-        Variable name for the flow data, by default "tendency_of_ice_mass_due_to_flow".
-    fig_dir : Path, optional
-        Directory to save the figures, by default "figures".
-    """
-    o = obs.sum(dim="time")[obs_mean_var]
-    s = sim.median(dim="exp_id").sum(dim="time")[sim_var]
-    smb = sim.median(dim="exp_id").sum(dim="time")[smb_var]
-    flow = sim.median(dim="exp_id").sum(dim="time")[flow_var]
-
-    fig = plt.figure(figsize=(6.4, 7.2))
-    fig.set_dpi(600)
-    ax_1 = fig.add_subplot(2, 2, 1, projection=cartopy_crs)
-    ax_2 = fig.add_subplot(2, 2, 2, projection=cartopy_crs)
-    ax_3 = fig.add_subplot(2, 2, 3, projection=cartopy_crs)
-    ax_4 = fig.add_subplot(2, 2, 4, projection=cartopy_crs)
-    cb = o.plot(
-        ax=ax_1, vmin=-20, vmax=20, cmap="RdBu_r", extend="both", add_colorbar=False
-    )
-    s.plot(ax=ax_2, vmin=-20, vmax=20, cmap="RdBu_r", extend="both", add_colorbar=False)
-    cb2 = smb.plot(
-        ax=ax_3, vmin=-0.05, vmax=0.05, cmap="RdBu_r", extend="both", add_colorbar=False
-    )
-    flow.plot(
-        ax=ax_4, vmin=-0.05, vmax=0.05, cmap="RdBu_r", extend="both", add_colorbar=False
-    )
-    for ax in [ax_1, ax_2, ax_3, ax_4]:
-        ax.gridlines(
-            draw_labels={"top": "x", "left": "y"},
-            dms=True,
-            xlocs=np.arange(-60, 60, 10),
-            ylocs=np.arange(50, 88, 10),
-            x_inline=False,
-            y_inline=False,
-            rotate_labels=20,
-            ls="dotted",
-            color="k",
-        )
-        ax.coastlines()
-    ax_1.set_title("Observed dhdt")
-    ax_2.set_title("Simulated Median dhdt")
-    ax_3.set_title("Simulated Median SMB")
-    ax_4.set_title("Simulated Median Flow")
-
-    fig.colorbar(
-        cb,
-        ax=[ax_1, ax_2],
-        location="right",
-        orientation="vertical",
-        extend="both",
-        anchor=(0.5, 0.5),
-        pad=0,
-        shrink=0.75,
-        label="dh/dt (m)",
-    )
-    fig.colorbar(
-        cb2,
-        ax=[ax_3, ax_4],
-        location="right",
-        orientation="vertical",
-        extend="both",
-        anchor=(0.5, 0.5),
-        pad=0,
-        shrink=0.75,
-        label="mass (Gt)",
-    )
-    fig.savefig(fig_dir / Path("dhdt.png"), dpi=600)
 
 
 if __name__ == "__main__":
@@ -233,7 +145,6 @@ if __name__ == "__main__":
     parallel = options.parallel
     reference_year = options.reference_year
     resampling_frequency = options.resampling_frequency
-    result_dir = Path(options.result_dir)
     outlier_variable = options.outlier_variable
     ragis_config_file = Path(
         str(files("pism_ragis.data").joinpath("ragis_config.toml"))
@@ -243,14 +154,35 @@ if __name__ == "__main__":
     params_short_dict = config["Parameters"]
     params = list(params_short_dict.keys())
 
+    result_dir = Path(options.result_dir)
+    result_dir.mkdir(parents=True, exist_ok=True)
+
+    column_function_mapping: dict[str, list[Callable]] = {
+        "surface.given.file": [prp.simplify_path, prp.simplify_climate],
+        "ocean.th.file": [prp.simplify_path, prp.simplify_ocean],
+        "geometry.front_retreat.prescribed.file": [prp.simplify_retreat],
+    }
+
+    rcparams = {
+        "axes.linewidth": 0.25,
+        "xtick.direction": "in",
+        "xtick.major.size": 2.5,
+        "xtick.major.width": 0.25,
+        "ytick.direction": "in",
+        "ytick.major.size": 2.5,
+        "ytick.major.width": 0.25,
+        "hatch.linewidth": 0.25,
+    }
+
+    mpl.rcParams.update(rcparams)
+
     obs_mean_var = "dhdt"
     obs_std_var = "dhdt_err"
     sim_var = "dhdt"
     sum_dims = ["time", "y", "x"]
-    retreat_methods = ["Prescribed"]
+    retreat_methods = ["Free", "Prescribed"]
 
     filter_range = ["2003", "2020"]
-    # print(m_ds.pism_config)
 
     print("Loading ensemble.")
     with ProgressBar():
@@ -277,16 +209,36 @@ if __name__ == "__main__":
     ).sel(time=slice(*filter_range))
     observed_resampled = observed.resample({"time": resampling_frequency}).mean()
 
-    r_normal: list = []
-    r_huber: list = []
+    bins_dict = config["Posterior Bins"]
+    parameter_categories = config["Parameter Categories"]
+    params_sorted_by_category: dict = {
+        group: [] for group in sorted(parameter_categories.values())
+    }
+    for param in params:
+        prefix = param.split(".")[0]
+        if prefix in parameter_categories:
+            group = parameter_categories[prefix]
+            if param not in params_sorted_by_category[group]:
+                params_sorted_by_category[group].append(param)
+
+    params_sorted_list = list(chain(*params_sorted_by_category.values()))
+    params_sorted_dict = {k: params_short_dict[k] for k in params_sorted_list}
+    short_bins_dict = {
+        params_short_dict[key]: bins_dict[key]
+        for key in params_short_dict
+        if key in bins_dict
+    }
+
     for retreat_method in retreat_methods:
         print("-" * 80)
         print(f"Retreat method: {retreat_method}")
         print("-" * 80)
 
-        fig_dir = (
-            result_dir / Path(f"retreat_{retreat_method.lower()}") / Path("figures")
-        )
+        retreat_dir = result_dir / Path(f"retreat_{retreat_method.lower()}")
+        retreat_dir.mkdir(parents=True, exist_ok=True)
+        data_dir = retreat_dir / Path("posteriors")
+        data_dir.mkdir(parents=True, exist_ok=True)
+        fig_dir = retreat_dir / Path("figures")
         fig_dir.mkdir(parents=True, exist_ok=True)
 
         simulated_retreat_filtered = filter_by_retreat_method(simulated, retreat_method)
@@ -314,54 +266,46 @@ if __name__ == "__main__":
         sim = simulated_retreat_resampled.where(~obs_mask)
         sim = xr.merge([sim, stats])
 
-        (
-            prior_posterior,
-            simulated_prior,
-            simulated_posterior,
-        ) = run_importance_sampling(
-            observed=obs,
-            simulated=sim,
-            obs_mean_vars=[obs_mean_var],
-            obs_std_vars=[obs_std_var],
-            sim_vars=[sim_var],
-            filter_range=filter_range,
-            fudge_factor=fudge_factor,
-            sum_dims=sum_dims,
-            params=params,
+        (prior_posterior, simulated_prior, simulated_posterior, simulated_weights) = (
+            run_importance_sampling(
+                observed=obs,
+                simulated=sim,
+                obs_mean_vars=[obs_mean_var],
+                obs_std_vars=[obs_std_var],
+                sim_vars=[sim_var],
+                filter_range=filter_range,
+                fudge_factor=fudge_factor,
+                sum_dims=sum_dims,
+                params=params,
+            )
         )
 
-        simulated_posterior.to_netcdf("posterior.nc")
-        # print(f"Importance sampling using {obs_mean_var}.")
-        # f = importance_sampling(
-        #     observed=obs,
-        #     simulated=sim,
-        #     log_likelihood=log_normal,
-        #     n_samples=len(sim.exp_id),
-        #     fudge_factor=fudge_factor,
-        #     obs_mean_var=obs_mean_var,
-        #     obs_std_var=obs_std_var,
-        #     sim_var=sim_var,
-        #     sum_dim=["time", "y", "x"],
-        # )
-        # with ProgressBar():
-        #     sum_filtered_ids = f.compute()
-        # r_normal.append(sum_filtered_ids)
+        # Apply the functions to the corresponding columns
+        for col, functions in column_function_mapping.items():
+            for func in functions:
+                prior_posterior[col] = prior_posterior[col].apply(func)
 
-        # print(f"Importance sampling using {obs_mean_var}.")
-        # f = importance_sampling(
-        #     observed=obs,
-        #     simulated=sim,
-        #     log_likelihood=log_pseudo_huber,
-        #     n_samples=len(sim.exp_id),
-        #     fudge_factor=fudge_factor,
-        #     obs_mean_var=obs_mean_var,
-        #     obs_std_var=obs_std_var,
-        #     sim_var=sim_var,
-        #     sum_dim=["time", "y", "x"],
-        # )
-        # with ProgressBar():
-        #     sum_filtered_ids = f.compute()
-        # r_huber.append(sum_filtered_ids)
+        if "frontal_melt.routing.parameter_a" in prior_posterior.columns:
+            prior_posterior["frontal_melt.routing.parameter_a"] *= 10**4
+        if "ocean.th.gamma_T" in prior_posterior.columns:
+            prior_posterior["ocean.th.gamma_T"] *= 10**4
+        if "calving.vonmises_calving.sigma_max" in prior_posterior.columns:
+            prior_posterior["calving.vonmises_calving.sigma_max"] *= 10**-3
+
+        prior_posterior["basin"] = "GIS"
+        prior_posterior.to_parquet(
+            data_dir
+            / Path(
+                f"""prior_posterior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.parquet"""
+            )
+        )
+
+        plot_prior_posteriors(
+            prior_posterior.rename(columns=params_sorted_dict),
+            x_order=params_sorted_dict.values(),
+            fig_dir=fig_dir,
+            bins_dict=short_bins_dict,
+        )
 
     # s = sim_ds["velsurf_mag"]
     # o = obs_ds["v"]

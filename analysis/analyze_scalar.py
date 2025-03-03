@@ -230,6 +230,7 @@ if __name__ == "__main__":
     reduced = False
 
     result_dir = Path(options.result_dir)
+    result_dir.mkdir(parents=True, exist_ok=True)
     data_dir = result_dir / Path("posteriors")
     data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -294,9 +295,11 @@ if __name__ == "__main__":
         print(f"Retreat method: {retreat_method}")
         print("-" * 80)
 
-        fig_dir = (
-            result_dir / Path(f"retreat_{retreat_method.lower()}") / Path("figures")
-        )
+        retreat_dir = result_dir / Path(f"retreat_{retreat_method.lower()}")
+        retreat_dir.mkdir(parents=True, exist_ok=True)
+        data_dir = retreat_dir / Path("posteriors")
+        data_dir.mkdir(parents=True, exist_ok=True)
+        fig_dir = retreat_dir / Path("figures")
         fig_dir.mkdir(parents=True, exist_ok=True)
 
         simulated_retreat_filtered = prp.filter_by_retreat_method(
@@ -357,7 +360,7 @@ if __name__ == "__main__":
             + ["ensemble"]
         )
 
-        (prior_posterior, simulated_prior, simulated_posterior, weights) = (
+        (prior_posterior, simulated_prior, simulated_posterior, simulated_weights) = (
             run_importance_sampling(
                 observed=observed_basins_resampled,
                 simulated=simulated_basins_resampled,
