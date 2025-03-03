@@ -295,6 +295,9 @@ def preprocess_config(
         for k, v in p_config.attrs.items()
         if not any(k.endswith(suffix) for suffix in suffixes_to_exclude)
     }
+    if "geometry.front_retreat.prescribed.file" not in config.keys():
+        config["geometry.front_retreat.prescribed.file"] = "false"
+
     stats = p_run_stats
     config_sorted = OrderedDict(sorted(config.items()))
 

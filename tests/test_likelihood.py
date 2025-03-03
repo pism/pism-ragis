@@ -25,8 +25,9 @@ import numpy as np
 import pytest
 import xarray as xr
 from scipy.special import pseudo_huber
+from sklearn.metrics import jaccard_score
 
-from pism_ragis.likelihood import log_normal, log_pseudo_huber
+from pism_ragis.likelihood import log_jaccard_score, log_normal, log_pseudo_huber
 
 
 @pytest.fixture(name="weights_da")
@@ -118,7 +119,7 @@ def test_log_normal_xarray() -> None:
     Test log_normal likelihood with xr.DataArray inputs.
 
     This test checks if the log_likelihood function correctly computes the log-likelihood
-    when the inputs are numpy arrays.
+    when the inputs are xarray DataArrays.
     """
     x: xr.DataArray = xr.DataArray(
         ([[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]]),
@@ -144,10 +145,10 @@ def test_log_normal_xarray() -> None:
 
 def test_log_pseudo_huber_xarray() -> None:
     """
-    Test log_normal likelihood with xr.DataArray inputs.
+    Test log_pseudo_huber likelihood with xr.DataArray inputs.
 
     This test checks if the log_likelihood function correctly computes the log-likelihood
-    when the inputs are numpy arrays.
+    when the inputs are xarray DataArrays.
     """
     x: xr.DataArray = xr.DataArray(
         ([[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]]),
@@ -167,4 +168,38 @@ def test_log_pseudo_huber_xarray() -> None:
     delta: float = 2.0
     expected = -pseudo_huber(delta, (x - mu) / std) - 1
     result: xr.DataArray = log_pseudo_huber(x, mu, std, delta=delta)
+    assert np.allclose(result, expected), f"Expected {expected}, got {result}"
+
+
+def test_log_jaccard_score_ndarray() -> None:
+    """
+    Test log_jaccard_score likelihood with np.ndarray inputs.
+
+    This test checks if the log_likelihood function correctly computes the log-likelihood
+    when the inputs are numpy arrays.
+    """
+    y_true = np.array([[0, 1, 1], [1, 1, 0]])
+    y_pred = np.array([[1, 1, 1], [1, 0, 0]])
+
+    expected = -jaccard_score(y_true[0], y_pred[0])
+    result = log_jaccard_score(y_true[0], y_pred[0])
+    assert np.allclose(result, expected), f"Expected {expected}, got {result}"
+
+
+def test_log_jaccard_score_xarray() -> None:
+    """
+    Test log_jaccard_score likelihood with xr.DataArray inputs.
+
+    This test checks if the log_likelihood function correctly computes the log-likelihood
+    when the inputs are xarray DataArrays.
+    """
+    y_true: xr.DataArray = xr.DataArray(
+        [0, 1, 1], coords={"x": [-1, 0, 1]}, name="y_true"
+    )
+    y_pred: xr.DataArray = xr.DataArray(
+        [1, 1, 1], coords={"x": [-1, 0, 1]}, name="y_pred"
+    )
+
+    expected = -jaccard_score(y_true, y_pred)
+    result = log_jaccard_score(y_true, y_pred)
     assert np.allclose(result, expected), f"Expected {expected}, got {result}"

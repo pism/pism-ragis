@@ -33,7 +33,7 @@ from dask.diagnostics import ProgressBar
 
 import pism_ragis.processing as prp
 from pism_ragis.decorators import timeit
-from pism_ragis.likelihood import log_normal
+from pism_ragis.likelihood import log_normal_xr
 from pism_ragis.logger import get_logger
 from pism_ragis.processing import config_to_dataframe, filter_config
 
@@ -114,7 +114,7 @@ def sample_with_replacement_xr(
 def importance_sampling(
     simulated: xr.Dataset,
     observed: xr.Dataset,
-    log_likelihood: Callable,
+    log_likelihood: Callable = log_normal_xr,
     likelihood_kwargs={},
     dim: str = "exp_id",
     sum_dims: list = ["time"],
@@ -134,8 +134,8 @@ def importance_sampling(
         An xarray Dataset containing the simulated data.
     observed : xr.Dataset
         An xarray Dataset containing the observed data.
-    log_likelihood : Callable
-        The log-likelihood function to use for filtering.
+    log_likelihood : Callable, optional
+        The log-likelihood function to use for filtering, by default log_normal_xr.
     likelihood_kwargs : dict, optional
         Additional keyword arguments to pass to the log-likelihood function, by default {}.
     dim : str, optional
@@ -177,17 +177,21 @@ def importance_sampling(
 
     # Calculate the observed mean and adjusted standard deviation
     obs_mean = observed[obs_mean_var]
-    obs_std = fudge_factor * observed[obs_std_var]
+    obs_std = observed[obs_std_var]
 
     # Extract the simulated data
     sim = simulated[sim_var]
 
     # Compute the log-likelihood of each simulated data point
-    log_likes = log_likelihood(sim, obs_mean, obs_std, **likelihood_kwargs)
-    log_likes = log_likes.where(log_likes != 0, np.nan)
-    log_likes.name = "log_likes"
-    log_likes_sum = log_likes.sum(dim=sum_dims)
-    log_likes_scaled = log_likes_sum - log_likes_sum.max(dim=dim)
+    log_likes = log_likelihood(
+        sim,
+        obs_mean,
+        obs_std,
+        fudge_factor=fudge_factor,
+        sum_dims=sum_dims,
+        **likelihood_kwargs,
+    )
+    log_likes_scaled = log_likes - log_likes.max(dim=dim)
     # Convert log-likelihoods to weights
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", r"overflow encountered")
@@ -197,6 +201,131 @@ def importance_sampling(
 
     samples = sample_with_replacement_xr(weights, n_samples=n_samples, seed=seed)
     return xr.merge([log_likes, weights, samples])
+
+
+@timeit
+def run_importance_sampling(
+    observed: xr.Dataset,
+    simulated: xr.Dataset,
+    obs_mean_vars: list[str] = ["grounding_line_flux", "mass_balance"],
+    obs_std_vars: list[str] = [
+        "grounding_line_flux_uncertainty",
+        "mass_balance_uncertainty",
+    ],
+    sim_vars: list[str] = ["grounding_line_flux", "mass_balance"],
+    log_likelihood: Callable = log_normal_xr,
+    filter_range: list[int] = [1990, 2019],
+    fudge_factor: float = 3.0,
+    sum_dims: list = ["time"],
+    params: list[str] = [],
+) -> Tuple[pd.DataFrame, xr.Dataset, xr.Dataset, xr.Dataset]:
+    """
+    Run sampling to process observed and simulated datasets.
+
+    This function performs importance sampling using the specified observed and simulated datasets,
+    processes the results, and returns a DataFrame with the prior and posterior configurations.
+
+    Parameters
+    ----------
+    observed : xr.Dataset
+        The observed dataset.
+    simulated : xr.Dataset
+        The simulated dataset.
+    obs_mean_vars : list[str], optional
+        A list of variable names for the observed mean values, by default ["grounding_line_flux", "mass_balance"].
+    obs_std_vars : list[str], optional
+        A list of variable names for the observed standard deviation values, by default ["grounding_line_flux_uncertainty", "mass_balance_uncertainty"].
+    sim_vars : list[str], optional
+        A list of variable names for the simulated values, by default ["grounding_line_flux", "mass_balance"].
+    log_likelihood : Callable, optional
+        The log-likelihood function to use for filtering, by default log_normal_xr.
+    filter_range : list[int], optional
+        A list containing the start and end years for filtering, by default [1990, 2019].
+    fudge_factor : float, optional
+        A fudge factor for the importance sampling, by default 3.0.
+    sum_dims : list, optional
+        The dimensions to sum over when computing the log-likelihood, by default ["time"].
+    params : list[str], optional
+        A list of parameter names to be used for filtering configurations, by default [].
+
+    Returns
+    -------
+    Tuple[pd.DataFrame, xr.Dataset, xr.Dataset, xr.Dataset]
+        A tuple containing:
+        - A DataFrame with the prior and posterior configurations.
+        - The prior simulated dataset.
+        - The posterior simulated dataset.
+        - The weights.
+    """
+
+    print("-" * 80)
+    print("Running importance sampling")
+    print("-" * 80)
+    print("")
+
+    filter_start_year, filter_end_year = filter_range
+    prior_config = filter_config(
+        simulated["pism_config"],
+        params,
+    )
+    prior_df = config_to_dataframe(prior_config, ensemble="Prior")
+
+    simulated_prior = simulated
+    simulated_prior["ensemble"] = "Prior"
+
+    prior_posterior_list = []
+    posterior_list = []
+    weights_list = []
+    for obs_mean_var, obs_std_var, sim_var in zip(
+        obs_mean_vars, obs_std_vars, sim_vars
+    ):
+        print(f"Importance sampling using {obs_mean_var}")
+        f = importance_sampling(
+            simulated=simulated.sel(
+                time=slice(str(filter_start_year), str(filter_end_year))
+            ),
+            observed=observed.sel(
+                time=slice(str(filter_start_year), str(filter_end_year))
+            ),
+            log_likelihood=log_likelihood,
+            fudge_factor=fudge_factor,
+            n_samples=simulated.sizes["exp_id"],
+            obs_mean_var=obs_mean_var,
+            obs_std_var=obs_std_var,
+            sim_var=sim_var,
+            sum_dims=sum_dims,
+        )
+
+        with ProgressBar() as pbar:
+            result = f.compute()
+            logger.info(
+                "Importance Sampling: Finished in %2.2f seconds", pbar.last_duration
+            )
+
+        importance_sampled_ids = result["exp_id_sampled"]
+        simulated_posterior = simulated.sel(exp_id=importance_sampled_ids)
+        simulated_posterior["ensemble"] = "Posterior"
+        simulated_posterior = simulated_posterior.expand_dims(
+            {"filtered_by": [obs_mean_var]}
+        )
+
+        posterior_config = filter_config(simulated_posterior["pism_config"], params)
+        posterior_df = config_to_dataframe(posterior_config, ensemble="Posterior")
+
+        prior_posterior_f = pd.concat([prior_df, posterior_df]).reset_index(drop=True)
+        prior_posterior_f["filtered_by"] = obs_mean_var
+        prior_posterior_list.append(prior_posterior_f)
+        posterior_list.append(simulated_posterior)
+        weights_f = result["weights"]
+        weights_f["filtered_by"] = obs_mean_var
+        weights_list.append(weights_f)
+
+    prior_posterior = pd.concat(prior_posterior_list).reset_index(drop=True)
+    prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)
+    prior = simulated_prior
+    posterior = xr.concat(posterior_list, dim="filtered_by")
+    weights = xr.concat(weights_list, dim="filtered_by")
+    return prior_posterior, prior, posterior, weights
 
 
 @timeit
@@ -267,125 +396,3 @@ def filter_outliers(
     outliers_ds = ds.sel(exp_id=outlier_exp_ids)
     print(f"Ensemble size: {n_members}, outlier-filtered size: {n_members_filtered}\n")
     return valid_ds, outliers_ds
-
-
-@timeit
-def run_importance_sampling(
-    observed: xr.Dataset,
-    simulated: xr.Dataset,
-    obs_mean_vars: list[str] = ["grounding_line_flux", "mass_balance"],
-    obs_std_vars: list[str] = [
-        "grounding_line_flux_uncertainty",
-        "mass_balance_uncertainty",
-    ],
-    sim_vars: list[str] = ["grounding_line_flux", "mass_balance"],
-    filter_range: list[int] = [1990, 2019],
-    fudge_factor: float = 3.0,
-    sum_dims: list = ["time"],
-    params: list[str] = [],
-) -> Tuple[pd.DataFrame, xr.Dataset, xr.Dataset, xr.Dataset]:
-    """
-    Run sampling to process observed and simulated datasets.
-
-    This function performs importance sampling using the specified observed and simulated datasets,
-    processes the results, and returns a DataFrame with the prior and posterior configurations.
-
-    Parameters
-    ----------
-    observed : xr.Dataset
-        The observed dataset.
-    simulated : xr.Dataset
-        The simulated dataset.
-    obs_mean_vars : list[str], optional
-        A list of variable names for the observed mean values, by default ["grounding_line_flux", "mass_balance"].
-    obs_std_vars : list[str], optional
-        A list of variable names for the observed standard deviation values, by default ["grounding_line_flux_uncertainty", "mass_balance_uncertainty"].
-    sim_vars : list[str], optional
-        A list of variable names for the simulated values, by default ["grounding_line_flux", "mass_balance"].
-    filter_range : list[int], optional
-        A list containing the start and end years for filtering, by default [1990, 2019].
-    fudge_factor : float, optional
-        A fudge factor for the importance sampling, by default 3.0.
-    sum_dims : list, optional
-        The dimensions to sum over when computing the log-likelihood, by default ["time"].
-    params : list[str], optional
-        A list of parameter names to be used for filtering configurations, by default [].
-
-    Returns
-    -------
-    Tuple[pd.DataFrame, xr.Dataset, xr.Dataset]
-        A tuple containing:
-        - A DataFrame with the prior and posterior configurations.
-        - The prior simulated dataset.
-        - The posterior simulated dataset.
-        - The weights.
-    """
-
-    print("-" * 80)
-    print("Running importance sampling")
-    print("-" * 80)
-    print("")
-
-    filter_start_year, filter_end_year = filter_range
-    prior_config = filter_config(
-        simulated["pism_config"],
-        params,
-    )
-    prior_df = config_to_dataframe(prior_config, ensemble="Prior")
-
-    simulated_prior = simulated
-    simulated_prior["ensemble"] = "Prior"
-
-    prior_posterior_list = []
-    posterior_list = []
-    weights_list = []
-    for obs_mean_var, obs_std_var, sim_var in zip(
-        obs_mean_vars, obs_std_vars, sim_vars
-    ):
-        print(f"Importance sampling using {obs_mean_var}")
-        f = importance_sampling(
-            simulated=simulated.sel(
-                time=slice(str(filter_start_year), str(filter_end_year))
-            ),
-            observed=observed.sel(
-                time=slice(str(filter_start_year), str(filter_end_year))
-            ),
-            log_likelihood=log_normal,
-            fudge_factor=fudge_factor,
-            n_samples=len(simulated.exp_id),
-            obs_mean_var=obs_mean_var,
-            obs_std_var=obs_std_var,
-            sim_var=sim_var,
-            sum_dims=sum_dims,
-        )
-
-        with ProgressBar() as pbar:
-            result = f.compute()
-            logger.info(
-                "Importance Sampling: Finished in %2.2f seconds", pbar.last_duration
-            )
-
-        importance_sampled_ids = result["exp_id_sampled"]
-        simulated_posterior = simulated.sel(exp_id=importance_sampled_ids)
-        simulated_posterior["ensemble"] = "Posterior"
-        simulated_posterior = simulated_posterior.expand_dims(
-            {"filtered_by": [obs_mean_var]}
-        )
-
-        posterior_config = filter_config(simulated_posterior["pism_config"], params)
-        posterior_df = config_to_dataframe(posterior_config, ensemble="Posterior")
-
-        prior_posterior_f = pd.concat([prior_df, posterior_df]).reset_index(drop=True)
-        prior_posterior_f["filtered_by"] = obs_mean_var
-        prior_posterior_list.append(prior_posterior_f)
-        posterior_list.append(simulated_posterior)
-        weights_f = result["weights"]
-        weights_f["filtered_by"] = obs_mean_var
-        weights_list.append(weights_f)
-
-    prior_posterior = pd.concat(prior_posterior_list).reset_index(drop=True)
-    prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)
-    prior = simulated_prior
-    posterior = xr.concat(posterior_list, dim="filtered_by")
-    weights = xr.concat(weights_list, dim="filtered_by")
-    return prior_posterior, prior, posterior, weights
