@@ -45,7 +45,7 @@ from tqdm.auto import tqdm
 import pism_ragis.processing as prp
 from pism_ragis.download import save_netcdf
 from pism_ragis.filtering import importance_sampling, run_importance_sampling
-from pism_ragis.likelihood import log_normal, log_pseudo_huber
+from pism_ragis.likelihood import log_jaccard_score_xr, log_normal_xr
 from pism_ragis.logger import get_logger
 from pism_ragis.plotting import plot_prior_posteriors
 from pism_ragis.processing import filter_by_retreat_method, preprocess_config
@@ -66,6 +66,99 @@ hist_cmap = ["#a6cee3", "#1f78b4"]
 cartopy_crs = ccrs.NorthPolarStereo(
     central_longitude=-45, true_scale_latitude=70, globe=None
 )
+
+
+def prepare_liafr(
+    obs_ds: xr.Dataset, sim_ds: xr.Dataset, obs_mean_var, obs_std_var, sim_var: str
+) -> tuple[xr.Dataset, xr.Dataset]:
+    """
+    Prepare land ice area fraction retreat data for analysis.
+
+    Parameters
+    ----------
+    obs_ds : xr.Dataset
+        The observed dataset.
+    sim_ds : xr.Dataset
+        The simulated dataset.
+    obs_mean_var : str
+        The variable name for the observed mean data.
+    obs_std_var : str
+        The variable name for the observed standard deviation data.
+    sim_var : str
+        The variable name for the simulated data.
+
+    Returns
+    -------
+    tuple[xr.Dataset, xr.Dataset]
+        A tuple containing the prepared observed and simulated datasets.
+    """
+    s_liafr = xr.where(sim_ds["thk"] > 10, 1, 0).resample({"time": "YS"}).mean()
+    s_liafr.name = sim_var
+    o_liafr = (
+        obs_ds[obs_mean_var]
+        .resample({"time": "YS"})
+        .mean()
+        .interp_like(s_liafr, method="nearest")
+        .fillna(0)
+    )
+    s_liafr_b = s_liafr.astype(bool)
+    o_liafr_b = o_liafr.astype(bool)
+
+    o_liafr_b_uncertainty = xr.ones_like(o_liafr_b)
+    o_liafr_b_uncertainty.name = obs_std_var
+    obs = xr.merge([o_liafr_b, o_liafr_b_uncertainty])
+
+    sim = s_liafr_b.to_dataset()
+    return obs, sim
+
+
+def prepare_dhdt(
+    obs_ds: xr.Dataset, sim_ds: xr.Dataset, obs_mean_var, obs_std_var, sim_var: str
+) -> tuple[xr.Dataset, xr.Dataset]:
+    """
+    Prepare dh/dt data for analysis.
+
+    Parameters
+    ----------
+    obs_ds : xr.Dataset
+        The observed dataset.
+    sim_ds : xr.Dataset
+        The simulated dataset.
+    obs_mean_var : str
+        The variable name for the observed mean data.
+    obs_std_var : str
+        The variable name for the observed standard deviation data.
+    sim_var : str
+        The variable name for the simulated data.
+
+    Returns
+    -------
+    tuple[xr.Dataset, xr.Dataset]
+        A tuple containing the prepared observed and simulated datasets.
+    """
+    sim_ds = sim_ds.pint.quantify()
+    sim_ds[sim_var] = sim_ds["dHdt"] * 1000.0 / 910.0
+    sim_ds[sim_var] = sim_ds[sim_var].pint.to("m year^-1")
+    sim_ds = sim_ds.pint.dequantify()
+
+    sim_retreat_resampled = (
+        sim_ds.drop_vars(["pism_config", "run_stats"])
+        .drop_dims(["pism_config_axis", "run_stats_axis"])
+        .resample({"time": "YS"})
+        .mean(dim="time")
+    )
+
+    obs = obs_ds.interp_like(sim_retreat_resampled).pint.quantify()
+    for v in [obs_mean_var, obs_std_var]:
+        obs[v] = obs[v].pint.to("m year^-1")
+    obs = obs.pint.dequantify()
+
+    obs_dhdt = obs[obs_mean_var]
+    obs_mask = obs_dhdt.isnull()
+    obs_mask = obs_mask.any(dim="time")
+
+    sim = sim_retreat_resampled.where(~obs_mask)
+    return obs, sim
 
 
 if __name__ == "__main__":
@@ -99,6 +192,19 @@ if __name__ == "__main__":
         default=3,
     )
     parser.add_argument(
+        "--filter_var",
+        help="""Filter variable. Default='land_ice_area_retreat'""",
+        type=str,
+        choices=["land_ice_area_fraction_retreat", "dhdt"],
+        default="land_ice_area_fraction_retreat",
+    )
+    parser.add_argument(
+        "--input_data_dir",
+        help="""Observational uncertainty multiplier. Default=3""",
+        type=str,
+        default="land_ice_are_fraction_retreat",
+    )
+    parser.add_argument(
         "--n_jobs", help="""Number of parallel jobs.""", type=int, default=4
     )
     parser.add_argument(
@@ -120,19 +226,6 @@ if __name__ == "__main__":
         default="YS",
     )
     parser.add_argument(
-        "--reference_year",
-        help="""Reference year.""",
-        type=int,
-        default=1986,
-    )
-    parser.add_argument(
-        "--temporal_range",
-        help="""Time slice to extract.""",
-        type=str,
-        nargs=2,
-        default=[2003, 2017],
-    )
-    parser.add_argument(
         "FILES",
         help="""Ensemble netCDF files.""",
         nargs="*",
@@ -140,10 +233,11 @@ if __name__ == "__main__":
 
     options = parser.parse_args()
     spatial_files = options.FILES
+    filter_var = options.filter_var
     fudge_factor = options.fudge_factor
     notebook = options.notebook
     parallel = options.parallel
-    reference_year = options.reference_year
+    input_data_dir = options.input_data_dir
     resampling_frequency = options.resampling_frequency
     outlier_variable = options.outlier_variable
     ragis_config_file = Path(
@@ -156,6 +250,9 @@ if __name__ == "__main__":
 
     result_dir = Path(options.result_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
+
+    obs_cmap = config["Plotting"]["obs_cmap"]
+    sim_cmap = config["Plotting"]["sim_cmap"]
 
     column_function_mapping: dict[str, list[Callable]] = {
         "surface.given.file": [prp.simplify_path, prp.simplify_climate],
@@ -176,13 +273,39 @@ if __name__ == "__main__":
 
     mpl.rcParams.update(rcparams)
 
-    obs_mean_var = "dhdt"
-    obs_std_var = "dhdt_err"
-    sim_var = "dhdt"
-    sum_dims = ["time", "y", "x"]
-    retreat_methods = ["Free", "Prescribed"]
+    log_likelihood: Callable
+    prepare_input: Callable
+    obs_mean_var = "land_ice_area_fraction_retreat"
+    obs_std_var = "land_ice_area_fraction_retreat_uncertainty"
+    sim_var = "land_ice_area_fraction_retreat"
+    filter_range = ["1980", "2019"]
+    sum_dims = ["y", "x", "time"]
+    obs_file: str
+    if filter_var == "land_ice_area_fraction_retreat":
+        obs_mean_var = "land_ice_area_fraction_retreat"
+        obs_std_var = "land_ice_area_fraction_retreat_uncertainty"
+        sim_var = "land_ice_area_fraction_retreat"
+        filter_range = ["1980", "2019"]
+        sum_dims = ["y", "x", "time"]
+        obs_file = (
+            input_data_dir
+            + "/front_retreat/pism_g450m_frontretreat_calfin_1980_2019_YM.nc"
+        )
+        log_likelihood = log_jaccard_score_xr
+        prepare_input = prepare_liafr
+    elif filter_var == "dhdt":
+        obs_mean_var = "dhdt"
+        obs_std_var = "dhdt_err"
+        sim_var = "dhdt"
+        filter_range = ["2003", "2020"]
+        sum_dims = ["time", "y", "x"]
+        obs_file = input_data_dir + "/mass_balance/Greenland_dhdt_mass*_1kmgrid_DB.nc"
+        prepare_input = prepare_dhdt
+        log_likelihood = log_normal_xr
+    else:
+        print(f"{filter_var} not supported")
 
-    filter_range = ["2003", "2020"]
+    retreat_methods = ["Free"]
 
     print("Loading ensemble.")
     with ProgressBar():
@@ -195,19 +318,9 @@ if __name__ == "__main__":
             engine="h5netcdf",
             combine="nested",
             concat_dim="exp_id",
-        )
+        ).sel({"time": slice(*filter_range)})
 
-    simulated = simulated.sel(time=slice(*filter_range)).pint.quantify()
-    simulated[sim_var] = simulated["dHdt"] * 1000.0 / 910.0
-    simulated[sim_var] = simulated[sim_var].pint.to("m year^-1")
-    simulated = simulated.pint.dequantify()
-
-    observed = xr.open_mfdataset(
-        "~/base/pism-ragis/data/mass_balance/Greenland_dhdt_mass*_1kmgrid_DB.nc",
-        # chunks={"time": -1, "x": -1, "y": -1},
-        chunks="auto",
-    ).sel(time=slice(*filter_range))
-    observed_resampled = observed.resample({"time": resampling_frequency}).mean()
+    observed = xr.open_mfdataset(obs_file).sel({"time": slice(*filter_range)})
 
     bins_dict = config["Posterior Bins"]
     parameter_categories = config["Parameter Categories"]
@@ -242,28 +355,11 @@ if __name__ == "__main__":
         fig_dir.mkdir(parents=True, exist_ok=True)
 
         simulated_retreat_filtered = filter_by_retreat_method(simulated, retreat_method)
-
         stats = simulated_retreat_filtered[["pism_config", "run_stats"]]
 
-        simulated_retreat_resampled = (
-            simulated_retreat_filtered.drop_vars(["pism_config", "run_stats"])
-            .drop_dims(["pism_config_axis", "run_stats_axis"])
-            .resample({"time": resampling_frequency})
-            .mean(dim="time")
+        obs, sim = prepare_input(
+            observed, simulated_retreat_filtered, obs_mean_var, obs_std_var, sim_var
         )
-
-        obs = observed_resampled.interp_like(
-            simulated_retreat_resampled
-        ).pint.quantify()
-        for v in [obs_mean_var, obs_std_var]:
-            obs[v] = obs[v].pint.to("m year^-1")
-        obs = obs.pint.dequantify()
-
-        obs_dhdt = obs["dhdt"]
-        obs_mask = obs_dhdt.isnull()
-        obs_mask = obs_mask.any(dim="time")
-
-        sim = simulated_retreat_resampled.where(~obs_mask)
         sim = xr.merge([sim, stats])
 
         (prior_posterior, simulated_prior, simulated_posterior, simulated_weights) = (
@@ -273,6 +369,7 @@ if __name__ == "__main__":
                 obs_mean_vars=[obs_mean_var],
                 obs_std_vars=[obs_std_var],
                 sim_vars=[sim_var],
+                log_likelihood=log_likelihood,
                 filter_range=filter_range,
                 fudge_factor=fudge_factor,
                 sum_dims=sum_dims,
@@ -292,6 +389,25 @@ if __name__ == "__main__":
         if "calving.vonmises_calving.sigma_max" in prior_posterior.columns:
             prior_posterior["calving.vonmises_calving.sigma_max"] *= 10**-3
 
+        simulated_prior.to_netcdf(
+            data_dir
+            / Path(
+                f"""simulated_prior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
+            )
+        )
+        simulated_posterior.to_netcdf(
+            data_dir
+            / Path(
+                f"""simulated_posterior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
+            )
+        )
+        simulated_weights.to_netcdf(
+            data_dir
+            / Path(
+                f"""simulated_weights_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
+            )
+        )
+
         prior_posterior["basin"] = "GIS"
         prior_posterior.to_parquet(
             data_dir
@@ -306,58 +422,3 @@ if __name__ == "__main__":
             fig_dir=fig_dir,
             bins_dict=short_bins_dict,
         )
-
-    # s = sim_ds["velsurf_mag"]
-    # o = obs_ds["v"]
-    # print(xskillscore.rmse(s, o, dim=["x", "y"], skipna=True).values)
-
-    # fig, axs = plt.subplots(1, 2, figsize=(12, 6))
-    # s.median(dim="exp_id").plot(ax=axs[0], vmin=0, vmax=500, label=False)
-    # o.plot(ax=axs[1], vmin=0, vmax=500)
-    # plt.show()
-
-    # observed = (
-    #     xr.open_dataset(options.obs_url, chunks="auto")
-    #     .sel({"time": str(sampling_year)})
-    #     .mean(dim="time")
-    # )
-    # obs_file_nc = (
-    #     result_dir
-    #     / Path(f"retreat_{retreat_method.lower()}")
-    #     / Path(f"observed_dhdt_{start_date}_{end_date}.nc")
-    # )
-    # sim_file_nc = (
-    #     result_dir
-    #     / Path(f"retreat_{retreat_method.lower()}")
-    #     / Path(f"simulated_dhdt_{start_date}_{end_date}.nc")
-    # )
-    # print(f"Saving observations to {obs_file_nc}")
-    # with ProgressBar():
-    #     obs.to_netcdf(obs_file_nc)
-    # print(f"Saving simulations to {sim_file_nc}")
-    # with ProgressBar():
-    #     sim.to_netcdf(sim_file_nc)
-
-    # save_netcdf(obs, obs_file_nc)
-    # save_netcdf(sim, sim_file_nc)
-
-    # obs_file_zarr = result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"observed_dhdt_{start_date}_{end_date}.zarr")
-    # sim_file_zarr = result_dir / Path(f"retreat_{retreat_method.lower()}") / Path(f"observed_dhdt_{start_date}_{end_date}.zarr")
-    # with ProgressBar():
-    #     obs.to_zarr(obs_file_zarr, mode="w")
-    #     sim.to_zarr(sim_file_zarr, mode="w")
-
-    # start_time = time.time()
-
-    # plot_spatial_median(
-    #     sim,
-    #     obs,
-    #     sim_var=sim_var,
-    #     obs_mean_var=obs_mean_var,
-    #     smb_var=smb_var,
-    #     flow_var=flow_var,
-    #     fig_dir=fig_dir,
-    # )
-    # end_time = time.time()
-    # elapsed_time = end_time - start_time
-    # print(f"Plotting finished in {elapsed_time:.2f} seconds")

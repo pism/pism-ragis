@@ -315,10 +315,12 @@ if __name__ == "__main__":
     ds.to_netcdf(p_fn, encoding=encoding)
 
     p = Path("front_retreat")
-    fn = Path(f"pism_g{resolution}m_frontretreat_calfin_1972_1979.nc")
+    fn = Path(f"pism_g{resolution}m_frontretreat_calfin_1980_2019_YM.nc")
     p_fn = p / fn
 
-    ds.sel({"time": slice("1972", "1979")}).to_netcdf(p_fn, encoding=encoding)
+    ds.sel({"time": slice("1980", "2019")}).resample({"time": "YS"}).mean().to_netcdf(
+        p_fn, encoding=encoding
+    )
 
     p = Path("front_retreat")
     fn = Path(f"pism_g{resolution}m_frontretreat_calfin_1972.nc")
