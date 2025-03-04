@@ -126,12 +126,6 @@ dists: Dict[str, Any] = {
         "uq": {
             "prescribed_retreat_file": randint(0, len(retreatfiles)),
             "calving.vonmises_calving.sigma_max": uniform(loc=300_000, scale=300_000),
-            "ocean.th.gamma_T": uniform(loc=0.5e-4, scale=1.00e-4),
-            "ocean_file": randint(0, len(gcms)),
-            "frontal_melt.routing.parameter_a": uniform(loc=2.4e-4, scale=1.2e-4),
-            "frontal_melt.routing.parameter_b": uniform(loc=1.0, scale=0.70),
-            "frontal_melt.routing.power_alpha": uniform(loc=0.3, scale=0.55),
-            "frontal_melt.routing.power_beta": uniform(loc=1.1, scale=0.7),
             "delta_T": uniform(-1, 2.0),
             "frac_P": uniform(0.975, 0.05),
             "surface.pdd.factor_ice": uniform(loc=4, scale=8),
@@ -140,7 +134,7 @@ dists: Dict[str, Any] = {
         },
         "default_values": {
             "climate": "given_pdd_delta",
-            "hydrology": "routing",
+            "hydrology": "diffuse",
             "ocean": "constant",
             "climate_file": "RACMO2.3p2_ERA5_FGRN055_1940_2023.nc",
             "salinity": 34,
