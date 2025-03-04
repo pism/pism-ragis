@@ -1,3 +1,3 @@
-id,prescribed_retreat_file,calving.vonmises_calving.sigma_max,delta_T,frac_P,surface.pdd.factor_ice,surface.pdd.factor_snow,surface.pdd.std_dev.value
-MEDIAN-FREE,,456267.2904088454,0.02021860889182503,ACCESS1-3_rcp85,8.072163572112778,3.2474126640431065,"dict_values(['pism_g450m_frontretreat_calfin_1972_2019.nc', ''])"
-MEDIAN-PRESCRIBED,,456267.2904088454,0.02021860889182503,ACCESS1-3_rcp85,8.072163572112778,3.2474126640431065,"dict_values(['pism_g450m_frontretreat_calfin_1972_2019.nc', ''])"
+id,calving.vonmises_calving.sigma_max,delta_T,frac_P,surface.pdd.factor_ice,surface.pdd.factor_snow,surface.pdd.std_dev.value
+MEDIAN-FREE,446859.14620543213,-0.018896456226068947,0.9995437800938869,ACCESS1-3_rcp85,3.348493853828953,"dict_values(['pism_g450m_frontretreat_calfin_1972_2019.nc', ''])"
+MEDIAN-PRESCRIBED,446859.14620543213,-0.018896456226068947,0.9995437800938869,ACCESS1-3_rcp85,3.348493853828953,"dict_values(['pism_g450m_frontretreat_calfin_1972_2019.nc', ''])"
