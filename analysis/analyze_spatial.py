@@ -404,22 +404,19 @@ if __name__ == "__main__":
             bins_dict=short_bins_dict,
         )
 
-        with ProgressBar():
-            simulated_prior.to_netcdf(
-                data_dir
+        save_netcdf(simulated_prior, data_dir
                 / Path(
-                    f"""simulated_prior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
-                )
-            )
-        with ProgressBar():
-            simulated_posterior.to_netcdf(
+                    f"""simulated_weights_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
+                ))
+
+        
+        save_netcdf(simulated_posterior,
                 data_dir
                 / Path(
                     f"""simulated_posterior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
                 )
             )
-        with ProgressBar():
-            simulated_weights.to_netcdf(
+        save_netcdf(simulated_weights, 
                 data_dir
                 / Path(
                     f"""simulated_weights_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""

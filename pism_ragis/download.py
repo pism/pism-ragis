@@ -28,6 +28,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import List, Union
 from urllib.request import urlopen
+import numpy as np
 
 import earthaccess
 import requests
@@ -122,7 +123,7 @@ def save_netcdf(
     comp : dict, optional
         Compression settings for the NetCDF file, by default {"zlib": True, "complevel": 2}.
     """
-    encoding = {var: comp for var in ds.data_vars}
+    encoding = {var: comp for var in ds.data_vars if np.issubdtype(ds[var].dtype, np.number)}
     with ProgressBar():
         ds.to_netcdf(output_filename, encoding=encoding)
 
