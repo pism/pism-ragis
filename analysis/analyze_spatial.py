@@ -199,7 +199,7 @@ if __name__ == "__main__":
         default="land_ice_area_fraction_retreat",
     )
     parser.add_argument(
-        "--input_data_dir",
+        "--data_dir",
         help="""Observational uncertainty multiplier. Default=3""",
         type=str,
         default="land_ice_are_fraction_retreat",
@@ -237,7 +237,7 @@ if __name__ == "__main__":
     fudge_factor = options.fudge_factor
     notebook = options.notebook
     parallel = options.parallel
-    input_data_dir = options.input_data_dir
+    input_data_dir = options.data_dir
     resampling_frequency = options.resampling_frequency
     outlier_variable = options.outlier_variable
     ragis_config_file = Path(
@@ -377,7 +377,7 @@ if __name__ == "__main__":
             )
         )
 
-        # Apply the functions to the corresponding columns
+        # Apply the functions to the correspondin_g columns
         for col, functions in column_function_mapping.items():
             for func in functions:
                 prior_posterior[col] = prior_posterior[col].apply(func)
@@ -390,10 +390,13 @@ if __name__ == "__main__":
             prior_posterior["calving.vonmises_calving.sigma_max"] *= 10**-3
 
         prior_posterior["basin"] = "GIS"
+        posterior = prior_posterior[prior_posterior["ensemble"] == "Posterior"].copy()
+        posterior["fudge_factor"] = fudge_factor
+        
         prior_posterior.to_parquet(
             data_dir
             / Path(
-                f"""prior_posterior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.parquet"""
+                f"""posterior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.parquet"""
             )
         )
 
@@ -406,16 +409,19 @@ if __name__ == "__main__":
 
         save_netcdf(simulated_prior, data_dir
                 / Path(
-                    f"""simulated_weights_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
+                    f"""simulated_prior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
                 ))
 
-        
+
+        simulated_posterior["fudge_factor"] = fudge_factor
         save_netcdf(simulated_posterior,
                 data_dir
                 / Path(
                     f"""simulated_posterior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
                 )
             )
+        simulated_weights = simulated_weights.to_dataset()
+        simulated_weights["fudge_factor"] = fudge_factor
         save_netcdf(simulated_weights, 
                 data_dir
                 / Path(
