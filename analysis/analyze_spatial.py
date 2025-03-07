@@ -157,7 +157,7 @@ def prepare_dhdt(
     obs_mask = obs_dhdt.isnull()
     obs_mask = obs_mask.any(dim="time")
 
-    sim = sim_retreat_resampled.where(~obs_mask)
+    sim = sim_retreat_resampled.where(~obs_mask)[["dhdt"]]
     return obs, sim
 
 
@@ -221,9 +221,15 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--resampling_frequency",
-        help="""Resampling data to resampling_frequency for importance sampling. Default is "MS".""",
+        help="""Resampling data to resampling_frequency for importance sampling. Default is "YS".""",
         type=str,
         default="YS",
+    )
+    parser.add_argument(
+        "--engine",
+        help="""Engine for xarray. Default="h5netcdf".""",
+        type=str,
+        default="h5netcdf",
     )
     parser.add_argument(
         "FILES",
@@ -232,6 +238,7 @@ if __name__ == "__main__":
     )
 
     options = parser.parse_args()
+    engine = options.engine
     spatial_files = options.FILES
     filter_var = options.filter_var
     fudge_factor = options.fudge_factor
@@ -315,7 +322,7 @@ if __name__ == "__main__":
             parallel=True,
             decode_cf=True,
             decode_timedelta=True,
-            engine="h5netcdf",
+            engine=engine,
             combine="nested",
             concat_dim="exp_id",
         ).sel({"time": slice(*filter_range)})
@@ -407,19 +414,20 @@ if __name__ == "__main__":
             bins_dict=short_bins_dict,
         )
 
-        save_netcdf(simulated_prior, data_dir
-                / Path(
-                    f"""simulated_prior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
-                ))
+        prior_nc = data_dir / Path(
+            f"""simulated_prior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
+        )
+        print(f"Writing {prior_nc}")        
+        save_netcdf(simulated_prior, prior_nc)
 
 
         simulated_posterior["fudge_factor"] = fudge_factor
-        save_netcdf(simulated_posterior,
-                data_dir
-                / Path(
-                    f"""simulated_posterior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
-                )
-            )
+        posterior_nc = data_dir / Path(
+            f"""simulated_posterior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
+        )
+        print(f"Writing {posterior_nc}")
+        save_netcdf(simulated_posterior, posterior_nc)
+        
         simulated_weights = simulated_weights.to_dataset()
         simulated_weights["fudge_factor"] = fudge_factor
         save_netcdf(simulated_weights, 
