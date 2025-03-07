@@ -384,23 +384,16 @@ if __name__ == "__main__":
             )
         )
 
-        # Apply the functions to the correspondin_g columns
+        # Apply the functions to the corresponding columns
         for col, functions in column_function_mapping.items():
             for func in functions:
                 prior_posterior[col] = prior_posterior[col].apply(func)
 
-        if "frontal_melt.routing.parameter_a" in prior_posterior.columns:
-            prior_posterior["frontal_melt.routing.parameter_a"] *= 10**4
-        if "ocean.th.gamma_T" in prior_posterior.columns:
-            prior_posterior["ocean.th.gamma_T"] *= 10**4
-        if "calving.vonmises_calving.sigma_max" in prior_posterior.columns:
-            prior_posterior["calving.vonmises_calving.sigma_max"] *= 10**-3
-
         prior_posterior["basin"] = "GIS"
         posterior = prior_posterior[prior_posterior["ensemble"] == "Posterior"].copy()
         posterior["fudge_factor"] = fudge_factor
-        
-        prior_posterior.to_parquet(
+
+        posterior.to_parquet(
             data_dir
             / Path(
                 f"""posterior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.parquet"""
@@ -417,9 +410,8 @@ if __name__ == "__main__":
         prior_nc = data_dir / Path(
             f"""simulated_prior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
         )
-        print(f"Writing {prior_nc}")        
+        print(f"Writing {prior_nc}")
         save_netcdf(simulated_prior, prior_nc)
-
 
         simulated_posterior["fudge_factor"] = fudge_factor
         posterior_nc = data_dir / Path(
@@ -427,13 +419,13 @@ if __name__ == "__main__":
         )
         print(f"Writing {posterior_nc}")
         save_netcdf(simulated_posterior, posterior_nc)
-        
+
         simulated_weights = simulated_weights.to_dataset()
         simulated_weights["fudge_factor"] = fudge_factor
-        save_netcdf(simulated_weights, 
-                data_dir
-                / Path(
-                    f"""simulated_weights_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
-                )
-            )
-
+        save_netcdf(
+            simulated_weights,
+            data_dir
+            / Path(
+                f"""simulated_weights_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
+            ),
+        )
