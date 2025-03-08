@@ -123,7 +123,7 @@ if __name__ == "__main__":
         "--engine",
         help="""Engine for xarray. Default="h5netcdf".""",
         type=str,
-        default="h5netcdf",
+        default="netcdf4",
     )
     parser.add_argument(
         "--filter_range",
@@ -283,6 +283,9 @@ if __name__ == "__main__":
 
     params_sorted_list = list(chain(*params_sorted_by_category.values()))
     params_sorted_dict = {k: params_short_dict[k] for k in params_sorted_list}
+    plot_params = params_sorted_dict.copy()
+    del plot_params["geometry.front_retreat.prescribed.file"]
+
     short_bins_dict = {
         params_short_dict[key]: bins_dict[key]
         for key in params_short_dict
@@ -611,8 +614,8 @@ if __name__ == "__main__":
         )
 
         plot_prior_posteriors(
-            prior_posterior.rename(columns=params_sorted_dict),
-            x_order=params_sorted_dict.values(),
+            prior_posterior.rename(columns=plot_params),
+            x_order=plot_params.values(),
             fig_dir=fig_dir,
             bins_dict=short_bins_dict,
         )

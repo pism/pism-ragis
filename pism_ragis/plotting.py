@@ -212,8 +212,8 @@ def plot_prior_posteriors(
         ) as progress_bar:
             for (basin, filter_var), m_df in df.groupby(by=group_columns):
                 fig, axs = plt.subplots(
-                    3,
-                    6,
+                    4,
+                    4,
                     sharey=True,
                     figsize=figsize,
                 )

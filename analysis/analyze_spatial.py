@@ -44,7 +44,10 @@ from tqdm.auto import tqdm
 
 import pism_ragis.processing as prp
 from pism_ragis.download import save_netcdf
-from pism_ragis.filtering import importance_sampling, run_importance_sampling
+from pism_ragis.filtering import (
+    importance_sampling,
+    run_importance_sampling,
+)
 from pism_ragis.likelihood import log_jaccard_score_xr, log_normal_xr
 from pism_ragis.logger import get_logger
 from pism_ragis.plotting import plot_prior_posteriors
@@ -229,7 +232,7 @@ if __name__ == "__main__":
         "--engine",
         help="""Engine for xarray. Default="h5netcdf".""",
         type=str,
-        default="h5netcdf",
+        default="netcdf4",
     )
     parser.add_argument(
         "FILES",
@@ -348,6 +351,8 @@ if __name__ == "__main__":
         for key in params_short_dict
         if key in bins_dict
     }
+    plot_params = params_sorted_dict.copy()
+    del plot_params["geometry.front_retreat.prescribed.file"]
 
     for retreat_method in retreat_methods:
         print("-" * 80)
@@ -401,8 +406,8 @@ if __name__ == "__main__":
         )
 
         plot_prior_posteriors(
-            prior_posterior.rename(columns=params_sorted_dict),
-            x_order=params_sorted_dict.values(),
+            prior_posterior.rename(columns=plot_params),
+            x_order=plot_params.values(),
             fig_dir=fig_dir,
             bins_dict=short_bins_dict,
         )
@@ -411,14 +416,14 @@ if __name__ == "__main__":
             f"""simulated_prior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
         )
         print(f"Writing {prior_nc}")
-        save_netcdf(simulated_prior, prior_nc)
+        save_netcdf(simulated_prior.chunk("auto"), prior_nc)
 
         simulated_posterior["fudge_factor"] = fudge_factor
         posterior_nc = data_dir / Path(
             f"""simulated_posterior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
         )
         print(f"Writing {posterior_nc}")
-        save_netcdf(simulated_posterior, posterior_nc)
+        save_netcdf(simulated_posterior.chunk("auto"), posterior_nc)
 
         simulated_weights = simulated_weights.to_dataset()
         simulated_weights["fudge_factor"] = fudge_factor
