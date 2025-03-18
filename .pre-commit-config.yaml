@@ -19,7 +19,7 @@ repos:
 
   # Can run individually with `pre-commit run isort --all-files`
   - repo: https://github.com/timothycrosley/isort
-    rev: 6.0.0
+    rev: 6.0.1
     hooks:
       - id: isort
         args:
@@ -66,10 +66,10 @@ repos:
             "--extension-pkg-whitelist=scipy",
           ]
 
-  # - repo: https://github.com/srstevenson/nb-clean
-  #   rev: 3.1.0
-  #  hooks:
-  #    - id: nb-clean
+  - repo: https://github.com/srstevenson/nb-clean
+    rev: 4.0.1
+    hooks:
+     - id: nb-clean
 
   # - repo: local
   #   hooks:
