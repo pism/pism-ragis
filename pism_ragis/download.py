@@ -26,11 +26,10 @@ import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 from pathlib import Path
-from typing import List, Union
 from urllib.request import urlopen
-import numpy as np
 
 import earthaccess
+import numpy as np
 import requests
 import xarray as xr
 from dask.diagnostics import ProgressBar
@@ -38,11 +37,11 @@ from tqdm.auto import tqdm
 
 
 def unzip_files(
-    files=List[Union[str, Path]],
-    output_dir: Union[str, Path] = ".",
+    files=list[str | Path],
+    output_dir: str | Path = ".",
     overwrite: bool = False,
     max_workers: int = 4,
-) -> List[Path]:
+) -> list[Path]:
     """
     Unzip files in parallel.
 
@@ -108,7 +107,7 @@ def unzip_file(zip_path: str, extract_to: str, overwrite: bool = False) -> None:
 
 def save_netcdf(
     ds: xr.Dataset,
-    output_filename: Union[str, Path] = "GRE_G0240_1985_2018_IDW_EXP_1.nc",
+    output_filename: str | Path = "GRE_G0240_1985_2018_IDW_EXP_1.nc",
     comp={"zlib": True, "complevel": 2},
 ):
     """
@@ -123,12 +122,14 @@ def save_netcdf(
     comp : dict, optional
         Compression settings for the NetCDF file, by default {"zlib": True, "complevel": 2}.
     """
-    encoding = {var: comp for var in ds.data_vars if np.issubdtype(ds[var].dtype, np.number)}
+    encoding = {
+        var: comp for var in ds.data_vars if np.issubdtype(ds[var].dtype, np.number)
+    }
     with ProgressBar():
         ds.to_netcdf(output_filename, encoding=encoding)
 
 
-def download_archive(url: str) -> Union[tarfile.TarFile, zipfile.ZipFile]:
+def download_archive(url: str) -> tarfile.TarFile | zipfile.ZipFile:
     """
     Download an archive file from a URL and return it as a tarfile or ZipFile object.
 
@@ -159,8 +160,8 @@ def download_archive(url: str) -> Union[tarfile.TarFile, zipfile.ZipFile]:
 
 
 def download_earthaccess(
-    filter_str: str | None = None, result_dir: Union[Path, str] = ".", **kwargs
-) -> List:
+    filter_str: str | None = None, result_dir: Path | str = ".", **kwargs
+) -> list:
     """
     Download datasets via Earthaccess.
 

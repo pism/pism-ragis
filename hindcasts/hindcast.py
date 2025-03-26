@@ -496,7 +496,6 @@ done\n\n
             grid_params_dict = grid
 
             sb_params_dict: Dict[str, Union[str, int, float]] = {
-                "stress_balance.sia.bed_smoother.range": horizontal_resolution,
                 "stress_balance.sia.enhancement_factor": combination[
                     "stress_balance.sia.enhancement_factor"
                 ],
