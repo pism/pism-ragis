@@ -308,14 +308,14 @@ def preprocess_config(
 
     pism_config = xr.DataArray(
         pc_vals.reshape(-1, 1),
-        dims=["pism_config_axis", "exp_id"],
-        coords={"pism_config_axis": pc_keys, "exp_id": [m_id]},
+        dims=["pism_config_axis", dim],
+        coords={"pism_config_axis": pc_keys, dim: [m_id]},
         name="pism_config",
     )
     run_stats = xr.DataArray(
         rs_vals.reshape(-1, 1),
-        dims=["run_stats_axis", "exp_id"],
-        coords={"run_stats_axis": rs_keys, "exp_id": [m_id]},
+        dims=["run_stats_axis", dim],
+        coords={"run_stats_axis": rs_keys, dim: [m_id]},
         name="run_stats",
     )
     ds = xr.merge(
