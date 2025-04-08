@@ -384,6 +384,7 @@ def plot_basins(
         fontsize=fontsize,
         fudge_factor=fudge_factor,
         level=level,
+        plot_range=plot_range,
         percentiles=percentiles,
         reduced=reduced,
         obs_alpha=obs_alpha,
@@ -472,6 +473,7 @@ def plot_obs_sims(
     fig_dir: str | Path = "figures",
     fudge_factor: float = 3.0,
     level: int = 4,
+    plot_range: list[int] = [1980, 2020],
     reduced: bool = False,
     reference_date: str = "2020-01-01",
     sim_alpha: float = 0.4,
@@ -506,6 +508,8 @@ def plot_obs_sims(
         allowing for greater tolerance in the matching process, by default 3.0.
     level : int, optional
         The level of detail for the plots, by default 4.
+    plot_range : list[int], optional
+        A list containing the start and end years for plotting, by default [1980, 2020].
     reduced : bool, optional
         Whether to produce a reduced version of the plots, by default False.
     reference_date : str, optional
@@ -761,7 +765,10 @@ def plot_obs_sims(
             axs[-2].set_title("")
             axs[-2].set_ylabel("SMB\n (Gt/yr)")
 
-        ax_last.set_xlim(np.datetime64("1980-01-01"), np.datetime64("2020-01-01"))
+        ax_last.set_xlim(
+            np.datetime64(f"{plot_range[0]}-01-01"),
+            np.datetime64(f"{plot_range[1]}-01-01"),
+        )
         # Set major ticks format to every 5 years
         ax_last.xaxis.set_major_locator(mdates.YearLocator(5))
         ax_last.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))

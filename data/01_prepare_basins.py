@@ -68,6 +68,7 @@ def prepare_basin(basin_dict: Dict, col: str = "SUBREGION1"):
     archive.extractall(path=path)
     p = path / f"{name}.shp"
     basin_gp = gp.read_file(p).to_crs(crs)
+    basin_gp["geometry"] = basin_gp["geometry"].apply(lambda x: x.exterior)
     shelves = gp.read_file("basins/GRE_Basins_shelf_extensions.gpkg").to_crs(crs)
     basin_dissolved_by_basin = basin_gp.dissolve(col)
     shelves_dissolved_by_basin = shelves.dissolve(col)

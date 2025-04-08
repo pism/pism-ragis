@@ -16,18 +16,19 @@
 # along with PISM; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-# pylint: disable=unused-import
+# pylint: disable=too-many-positional-arguments,unused-import
 
 """
-Module provides functions to deal domains.
+Module provides functions to handle domains.
 """
 
+import geopandas as gp
 import numpy as np
 import rioxarray
 import xarray as xr
 
 
-def new_range(x: np.array, dx: float):
+def new_range(x: np.array, dx: float) -> tuple[float, float, int]:
     """
     Compute the center and half-width of a domain that will contain all values in `x`.
 
@@ -35,19 +36,18 @@ def new_range(x: np.array, dx: float):
 
     Parameters
     ----------
-    x : np.array
+    x : numpy.array
         A 1D array of coordinate values.
     dx : float
         The desired resolution for the new domain.
 
     Returns
     -------
-    center : float
-        The center of the new domain.
-    Lx : float
-        The half-width of the new domain.
-    N : int
-        The number of grid points in the new domain.
+    tuple
+        A tuple containing:
+        - center (float): The center of the new domain.
+        - Lx (float): The half-width of the new domain.
+        - N (int): The number of grid points in the new domain.
 
     Notes
     -----
@@ -77,23 +77,26 @@ def get_bounds(
     ds: xr.Dataset,
     base_resolution: int = 150,
     multipliers: list | np.ndarray = [1, 2, 3, 6, 8, 10, 12, 16, 20, 24, 30],
-):
+) -> tuple[list[float], list[float]]:
     """
     Compute the x and y boundaries for a given dataset and set of grid resolutions.
 
     Parameters
     ----------
-    ds : xr.Dataset
+    ds : xarray.Dataset
         The input dataset containing the x and y coordinates.
     base_resolution : int, optional
         The base resolution in meters, by default 150.
-    multipliers : list | np.ndarray, optional
-        A list or array of multipliers to compute the set of grid resolutions, by default [1, 2, 3, 6, 8, 10, 12, 16, 20, 24, 30].
+    multipliers : list or numpy.ndarray, optional
+        A list or array of multipliers to compute the set of grid resolutions,
+        by default [1, 2, 3, 6, 8, 10, 12, 16, 20, 24, 30].
 
     Returns
     -------
-    tuple
-        A tuple containing the x boundaries and y boundaries as lists.
+    tuple of list of float
+        A tuple containing:
+        - x boundaries (list of float)
+        - y boundaries (list of float)
 
     Examples
     --------
@@ -113,13 +116,78 @@ def get_bounds(
 
     # compute y_bnds for this set of resolutions
     center, Ly, _ = new_range(y.values, np.lcm.reduce(dx))
-    y_bnds = np.minimum(center - Ly, center + Ly), np.maximum(center - Ly, center + Ly)
+    y_bnds = [
+        np.minimum(center - Ly, center + Ly),
+        np.maximum(center - Ly, center + Ly),
+    ]
     return x_bnds, y_bnds
+
+
+def create_local_grid(
+    series: gp.GeoSeries,
+    ds: xr.Dataset,
+    buffer: float = 500,
+    base_resolution: int = 150,
+    multipliers: list | np.ndarray = [1, 2, 3, 4, 6, 8, 10, 12, 16, 20, 24, 30],
+) -> xr.Dataset:
+    """
+    Create a local grid around a GeoSeries geometry with a buffer.
+
+    Parameters
+    ----------
+    series : geopandas.GeoSeries
+        The GeoSeries containing the geometry to buffer.
+    ds : xarray.Dataset
+        The dataset containing the x and y coordinates.
+    buffer : float, optional
+        The buffer distance around the geometry, by default 500.
+    base_resolution : int, optional
+        The base resolution in meters, by default 150.
+    multipliers : list or numpy.ndarray, optional
+        A list or array of multipliers to compute the set of grid resolutions,
+        by default [1, 2, 3, 4, 6, 8, 10, 12, 16, 20, 24, 30].
+
+    Returns
+    -------
+    xarray.Dataset
+        A dataset representing the local grid.
+
+    Notes
+    -----
+    The function uses the buffered geometry to determine the bounds of the local grid.
+    """
+    minx, miny, maxx, maxy = series["geometry"].buffer(buffer).bounds
+    max_mult = multipliers[-1]
+    resolution_coarse = base_resolution * max_mult
+    x_bnds, y_bnds = get_bounds(
+        ds, base_resolution=base_resolution, multipliers=multipliers
+    )
+    coarse_ds = create_domain(x_bnds, y_bnds, resolution=resolution_coarse)
+
+    ll = coarse_ds.sel({"x": minx, "y": miny}, method="nearest")
+    ur = coarse_ds.sel({"x": maxx, "y": maxy}, method="nearest")
+
+    if miny < maxy:
+        local_ds = coarse_ds.sel(
+            {"x": slice(ll["x"], ur["x"]), "y": slice(ll["y"], ur["y"])}
+        )
+    else:
+        local_ds = coarse_ds.sel(
+            {"x": slice(ll["x"], ur["x"]), "y": slice(ur["y"], ll["y"])}
+        )
+
+    x_bnds, y_bnds = [local_ds["x_bnds"][0, 0], local_ds["x_bnds"][-1, -1]], [
+        local_ds["y_bnds"][0, 0],
+        local_ds["y_bnds"][-1, -1],
+    ]
+    grid = create_domain(x_bnds, y_bnds)
+    return grid
 
 
 def create_domain(
     x_bnds: list | np.ndarray,
     y_bnds: list | np.ndarray,
+    resolution: float | None = None,
     x_dim: str = "x",
     y_dim: str = "y",
     crs: str = "EPSG:3413",
@@ -129,10 +197,12 @@ def create_domain(
 
     Parameters
     ----------
-    x_bnds : list | np.ndarray
+    x_bnds : list or numpy.ndarray
         A list or array containing the minimum and maximum x-coordinate boundaries.
-    y_bnds : list | np.ndarray
+    y_bnds : list or numpy.ndarray
         A list or array containing the minimum and maximum y-coordinate boundaries.
+    resolution : float or None, optional
+        The resolution of the grid, by default None.
     x_dim : str, optional
         The name of the x dimension, by default "x".
     y_dim : str, optional
@@ -142,7 +212,7 @@ def create_domain(
 
     Returns
     -------
-    xr.Dataset
+    xarray.Dataset
         An xarray.Dataset containing the domain information, including coordinates,
         boundary data, and mapping attributes.
 
@@ -161,12 +231,26 @@ def create_domain(
     >>> ds = create_domain(x_bnds, y_bnds)
     >>> print(ds)
     """
+
+    if resolution is not None:
+        x = np.arange(x_bnds[0] + resolution / 2, x_bnds[1], resolution)
+        y = np.arange(y_bnds[0] + resolution / 2, y_bnds[1], resolution)
+        xb = np.arange(x_bnds[0], x_bnds[1] + resolution, resolution)
+        yb = np.arange(y_bnds[0], y_bnds[1] + resolution, resolution)
+        x_bounds = np.stack([xb[:-1], xb[1:]]).T
+        y_bounds = np.stack([yb[:-1], yb[1:]]).T
+    else:
+        x = [0]
+        y = [0]
+        x_bounds = [[x_bnds[0], x_bnds[1]]]
+        y_bounds = [[y_bnds[0], y_bnds[1]]]
+
     x_bnds_dim = f"{x_dim}_bnds"
     y_bnds_dim = f"{y_dim}_bnds"
     coords = {
         x_dim: (
             [x_dim],
-            [0],
+            x,
             {
                 "units": "m",
                 "axis": x_dim.upper(),
@@ -177,7 +261,7 @@ def create_domain(
         ),
         y_dim: (
             [y_dim],
-            [0],
+            y,
             {
                 "units": "m",
                 "axis": y_dim.upper(),
@@ -191,20 +275,20 @@ def create_domain(
         {
             "domain": xr.DataArray(
                 data=0,
-                dims=[x_dim, y_dim],
+                dims=[y_dim, x_dim],
                 coords={x_dim: coords[x_dim], y_dim: coords[y_dim]},
                 attrs={
                     "dimensions": f"{x_dim} {y_dim}",
                 },
             ),
             x_bnds_dim: xr.DataArray(
-                data=[[x_bnds[0], x_bnds[1]]],
+                data=x_bounds,
                 dims=[x_dim, "nv2"],
                 coords={x_dim: coords[x_dim]},
                 attrs={"_FillValue": False},
             ),
             y_bnds_dim: xr.DataArray(
-                data=[[y_bnds[0], y_bnds[1]]],
+                data=y_bounds,
                 dims=[y_dim, "nv2"],
                 coords={y_dim: coords[y_dim]},
                 attrs={"_FillValue": False},
