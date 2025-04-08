@@ -178,6 +178,8 @@ spatial_ts_vars["dem"] = [
     "usurf",
     "velsurf_mag",
     "flux_divergence",
+    "ice_surface_temp",
+    "climatic_mass_balance",
 ]
 
 spatial_ts_vars["calibrate"] = [

@@ -1,0 +1,3 @@
+id,calving.vonmises_calving.sigma_max,delta_T,frac_P,surface.pdd.factor_ice,surface.pdd.factor_snow,surface.pdd.std_dev.value
+MEDIAN-FREE,526951.9577907727,-0.060473895460054994,1.0970457012308013,ACCESS1-3_rcp85,2.766018131347731,"dict_values(['pism_g450m_frontretreat_calfin_1972_2019.nc', ''])"
+MEDIAN-PRESCRIBED,526951.9577907727,-0.060473895460054994,1.0970457012308013,ACCESS1-3_rcp85,2.766018131347731,"dict_values(['pism_g450m_frontretreat_calfin_1972_2019.nc', ''])"
