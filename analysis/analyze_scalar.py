@@ -141,10 +141,10 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--valid_range",
-        help="""Ensemble members outside this range are removed. Default="-1_250 250". """,
+        help="""Ensemble members outside this range are removed. Default="-10000 0". """,
         type=float,
         nargs=2,
-        default=[-1000.0, 0.0],
+        default=[-10000.0, 0.0],
     )
     parser.add_argument(
         "--outlier_variable",

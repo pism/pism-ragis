@@ -188,6 +188,7 @@ spatial_ts_vars["calibrate"] = [
     "diffusivity",
     "mask",
     "flux_divergence",
+    "usurf",
 ]
 
 spatial_ts_vars["ml"] = [

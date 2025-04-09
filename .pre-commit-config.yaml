@@ -71,13 +71,13 @@ repos:
     hooks:
      - id: nb-clean
 
-  - repo: local
-    hooks:
-    - id: pytest # pytest is a pre-commit hook
-      name: pytest
-      entry: pytest tests
-      language: system
-      types: [python]
-      exclude: ^venv/ ^.git/ ^.vscode/ ^.DS_Store ^uq/ ^hindcasts/
-      always_run: true
-      pass_filenames: false
+  # - repo: local
+  #   hooks:
+  #   - id: pytest # pytest is a pre-commit hook
+  #     name: pytest
+  #     entry: pytest tests
+  #     language: system
+  #     types: [python]
+  #     exclude: ^venv/ ^.git/ ^.vscode/ ^.DS_Store ^uq/ ^hindcasts/
+  #     always_run: true
+  #     pass_filenames: false

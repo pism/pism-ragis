@@ -726,19 +726,26 @@ def load_ensemble(
     xr.Dataset
         The loaded xarray Dataset containing the ensemble data.
     """
+
+    time_coder = xr.coders.CFDatetimeCoder()
+
     print("Loading ensemble files... ", end="", flush=True)
     ds = xr.open_mfdataset(
         filenames,
         parallel=parallel,
         preprocess=preprocess,
         engine=engine,
+        decode_times=time_coder,
+        decode_timedelta=True,
     ).drop_vars(["spatial_ref", "mapping"], errors="ignore")
     print("Done.")
     return ds
 
 
 def normalize_cumulative_variables(
-    ds: xr.Dataset, variables: str | list[str], reference_date: str = "1992-01-01"
+    ds: xr.Dataset,
+    variables: str | list[str] | None = None,
+    reference_date: str = "1992-01-01",
 ) -> xr.Dataset:
     """
     Normalize cumulative variables in an xarray Dataset by subtracting their values at a reference year.
@@ -773,7 +780,11 @@ def normalize_cumulative_variables(
     Data variables:
         cumulative_var  (time) int64 0 10 20 30 40 50
     """
-    ds[variables] -= ds[variables].sel(time=reference_date, method="nearest")
+
+    if variables is not None:
+        ds[variables] -= ds[variables].sel(time=reference_date, method="nearest")
+    else:
+        pass
     return ds
 
 
@@ -1375,9 +1386,10 @@ def prepare_simulations(
     ds[config["Cumulative Variables"]["cumulative_smb"]] = ds[
         config["Flux Variables"]["smb_flux"]
     ].cumsum() / len(ds.time)
+    print(list(config["Cumulative Variables"].values()))
     ds = normalize_cumulative_variables(
         ds,
-        list(config["Cumulative Variables"].values()),
+        variables=list(config["Cumulative Variables"].values()),
         reference_date=reference_date,
     )
     return ds
@@ -1421,7 +1433,11 @@ def prepare_observations(
     >>> prepare_observations("basin.nc", config, "2000-01-1")
     <xarray.Dataset>
     """
-    ds = xr.open_dataset(url, engine=engine, chunks=-1)
+    time_coder = xr.coders.CFDatetimeCoder()
+
+    ds = xr.open_dataset(
+        url, engine=engine, chunks=-1, decode_times=time_coder, decode_timedelta=True
+    )
     ds = ds.sortby("basin")
 
     cumulative_vars = config["Cumulative Variables"]
