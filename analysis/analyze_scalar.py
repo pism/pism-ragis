@@ -47,6 +47,7 @@ from pism_ragis.plotting import (
     plot_posteriors,
     plot_prior_posteriors,
     plot_sensitivity_indices,
+    plot_timeseries,
 )
 
 logger = get_logger("pism_ragis")
@@ -141,10 +142,10 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--valid_range",
-        help="""Ensemble members outside this range are removed. Default="-10000 0". """,
+        help="""Ensemble members outside this range are removed. Default="-50000 0". """,
         type=float,
         nargs=2,
-        default=[-10000.0, 0.0],
+        default=[-2500.0, -100.0],
     )
     parser.add_argument(
         "--outlier_variable",
@@ -226,8 +227,10 @@ if __name__ == "__main__":
     obs_cmap = config["Plotting"]["obs_cmap"]
     sim_cmap = config["Plotting"]["sim_cmap"]
     fudge_factor = config["Importance Sampling"]["mankoff_fudge_factor"]
-    retreat_methods = ["Free", "Prescribed"]
-    reduced = False
+    retreat_methods = ["All", "Free", "Prescribed"]
+
+    if not notebook:
+        backend = "Agg"
 
     result_dir = Path(options.result_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
@@ -264,10 +267,36 @@ if __name__ == "__main__":
         engine=engine,
     )
 
+    simulated_all = simulated
+    simulated_all["ensemble"] = "All"
+    fig_dir = result_dir / Path("figures")
+    fig_dir.mkdir(parents=True, exist_ok=True)
+    plot_timeseries(
+        observed.sel({"basin": "GIS"}),
+        sim_prior=simulated_all.sel({"basin": "GIS"}),
+        fig_dir=fig_dir,
+        figsize=(4.8, 3.6),
+        fontsize=6,
+        plot_vars=["cumulative_mass_flux", "grounding_line_flux"],
+        config=config,
+        reference_date=reference_date,
+        y_lim=[[-20_000, 4000], [-2000, 0]],
+        add_lineplot=True,
+    )
+
     da = observed.sel(time=slice(f"{filter_range[0]}", f"{filter_range[-1]}"))[
         "grounding_line_flux"
     ].mean(dim="time")
     posterior_basins_sorted = observed.basin.sortby(da).values
+    print(
+        "Mean Grounding Line Flux by basin:\n",
+        " \n".join(
+            [
+                f"""{basin}: {np.round(flux, decimals=0)} {da.attrs["units"]}"""
+                for basin, flux in zip(da.basin.values, da.values)
+            ]
+        ),
+    )
 
     bins_dict = config["Posterior Bins"]
     parameter_categories = config["Parameter Categories"]
@@ -358,7 +387,7 @@ if __name__ == "__main__":
         ]
 
         sim_plot_vars = (
-            [ragis_config["Cumulative Variables"]["cumulative_mass_balance"]]
+            [ragis_config["Cumulative Variables"]["cumulative_mass_flux"]]
             + list(ragis_config["Flux Variables"].values())
             + ["ensemble"]
         )
@@ -385,71 +414,15 @@ if __name__ == "__main__":
                 ].load(),
                 filter_var=filter_var,
                 filter_range=filter_range,
-                figsize=(3.2, 1.2),
+                figsize=(4.8, 3.6),
                 fig_dir=fig_dir,
                 fontsize=5,
                 fudge_factor=fudge_factor,
-                level=1,
-                reduced=reduced,
                 percentiles=ci,
+                plot_vars=["cumulative_mass_flux", "grounding_line_flux"],
                 reference_date=reference_date,
                 config=config,
             )
-            plot_basins(
-                observed_basins_resampled.load(),
-                simulated_prior[sim_plot_vars].load(),
-                simulated_posterior.sel({"filtered_by": filter_var})[
-                    sim_plot_vars
-                ].load(),
-                filter_var=filter_var,
-                filter_range=filter_range,
-                figsize=(6.4, 3.2),
-                fig_dir=fig_dir,
-                fontsize=8,
-                fudge_factor=fudge_factor,
-                level=2,
-                plot_range=[1986, 2020],
-                reduced=reduced,
-                percentiles=ci,
-                reference_date=reference_date,
-                config=config,
-            )
-            plot_basins(
-                observed_basins_resampled.load(),
-                simulated_prior[sim_plot_vars].load(),
-                simulated_posterior.sel({"filtered_by": filter_var})[
-                    sim_plot_vars
-                ].load(),
-                filter_var=filter_var,
-                filter_range=filter_range,
-                figsize=(3.2, 2.0),
-                fig_dir=fig_dir,
-                fontsize=5,
-                fudge_factor=fudge_factor,
-                level=3,
-                reduced=reduced,
-                percentiles=ci,
-                reference_date=reference_date,
-                config=config,
-            )
-            # plot_basins(
-            #     observed_basins_resampled_ds.load(),
-            #     simulated_prior[sim_plot_vars].load(),
-            #     simulated_posterior.sel({"filtered_by": filter_var})[
-            #         sim_plot_vars
-            #     ].load(),
-            #     filter_var=filter_var,
-            #     filter_range=filter_range,
-            #     figsize=(2.2, 2.2),
-            #     fig_dir=fig_dir,
-            #     fontsize=5,
-            #     fudge_factor=fudge_factor,
-            #     level=4,
-            #     reduced=reduced,
-            #     percentiles=ci,
-            #     reference_date=reference_date,
-            #     config=config,
-            # )
 
         Path(fig_dir).mkdir(exist_ok=True)
         plot_dir = fig_dir / Path("basin_cumulative_violins")

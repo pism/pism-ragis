@@ -120,8 +120,6 @@ def prepare_grace_goddard(result_dir: Path = Path("mass_balance")):
     p_fn = result_dir / fn
     save_netcdf(ds, p_fn)
 
-    # ds["lat"].attrs.update({"units": "degrees"})
-    # ds["lon"].attrs.update({"units": "degrees"})
     ds["land_mask"].attrs.update({"units": ""})
     ds = ds.pint.quantify()
     lat_bounds, lon_bounds = ds["lat_bounds"], ds["lon_bounds"]
@@ -293,8 +291,6 @@ def prepare_mankoff(
         ds[f"cumulative_{v}"] = (ds[v].pint.to("Gt day^-1") * dt).cumsum(dim="time")
         ds[v] = ds[v].pint.to("Gt year^-1")
         ds[f"cumulative_{v}"] = ds[f"cumulative_{v}"].pint.to("Gt")
-
-    # ds["cumulative_mass_balance_uncertainty"] = (((ds["grounding_line_flux_uncertainty"] ** 2 + ds["basal_mass_balance_uncertainty"] ** 2)**(1/2)).pint.to("Gt day^-1") * dt).cumsum(dim="time")
 
     # remove last time entry because it is NaN for cumulative uncertainties.
     ds = ds.isel(time=slice(0, -1))

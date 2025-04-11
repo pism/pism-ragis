@@ -1366,7 +1366,7 @@ def prepare_simulations(
     ...     "PISM Spatial": {...},
     ...     "Cumulative Variables": {
     ...         "cumulative_grounding_line_flux": "cumulative_gl_flux",
-    ...         "cumulative_smb": "cumulative_smb_flux"
+    ...         "cumulative_smb_flux": "cumulative_smb_flux"
     ...     },
     ...     "Flux Variables": {
     ...         "grounding_line_flux": "gl_flux",
@@ -1383,10 +1383,9 @@ def prepare_simulations(
     ds[config["Cumulative Variables"]["cumulative_grounding_line_flux"]] = ds[
         config["Flux Variables"]["grounding_line_flux"]
     ].cumsum() / len(ds.time)
-    ds[config["Cumulative Variables"]["cumulative_smb"]] = ds[
+    ds[config["Cumulative Variables"]["cumulative_smb_flux"]] = ds[
         config["Flux Variables"]["smb_flux"]
     ].cumsum() / len(ds.time)
-    print(list(config["Cumulative Variables"].values()))
     ds = normalize_cumulative_variables(
         ds,
         variables=list(config["Cumulative Variables"].values()),

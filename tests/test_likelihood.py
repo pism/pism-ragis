@@ -78,7 +78,7 @@ def test_log_normal_ndarray() -> None:
     """
     Test log_normal likelihood with np.ndarray inputs.
 
-    This test checks if the log_likelihood function correctly computes the log-likelihood
+    This test verifies that the log_normal function correctly computes the log-likelihood
     when the inputs are numpy arrays.
     """
     x: np.ndarray = np.array([1.0, 2.0, 3.0])
@@ -96,7 +96,7 @@ def test_log_pseudo_huber_ndarray() -> None:
     """
     Test log_pseudo_huber likelihood with np.ndarray inputs.
 
-    This test checks if the log_likelihood function correctly computes the log-likelihood
+    This test verifies that the log_pseudo_huber function correctly computes the log-likelihood
     when the inputs are numpy arrays.
     """
     x: np.ndarray = np.array([1.0, 2.0, 3.0])
@@ -118,7 +118,7 @@ def test_log_normal_xarray() -> None:
     """
     Test log_normal likelihood with xr.DataArray inputs.
 
-    This test checks if the log_likelihood function correctly computes the log-likelihood
+    This test verifies that the log_normal function correctly computes the log-likelihood
     when the inputs are xarray DataArrays.
     """
     x: xr.DataArray = xr.DataArray(
@@ -147,7 +147,7 @@ def test_log_pseudo_huber_xarray() -> None:
     """
     Test log_pseudo_huber likelihood with xr.DataArray inputs.
 
-    This test checks if the log_likelihood function correctly computes the log-likelihood
+    This test verifies that the log_pseudo_huber function correctly computes the log-likelihood
     when the inputs are xarray DataArrays.
     """
     x: xr.DataArray = xr.DataArray(
@@ -175,7 +175,7 @@ def test_log_jaccard_score_ndarray() -> None:
     """
     Test log_jaccard_score likelihood with np.ndarray inputs.
 
-    This test checks if the log_likelihood function correctly computes the log-likelihood
+    This test verifies that the log_jaccard_score function correctly computes the log-likelihood
     when the inputs are numpy arrays.
     """
     y_true = np.array([[0, 1, 1], [1, 1, 0]])
@@ -190,7 +190,7 @@ def test_log_jaccard_score_xarray() -> None:
     """
     Test log_jaccard_score likelihood with xr.DataArray inputs.
 
-    This test checks if the log_likelihood function correctly computes the log-likelihood
+    This test verifies that the log_jaccard_score function correctly computes the log-likelihood
     when the inputs are xarray DataArrays.
     """
     y_true: xr.DataArray = xr.DataArray(

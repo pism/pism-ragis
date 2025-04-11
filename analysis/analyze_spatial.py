@@ -72,7 +72,11 @@ cartopy_crs = ccrs.NorthPolarStereo(
 
 
 def prepare_liafr(
-    obs_ds: xr.Dataset, sim_ds: xr.Dataset, obs_mean_var, obs_std_var, sim_var: str
+    obs_ds: xr.Dataset,
+    sim_ds: xr.Dataset,
+    obs_mean_var,
+    obs_std_var,
+    sim_var: str,
 ) -> tuple[xr.Dataset, xr.Dataset]:
     """
     Prepare land ice area fraction retreat data for analysis.
@@ -106,17 +110,22 @@ def prepare_liafr(
     )
     s_liafr_b = s_liafr.astype(bool)
     o_liafr_b = o_liafr.astype(bool)
+    sim = s_liafr_b.to_dataset()
 
     o_liafr_b_uncertainty = xr.ones_like(o_liafr_b)
     o_liafr_b_uncertainty.name = obs_std_var
     obs = xr.merge([o_liafr_b, o_liafr_b_uncertainty])
 
-    sim = s_liafr_b.to_dataset()
     return obs, sim
 
 
 def prepare_dhdt(
-    obs_ds: xr.Dataset, sim_ds: xr.Dataset, obs_mean_var, obs_std_var, sim_var: str
+    obs_ds: xr.Dataset,
+    sim_ds: xr.Dataset,
+    obs_mean_var,
+    obs_std_var,
+    sim_var: str,
+    coarsen: dict | None = None,
 ) -> tuple[xr.Dataset, xr.Dataset]:
     """
     Prepare dh/dt data for analysis.
@@ -133,6 +142,8 @@ def prepare_dhdt(
         The variable name for the observed standard deviation data.
     sim_var : str
         The variable name for the simulated data.
+    coarsen : dict or None, optional
+        Dictionary specifying the dimensions and factors for coarsening the simulated data, by default None.
 
     Returns
     -------
@@ -161,6 +172,11 @@ def prepare_dhdt(
     obs_mask = obs_mask.any(dim="time")
 
     sim = sim_retreat_resampled.where(~obs_mask)[["dhdt"]]
+
+    if coarsen is not None:
+        sim = sim.coarsen(coarsen).mean()
+        obs = obs.interp_like(sim)
+
     return obs, sim
 
 
@@ -370,7 +386,12 @@ if __name__ == "__main__":
         stats = simulated_retreat_filtered[["pism_config", "run_stats"]]
 
         obs, sim = prepare_input(
-            observed, simulated_retreat_filtered, obs_mean_var, obs_std_var, sim_var
+            observed,
+            simulated_retreat_filtered,
+            obs_mean_var,
+            obs_std_var,
+            sim_var,
+            coarsen={"x": 5, "y": 5},
         )
         sim = xr.merge([sim, stats])
 

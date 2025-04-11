@@ -1,10 +1,10 @@
 [Parameters]
 
 'calving.vonmises_calving.sigma_max' = '$\sigma_{\mathrm{max}}$ (kPa)'
-'geometry.front_retreat.prescribed.file' = 'Retreat Method'
-'ocean.th.gamma_T' = '$\gamma$ (10$^{-4}$ 1)'
-'surface.given.file' = 'Climate Forcing'
-'ocean.th.file' = 'Ocean Forcing'
+'geometry.front_retreat.prescribed.file' = '\textsf{Retreat Method}'
+'ocean.th.gamma_T' = '$\gamma_{S}$ (10$^{-4}$ 1)'
+'surface.given.file' = '\textsf{Climate Forcing}'
+'ocean.th.file' = '\textsf{Ocean Forcing}'
 'frontal_melt.routing.parameter_a' = '$a$ (10$^{-4}$ m$^{-\alpha}$ day$^{\alpha-1}$ Celsius$^{-\beta}$)'
 'frontal_melt.routing.parameter_b' = '$b$ (day$^{\alpha-1)}$ Celsius$^{-\beta}$)'
 'frontal_melt.routing.power_alpha' = '$\alpha$ (1)'
@@ -65,15 +65,15 @@ smb_flux_uncertainty = "surface_mass_balance_uncertainty"
 
 ['Cumulative Variables']
 
-cumulative_mass_balance = "cumulative_mass_balance"
+cumulative_mass_flux = "cumulative_mass_balance"
 cumulative_grounding_line_flux = "cumulative_grounding_line_flux"
-cumulative_smb = "cumulative_surface_mass_balance"
+cumulative_smb_flux = "cumulative_surface_mass_balance"
 
 ['Cumulative Uncertainty Variables']
 
-cumulative_mass_balance_uncertainty = "cumulative_mass_balance_uncertainty"
+cumulative_mass_flux_uncertainty = "cumulative_mass_balance_uncertainty"
 cumulative_grounding_line_flux_uncertainty = "cumulative_grounding_line_flux_uncertainty"
-cumulative_smb_uncertainty = "cumulative_surface_mass_balance_uncertainty"
+cumulative_smb__flux_uncertainty = "cumulative_surface_mass_balance_uncertainty"
 
 ["PISM Spatial"]
 
@@ -96,11 +96,19 @@ gis = {D = "grounding_line_flux", MB = "mass_balance", SMB = "surface_mass_balan
 
 ['Plotting']
 
-sim_alpha = 0.5
+sim_alpha = 0.6
 sim_cmap = ["#CC6677", "#882255"]
 obs_alpha = 1.0
 obs_cmap = ["0.8", "0.9"]
 hist_cmap = ["#a6cee3", "#1f78b4"]
+
+mass_flux = "Mass balance\n (Gt/yr)"
+grounding_line_flux = "Grounding Line\nFlux (Gt/yr)"
+smb_flux = "Climatic Mass Balance\n (Gt/yr)"
+cumulative_mass_flux = "Cumulative mass change\n since {reference_date} (Gt)"
+cumulative_grounding_line_flux = "Cumulative Grounding Line Flux\n since {reference_date} (Gt)"
+cumulative_smb_flux = "Cumulative Climatic Mass Balance\n since {reference_date} (Gt)"
+
 
 ['Importance Sampling']
 
