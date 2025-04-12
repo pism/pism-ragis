@@ -162,20 +162,22 @@ def prepare_dhdt(
         .mean(dim="time")
     )
 
-    obs = obs_ds.interp_like(sim_retreat_resampled).pint.quantify()
+    obs = obs_ds.pint.quantify()
     for v in [obs_mean_var, obs_std_var]:
         obs[v] = obs[v].pint.to("m year^-1")
     obs = obs.pint.dequantify()
+
+    if coarsen is not None:
+        sim = sim_retreat_resampled.coarsen(coarsen).mean()
+    else:
+        sim = sim_retreat_resampled
+    obs = obs.interp_like(sim)
 
     obs_dhdt = obs[obs_mean_var]
     obs_mask = obs_dhdt.isnull()
     obs_mask = obs_mask.any(dim="time")
 
-    sim = sim_retreat_resampled.where(~obs_mask)[["dhdt"]]
-
-    if coarsen is not None:
-        sim = sim.coarsen(coarsen).mean()
-        obs = obs.interp_like(sim)
+    sim = sim.where(~obs_mask)[["dhdt"]]
 
     return obs, sim
 
@@ -344,9 +346,12 @@ if __name__ == "__main__":
             engine=engine,
             combine="nested",
             concat_dim="exp_id",
+            chunks="auto",
         ).sel({"time": slice(*filter_range)})
 
-    observed = xr.open_mfdataset(obs_file).sel({"time": slice(*filter_range)})
+    observed = xr.open_mfdataset(obs_file, chunks="auto").sel(
+        {"time": slice(*filter_range)}
+    )
 
     bins_dict = config["Posterior Bins"]
     parameter_categories = config["Parameter Categories"]
@@ -394,6 +399,9 @@ if __name__ == "__main__":
             coarsen={"x": 5, "y": 5},
         )
         sim = xr.merge([sim, stats])
+
+        obs = obs.chunk("auto")
+        sim = sim.chunk("auto")
 
         (prior_posterior, simulated_prior, simulated_posterior, simulated_weights) = (
             run_importance_sampling(

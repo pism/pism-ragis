@@ -11,6 +11,7 @@ geopandas
 gsl
 joblib
 jupyter
+jupyter-server-proxy
 matplotlib
 numpy
 netCDF4

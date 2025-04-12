@@ -276,10 +276,12 @@ def run_importance_sampling(
     prior_posterior_list = []
     posterior_list = []
     weights_list = []
+
     for obs_mean_var, obs_std_var, sim_var in zip(
         obs_mean_vars, obs_std_vars, sim_vars
     ):
         print(f"Importance sampling using {obs_mean_var}")
+
         f = importance_sampling(
             simulated=simulated.sel(
                 time=slice(str(filter_start_year), str(filter_end_year))
@@ -299,8 +301,35 @@ def run_importance_sampling(
         with ProgressBar() as pbar:
             result = f.compute()
             logger.info(
-                "Importance Sampling: Finished in %2.2f seconds", pbar.last_duration
+                "Importance Sampling: Finished in %2.2f seconds",
+                pbar.last_duration,
             )
+        # # # result = f.persist()  # start computation in the background
+        # # # progress(result)  # watch progress
+
+        # # # result.compute()
+
+        # simulated_dist = simulated.sel(
+        #     time=slice(str(filter_start_year), str(filter_end_year))
+        # )
+
+        # observed_dist = observed.sel(
+        #     time=slice(str(filter_start_year), str(filter_end_year))
+        # )
+        # f = client.submit(
+        #     importance_sampling,
+        #     simulated=simulated_dist,
+        #     observed=observed_dist,
+        #     log_likelihood=log_likelihood,
+        #     fudge_factor=fudge_factor,
+        #     n_samples=simulated.sizes["exp_id"],
+        #     obs_mean_var=obs_mean_var,
+        #     obs_std_var=obs_std_var,
+        #     sim_var=sim_var,
+        #     sum_dims=sum_dims,
+        # )
+        # progress(f)
+        # result = client.gather(f)
 
         importance_sampled_ids = result["exp_id_sampled"]
         simulated_posterior = simulated.sel(exp_id=importance_sampled_ids)

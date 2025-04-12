@@ -281,24 +281,11 @@ def plot_basins(
     observed: xr.Dataset,
     prior: xr.Dataset,
     posterior: xr.Dataset,
-    filter_var: str | None = None,
-    figsize: tuple[float, float] | None = None,
-    filter_range: list[int] = [1990, 2019],
-    fig_dir: str | Path = "figures",
-    fontsize: int = 6,
-    fudge_factor: float = 3.0,
-    percentiles: list[float] = [0.025, 0.975],
-    reference_date: str = "2020-01-01",
-    plot_vars: list | None = None,
     x_lim: list[int] = [1980, 2020],
-    config: dict = {},
+    **kwargs,
 ):
     """
     Plot basins using observed, prior, and posterior datasets.
-
-    This function plots the observed, prior, and posterior datasets for each basin,
-    and saves the plots to the specified directory. It also displays a progress bar
-    to indicate the progress of the plotting process.
 
     Parameters
     ----------
@@ -308,29 +295,10 @@ def plot_basins(
         The prior dataset.
     posterior : xr.Dataset
         The posterior dataset.
-    filter_var : str, optional
-        The variable used for filtering, by default None.
-    figsize : tuple[float, float] or None, optional
-        Size of the figure, by default None.
-    filter_range : list[int], optional
-        A list containing the start and end years for filtering, by default [1990, 2019].
-    fig_dir : str or Path, optional
-        The directory where figures will be saved, by default "figures".
-    fontsize : int, optional
-        Font size for the plot, by default 6.
-    fudge_factor : float, optional
-        A multiplicative factor applied to the observed standard deviation to widen the likelihood function,
-        allowing for greater tolerance in the matching process, by default 3.0.
-    percentiles : list[float], optional
-        Percentiles for credibility interval, by default [0.025, 0.975].
-    reference_date : str, optional
-        The reference date for cumulative mass change, by default "2020-01-01".
-    plot_vars : list or None, optional
-        Variables to plot, by default None.
     x_lim : list[int], optional
         A list containing the start and end years for plotting, by default [1980, 2020].
-    config : dict, optional
-        Configuration dictionary, by default {}.
+    **kwargs : dict
+        Additional keyword arguments for the plotting function.
     """
 
     client = Client()
@@ -360,19 +328,8 @@ def plot_basins(
         observed_scattered,
         prior_scattered,
         posterior_scattered,
-        reference_date=reference_date,
-        config=config,
-        filter_var=filter_var,
-        filter_range=filter_range,
-        figsize=figsize,
-        fig_dir=fig_dir,
-        fontsize=fontsize,
-        fudge_factor=fudge_factor,
-        plot_vars=plot_vars,
         x_lim=x_lim,
-        percentiles=percentiles,
-        obs_alpha=obs_alpha,
-        sim_alpha=sim_alpha,
+        **kwargs,
     )
 
     progress(futures)
@@ -491,11 +448,11 @@ def plot_timeseries(
     fudge_factor : float, optional
         A multiplicative factor applied to the observed standard deviation to widen the likelihood function,
         allowing for greater tolerance in the matching process, by default 3.0.
-    plot_vars : list, optional
+    plot_vars : str or list, optional
         Variables to plot, by default ["cumulative_mass_flux", "grounding_line_flux"].
     x_lim : list[int], optional
         A list containing the start and end years for plotting, by default [1980, 2020].
-    y_lim : list[float] or list[list[float]] or None, optional
+    y_lim : list or list[list] or None, optional
         Y-axis limits for the plots, by default None.
     reference_date : str, optional
         The reference date for cumulative mass change, by default "2020-01-01".
@@ -676,8 +633,11 @@ def plot_timeseries(
                     l_f.get_frame().set_linewidth(0.0)
                     l_f.get_frame().set_alpha(0.0)
 
-            ylabel_str = config["Plotting"]["cumulative_mass_flux"]
-            ylabel = eval(f"f'''{ylabel_str}'''")
+            ylabel_str = config["Plotting"][plot_var]
+            if "Cumulative" in ylabel_str:
+                ylabel = eval(f"f'''{ylabel_str}'''")
+            else:
+                ylabel = ylabel_str
             ax.set_ylabel(ylabel)
             ax.set_title(None)
             ax.set_xlabel(None)
@@ -756,10 +716,6 @@ def plot_outliers(
 ):
     """
     Plot outliers in the given DataArrays and save the plot to a file.
-
-    This function creates a plot with the filtered data and outliers, and saves the plot
-    to the specified filename. The filtered data is plotted in black, and the outliers
-    are plotted in red.
 
     Parameters
     ----------

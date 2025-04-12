@@ -414,7 +414,7 @@ if __name__ == "__main__":
                 ].load(),
                 filter_var=filter_var,
                 filter_range=filter_range,
-                figsize=(4.8, 3.6),
+                figsize=(3.2, 2.6),
                 fig_dir=fig_dir,
                 fontsize=5,
                 fudge_factor=fudge_factor,
