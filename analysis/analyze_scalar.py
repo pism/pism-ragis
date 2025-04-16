@@ -282,6 +282,7 @@ if __name__ == "__main__":
         reference_date=reference_date,
         y_lim=[[-20_000, 4000], [-2000, 0]],
         add_lineplot=True,
+        add_median=True,
     )
 
     da = observed.sel(time=slice(f"{filter_range[0]}", f"{filter_range[-1]}"))[
@@ -296,6 +297,29 @@ if __name__ == "__main__":
                 for basin, flux in zip(da.basin.values, da.values)
             ]
         ),
+    )
+
+    discharge_var = ragis_config["Flux Variables"]["grounding_line_flux"]
+    discharge_uncertainty_var = ragis_config["Flux Uncertainty Variables"][
+        "grounding_line_flux_uncertainty"
+    ]
+
+    gis_obs_discharge = observed.sel({"basin": "GIS", "time": slice("1980", "2019")})[
+        [discharge_var, discharge_uncertainty_var]
+    ]
+    gis_obs_discharge_mean = gis_obs_discharge.mean(dim="time").compute()
+    gis_sim_discharge = (
+        simulated.sel({"basin": "GIS", "time": slice("1980", "2019")})[discharge_var]
+        .mean(dim="time")
+        .compute()
+    )
+    gis_sim_discharge_median = gis_sim_discharge.median(dim="exp_id").compute()
+    gis_sim_discharge_ci = gis_sim_discharge.quantile(ci, dim="exp_id").compute()
+    print(
+        f"""Observed {discharge_var} mean: {gis_obs_discharge_mean[discharge_var].values:.0f} std: {gis_obs_discharge_mean[discharge_uncertainty_var].values:.0f} {gis_obs_discharge_mean[discharge_var].attrs["units"]}"""
+    )
+    print(
+        f"""Simulated {discharge_var} median {gis_sim_discharge_median:.0f}  {gis_sim_discharge_ci.values} {ci} {gis_sim_discharge_median.attrs["units"]}"""
     )
 
     bins_dict = config["Posterior Bins"]
@@ -323,7 +347,7 @@ if __name__ == "__main__":
     pp_retreat_list: list[pd.DataFrame] = []
     posterior_ds_dict: dict[str, xr.Dataset] = {}
     for retreat_method in retreat_methods:
-        print("-" * 80)
+        print("-" * 8)
         print(f"Retreat method: {retreat_method}")
         print("-" * 80)
 

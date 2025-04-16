@@ -16,12 +16,11 @@
 # along with PISM; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-# pylint: disable=unused-import,too-many-positional-arguments
+# pylint: disable=unused-import,too-many-positional-arguments,unused-argument
 """
 Analyze RAGIS ensemble.
 """
 import json
-import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from importlib.resources import files
 from itertools import chain
@@ -53,7 +52,13 @@ from pism_ragis.logger import get_logger
 from pism_ragis.plotting import plot_prior_posteriors
 from pism_ragis.processing import filter_by_retreat_method, preprocess_config
 
-xr.set_options(keep_attrs=True)
+xr.set_options(
+    keep_attrs=True,
+    warn_for_unclosed_files=True,
+    use_flox=True,
+    use_bottleneck=True,
+    use_opt_einsum=True,
+)
 
 plt.style.use("tableau-colorblind10")
 logger = get_logger("pism_ragis")
@@ -177,7 +182,125 @@ def prepare_dhdt(
     obs_mask = obs_dhdt.isnull()
     obs_mask = obs_mask.any(dim="time")
 
-    sim = sim.where(~obs_mask)[["dhdt"]]
+    sim = sim.where(~obs_mask)[[sim_var]]
+
+    return obs, sim
+
+
+def prepare_v(
+    obs_ds: xr.Dataset,
+    sim_ds: xr.Dataset,
+    obs_mean_var: str | None = None,
+    obs_std_var: str | None = None,
+    sim_var: str | None = None,
+    coarsen: dict | None = None,
+) -> tuple[xr.Dataset, xr.Dataset]:
+    """
+    Prepare dh/dt data for analysis.
+
+    Parameters
+    ----------
+    obs_ds : xr.Dataset
+        The observed dataset.
+    sim_ds : xr.Dataset
+        The simulated dataset.
+    obs_mean_var : str
+        The variable name for the observed mean data.
+    obs_std_var : str
+        The variable name for the observed standard deviation data.
+    sim_var : str
+        The variable name for the simulated data.
+    coarsen : dict or None, optional
+        Dictionary specifying the dimensions and factors for coarsening the simulated data, by default None.
+
+    Returns
+    -------
+    tuple[xr.Dataset, xr.Dataset]
+        A tuple containing the prepared observed and simulated datasets.
+    """
+
+    sim_retreat_resampled = (
+        sim_ds.drop_vars(["pism_config", "run_stats"])
+        .drop_dims(["pism_config_axis", "run_stats_axis"])
+        .resample({"time": "YS"})
+        .mean(dim="time")
+    )
+    obs = obs_ds.pint.quantify()
+    for v in [obs_mean_var, obs_std_var]:
+        obs[v] = obs[v].pint.to("m year^-1")
+    obs = obs.pint.dequantify()
+    obs = obs.where(obs["ice"])
+    if coarsen is not None:
+        sim = sim_retreat_resampled.coarsen(coarsen).mean()
+    else:
+        sim = sim_retreat_resampled
+    obs = obs.interp_like(sim)
+
+    return obs, sim
+
+
+def prepare_grace(
+    obs_ds: xr.Dataset,
+    sim_ds: xr.Dataset,
+    obs_mean_var: str | None = None,
+    obs_std_var: str | None = None,
+    sim_var: str | None = None,
+    coarsen: dict | None = None,
+) -> tuple[xr.Dataset, xr.Dataset]:
+    """
+    Prepare dh/dt data for analysis.
+
+    Parameters
+    ----------
+    obs_ds : xr.Dataset
+        The observed dataset.
+    sim_ds : xr.Dataset
+        The simulated dataset.
+    obs_mean_var : str
+        The variable name for the observed mean data.
+    obs_std_var : str
+        The variable name for the observed standard deviation data.
+    sim_var : str
+        The variable name for the simulated data.
+    coarsen : dict or None, optional
+        Dictionary specifying the dimensions and factors for coarsening the simulated data, by default None.
+
+    Returns
+    -------
+    tuple[xr.Dataset, xr.Dataset]
+        A tuple containing the prepared observed and simulated datasets.
+    """
+
+    obs = obs_ds.where(obs_ds["land_mask"])
+    obs = obs.expand_dims({"basin": ["GIS"]})
+
+    obs = obs.rio.set_spatial_dims(x_dim="lon", y_dim="lat")
+    obs.rio.write_crs("EPSG:4326", inplace=True)
+
+    sim = (
+        sim_ds[[sim_var]]
+        .rio.set_spatial_dims(x_dim="x", y_dim="y")
+        .drop_vars(["time_bounds", "timestamp"], errors="ignore")
+    )
+    sim.rio.write_crs("EPSG:3413", inplace=True)
+
+    print("Reprojecting simulated data to EPSG:4326")
+    sims = []
+    for s in tqdm(
+        sim["exp_id"].values,
+        total=len(sim["exp_id"].values),
+        desc="Reprojecting simulated data",
+    ):
+        sim_s = sim.sel(exp_id=s)
+        sim_s = sim_s.rio.reproject_match(obs)
+        sim_s = sim_s.rename({"x": "lon", "y": "lat"})
+        sims.append(sim_s)
+    sim = xr.concat(sims, dim="exp_id")
+
+    sim = sim.where(obs["land_mask"])
+
+    # obs = obs.resample(time="YS").mean()
+    # sim = sim.resample(time="YS").mean()
 
     return obs, sim
 
@@ -214,9 +337,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--filter_var",
-        help="""Filter variable. Default='land_ice_area_retreat'""",
+        help="""Filter variable. Default='retreat'""",
         type=str,
-        choices=["land_ice_area_fraction_retreat", "dhdt"],
+        choices=["retreat", "dhdt", "speed", "grace"],
         default="land_ice_area_fraction_retreat",
     )
     parser.add_argument(
@@ -260,7 +383,7 @@ if __name__ == "__main__":
 
     options = parser.parse_args()
     engine = options.engine
-    spatial_files = options.FILES
+    spatial_files = sorted(options.FILES)
     filter_var = options.filter_var
     fudge_factor = options.fudge_factor
     notebook = options.notebook
@@ -307,9 +430,11 @@ if __name__ == "__main__":
     obs_std_var = "land_ice_area_fraction_retreat_uncertainty"
     sim_var = "land_ice_area_fraction_retreat"
     filter_range = ["1980", "2019"]
-    sum_dims = ["y", "x", "time"]
+    coarsen: dict | None = None
+    sum_dims: list | None = None
+
     obs_file: str
-    if filter_var == "land_ice_area_fraction_retreat":
+    if filter_var == "retreat":
         obs_mean_var = "land_ice_area_fraction_retreat"
         obs_std_var = "land_ice_area_fraction_retreat_uncertainty"
         sim_var = "land_ice_area_fraction_retreat"
@@ -321,6 +446,8 @@ if __name__ == "__main__":
         )
         log_likelihood = log_jaccard_score_xr
         prepare_input = prepare_liafr
+        coarsen = None
+        sum_dims = ["y", "x", "time"]
     elif filter_var == "dhdt":
         obs_mean_var = "dhdt"
         obs_std_var = "dhdt_err"
@@ -330,6 +457,27 @@ if __name__ == "__main__":
         obs_file = input_data_dir + "/mass_balance/Greenland_dhdt_mass*_1kmgrid_DB.nc"
         prepare_input = prepare_dhdt
         log_likelihood = log_normal_xr
+        coarsen = {"x": 5, "y": 5}
+    elif filter_var == "speed":
+        obs_mean_var = "v"
+        obs_std_var = "v_err"
+        sim_var = "velsurf_mag"
+        filter_range = ["1985", "2018"]
+        sum_dims = ["time", "y", "x"]
+        obs_file = input_data_dir + "/itslive/ITS_LIVE_GRE_G0240_*.nc"
+        prepare_input = prepare_v
+        log_likelihood = log_normal_xr
+        coarsen = {"x": 5, "y": 5}
+    elif filter_var == "grace":
+        obs_mean_var = "mass_balance"
+        obs_std_var = "mass_balance_err"
+        sim_var = "tendency_of_ice_mass"
+        filter_range = ["2002", "2020"]
+        sum_dims = ["time", "lat", "lon"]
+        obs_file = input_data_dir + "/mass_balance/grace_gsfc_greenland_mass_balance.nc"
+        prepare_input = prepare_grace
+        log_likelihood = log_normal_xr
+        coarsen = None
     else:
         print(f"{filter_var} not supported")
 
@@ -348,8 +496,7 @@ if __name__ == "__main__":
             concat_dim="exp_id",
             chunks="auto",
         ).sel({"time": slice(*filter_range)})
-
-    observed = xr.open_mfdataset(obs_file, chunks="auto").sel(
+    observed = xr.open_mfdataset(obs_file, chunks={"time": -1}).sel(
         {"time": slice(*filter_range)}
     )
 
@@ -396,7 +543,7 @@ if __name__ == "__main__":
             obs_mean_var,
             obs_std_var,
             sim_var,
-            coarsen={"x": 5, "y": 5},
+            coarsen=coarsen,
         )
         sim = xr.merge([sim, stats])
 

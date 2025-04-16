@@ -216,7 +216,9 @@ def plot_prior_posteriors(
                     sharey=True,
                     figsize=figsize,
                 )
-                # fig.subplots_adjust(hspace=0.1, wspace=0.1)
+                fig.subplots_adjust(
+                    hspace=0.6, wspace=0.1, left=0.05, right=0.95, bottom=0.1, top=0.95
+                )
                 for k, v in enumerate(x_order):
                     if bins_dict is not None:
                         bins = bins_dict.get(v, "auto")
@@ -261,7 +263,6 @@ def plot_prior_posteriors(
                     for tick in ticklabels:
                         tick.set_rotation(15)
 
-                fig.tight_layout()
                 fig.set_dpi(600)
                 fn = pdf_dir / Path(
                     f"{basin}_prior_posterior_filtered_by_{filter_var}.pdf"
@@ -423,6 +424,7 @@ def plot_timeseries(
     percentiles: list[float] = [0.025, 0.975],
     fontsize: float = 6,
     add_lineplot: bool = False,
+    add_median: bool = False,
 ) -> None:
     """
     Plot cumulative mass balance and grounding line flux.
@@ -468,6 +470,8 @@ def plot_timeseries(
         Font size for the plot, by default 6.
     add_lineplot : bool, optional
         Whether to add line plots for individual simulations, by default False.
+    add_median : bool, optional
+        Whether to add simulated median, by default False.
     """
 
     import pism_ragis.processing  # pylint: disable=import-outside-toplevel,reimported
@@ -586,6 +590,14 @@ def plot_timeseries(
                             ls="dotted",
                             dashes=(1, 5),
                         )
+                    if add_median:
+                        sim_prior_quantiles[0.5][p_var].plot(
+                            color=sim_cmap[0],
+                            add_legend=False,
+                            ax=ax,
+                            lw=1,
+                            ls="solid",
+                        )
 
                 if sim_posterior is not None:
                     sim_ci = ax.fill_between(
@@ -607,6 +619,14 @@ def plot_timeseries(
                             lw=0.20,
                             ls="dotted",
                             dashes=(1, 5),
+                        )
+                    if add_median:
+                        sim_posterior_quantiles[0.5][p_var].plot(
+                            color=sim_cmap[1],
+                            add_legend=False,
+                            ax=ax,
+                            lw=1,
+                            ls="solid",
                         )
 
                 if (

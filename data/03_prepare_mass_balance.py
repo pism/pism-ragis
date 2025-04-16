@@ -115,11 +115,12 @@ def prepare_grace_goddard(result_dir: Path = Path("mass_balance")):
         Directory to save the results, by default "mass_balance".
     """
     url = "https://earth.gsfc.nasa.gov/sites/default/files/geo/gsfc.glb_.200204_202410_rl06v2.0_obp-ice6gd_halfdegree.nc"
-    ds = download_netcdf(url)
     fn = "grace_gsfc_greenland_mass_balance_clean.nc"
     p_fn = result_dir / fn
+    ds = download_netcdf(url)
     save_netcdf(ds, p_fn)
-
+    ds = xr.open_dataset(p_fn)
+    ds = ds.sel({"lon": slice(360 - 75, 360 - 10), "lat": slice(59, 84)})
     ds["land_mask"].attrs.update({"units": ""})
     ds = ds.pint.quantify()
     lat_bounds, lon_bounds = ds["lat_bounds"], ds["lon_bounds"]
@@ -154,9 +155,13 @@ def prepare_grace_goddard(result_dir: Path = Path("mass_balance")):
     area.name = "area"
     area.attrs.update({"units": "m^2"})
 
+    ds["lwe_thickness_err"] = xr.zeros_like(ds["lwe_thickness"]) + 4
+
     water_density = xr.DataArray(1000.0).pint.quantify("kg m^-3").pint.to("Gt m^-3")
     ds["cumulative_mass_balance"] = (
-        ds["lwe_thickness"].pint.to("m") * area * water_density
+        ds["lwe_thickness"].where(ds["land_mask"]).pint.to("m")
+        * area.pint.quantify()
+        * water_density
     )
     days_in_interval = (
         (ds.time.diff(dim="time") / np.timedelta64(1, "s"))
@@ -166,7 +171,13 @@ def prepare_grace_goddard(result_dir: Path = Path("mass_balance")):
     ds["mass_balance"] = (
         ds["cumulative_mass_balance"].diff(dim="time") / days_in_interval
     )
-    ds = ds.expand_dims({"basin": ["GRACE"]})
+    ds["mass_balance_err"] = (
+        xr.zeros_like(ds["mass_balance"])
+        + xr.DataArray(4).pint.quantify("cm yr^-1").pint.to("m yr^-1")
+        * area.pint.quantify()
+        * water_density
+    )
+
     fn = "grace_gsfc_greenland_mass_balance.nc"
 
     p_fn = result_dir / fn
@@ -223,7 +234,6 @@ def prepare_grace_tellus(result_dir: Path = Path("mass_balance")):
     ds["mass_balance"] = (
         ds["cumulative_mass_balance"].diff(dim="time") / days_in_interval
     )
-    ds = ds.expand_dims({"basin": ["GRACE"]})
     fn = "grace_greenland_mass_balance.nc"
     p_fn = result_dir / fn
     grace_ds = ds.pint.dequantify()
@@ -311,13 +321,13 @@ if __name__ == "__main__":
 
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
-    parser.description = "Prepare Mass Balance from Mankoff et al. (2021)."
+    parser.description = "Prepare Mass Balance data sets."
     options = parser.parse_args()
     p = Path("mass_balance")
     p.mkdir(parents=True, exist_ok=True)
 
     prepare_grace_goddard(result_dir=p)
 
-    prepare_mankoff(result_dir=p)
+    # prepare_mankoff(result_dir=p)
 
-    prepare_grace_tellus(result_dir=p)
+    # prepare_grace_tellus(result_dir=p)

@@ -35,7 +35,7 @@ import requests
 import xarray as xr
 from cdo import Cdo
 from dask.diagnostics import ProgressBar
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from pism_ragis.download import unzip_files
 from pism_ragis.processing import preprocess_time

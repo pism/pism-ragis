@@ -1,10 +1,10 @@
 [Parameters]
 
 'calving.vonmises_calving.sigma_max' = '$\sigma_{\mathrm{max}}$ (kPa)'
-'geometry.front_retreat.prescribed.file' = '\textsf{Retreat Method}'
+'geometry.front_retreat.prescribed.file' = 'Retreat Method'
 'ocean.th.gamma_T' = '$\gamma_{S}$ (10$^{-4}$ 1)'
-'surface.given.file' = '\textsf{Climate Forcing}'
-'ocean.th.file' = '\textsf{Ocean Forcing}'
+'surface.given.file' = 'Climate Forcing'
+'ocean.th.file' = 'Ocean Forcing'
 'frontal_melt.routing.parameter_a' = '$a$ (10$^{-4}$ m$^{-\alpha}$ day$^{\alpha-1}$ Celsius$^{-\beta}$)'
 'frontal_melt.routing.parameter_b' = '$b$ (day$^{\alpha-1)}$ Celsius$^{-\beta}$)'
 'frontal_melt.routing.power_alpha' = '$\alpha$ (1)'
@@ -73,7 +73,7 @@ cumulative_smb_flux = "cumulative_surface_mass_balance"
 
 cumulative_mass_flux_uncertainty = "cumulative_mass_balance_uncertainty"
 cumulative_grounding_line_flux_uncertainty = "cumulative_grounding_line_flux_uncertainty"
-cumulative_smb__flux_uncertainty = "cumulative_surface_mass_balance_uncertainty"
+cumulative_smb_flux_uncertainty = "cumulative_surface_mass_balance_uncertainty"
 
 ["PISM Spatial"]
 

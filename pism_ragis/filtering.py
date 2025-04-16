@@ -173,7 +173,7 @@ def importance_sampling(
     """
 
     # Interpolate simulated data to match the observed data's calendar
-    simulated = simulated.interp_like(observed, method="linear")
+    simulated = simulated.interp_like(observed)
 
     # Calculate the observed mean and adjusted standard deviation
     obs_mean = observed[obs_mean_var]
