@@ -34,7 +34,6 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
 import toml
 import xarray as xr
 
@@ -44,7 +43,6 @@ from pism_ragis.filtering import filter_outliers, run_importance_sampling
 from pism_ragis.logger import get_logger
 from pism_ragis.plotting import (
     plot_basins,
-    plot_posteriors,
     plot_prior_posteriors,
     plot_sensitivity_indices,
     plot_timeseries,
@@ -62,44 +60,6 @@ warnings.filterwarnings(
 warnings.filterwarnings(
     "ignore", category=RuntimeWarning, message="invalid value encountered in divide"
 )
-
-
-def cumulative_df(df, v):
-    """
-    Create a cumulative DataFrame for a specified variable.
-
-    This function takes a DataFrame and a variable name, renames the specified variable
-    to "cumulative_value", and adds a new column "variable" with the variable name.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        The input DataFrame containing the data.
-    v : str
-        The name of the variable to be processed.
-
-    Returns
-    -------
-    pd.DataFrame
-        A DataFrame with the specified variable renamed to "cumulative_value" and an additional
-        column "variable" containing the variable name.
-
-    Examples
-    --------
-    >>> df = pd.DataFrame({
-    ...     "basin": ["A", "B", "C"],
-    ...     "filtered_by": ["X", "Y", "Z"],
-    ...     "mass_balance": [1.0, 2.0, 3.0]
-    ... })
-    >>> cumulative_df(df, "mass_balance")
-       basin filtered_by  cumulative_value      variable
-    0     A           X               1.0  mass_balance
-    1     B           Y               2.0  mass_balance
-    2     C           Z               3.0  mass_balance
-    """
-    df = df[["basin", "filtered_by", v]].rename(columns={v: "cumulative_value"})
-    df["variable"] = v
-    return df
 
 
 if __name__ == "__main__":
@@ -316,10 +276,10 @@ if __name__ == "__main__":
     gis_sim_discharge_median = gis_sim_discharge.median(dim="exp_id").compute()
     gis_sim_discharge_ci = gis_sim_discharge.quantile(ci, dim="exp_id").compute()
     print(
-        f"""Observed {discharge_var} mean: {gis_obs_discharge_mean[discharge_var].values:.0f} std: {gis_obs_discharge_mean[discharge_uncertainty_var].values:.0f} {gis_obs_discharge_mean[discharge_var].attrs["units"]}"""
+        f"""Observed {discharge_var} mean: {gis_obs_discharge_mean[discharge_var].values.round()} std: {gis_obs_discharge_mean[discharge_uncertainty_var].values.round()} {gis_obs_discharge_mean[discharge_var].attrs["units"]}"""
     )
     print(
-        f"""Simulated {discharge_var} median {gis_sim_discharge_median:.0f}  {gis_sim_discharge_ci.values} {ci} {gis_sim_discharge_median.attrs["units"]}"""
+        f"""Simulated {discharge_var} median {gis_sim_discharge_median.values.round()}  {gis_sim_discharge_ci.values.round()} {ci} {gis_sim_discharge_median.attrs["units"]}"""
     )
 
     bins_dict = config["Posterior Bins"]
@@ -370,10 +330,10 @@ if __name__ == "__main__":
         )
         stats = simulated_valid[["pism_config", "run_stats"]]
 
-        outliers_config = prp.filter_config(simulated_outliers, params)
+        outliers_config = prp.filter_config(simulated_outliers["pism_config"], params)
         outliers_df = prp.config_to_dataframe(outliers_config, ensemble="Outliers")
 
-        valid_config = prp.filter_config(simulated_valid, params)
+        valid_config = prp.filter_config(simulated_valid["pism_config"], params)
         valid_df = prp.config_to_dataframe(valid_config, ensemble="Valid")
 
         obs_basins = set(observed.basin.values)
@@ -455,154 +415,11 @@ if __name__ == "__main__":
         pdf_dir.mkdir(parents=True, exist_ok=True)
         png_dir = plot_dir / Path("pngs")
         png_dir.mkdir(parents=True, exist_ok=True)
-        svg_dir = plot_dir / Path("svgs")
-        svg_dir.mkdir(parents=True, exist_ok=True)
-
-        post_sum = (
-            simulated_posterior.sel(filtered_by=sim_vars)
-            .sel(time=slice(str(filter_range[0]), str(filter_range[-1])))[sim_vars]
-            .sum(dim="time")
-        )
-        obs_sum = observed_basins_resampled.sel(
-            time=slice(str(filter_range[0]), str(filter_range[-1]))
-        )[sim_vars].sum(dim="time")
-        # post_sum_norm = post_sum - obs_sum
-
-        df = post_sum.to_dataframe().reset_index()
-        c_df = pd.concat([cumulative_df(df, v) for v in sim_vars]).reset_index(
-            drop=True
-        )
-
-        with mpl.rc_context({"font.size": 6}):
-            legend = False
-            for k, (basin, basin_df) in enumerate(c_df.groupby(by="basin")):
-                fig, ax = plt.subplots(1, 1, figsize=(1.2, 1.2))
-
-                obs_data = (
-                    observed_basins_resampled.sel(basin=basin)
-                    .sel(time=slice(str(filter_range[0]), str(filter_range[-1])))
-                    .sum(dim="time")
-                )
-                obs_data_x = ["grounding_line_flux", "mass_balance"]
-                obs_data_y = [
-                    obs_data["grounding_line_flux"].to_numpy(),
-                    obs_data["mass_balance"].to_numpy(),
-                ]
-                obs_data_y_err = [
-                    obs_data["grounding_line_flux_uncertainty"].to_numpy(),
-                    obs_data["mass_balance_uncertainty"].to_numpy(),
-                ]
-                sns.violinplot(
-                    data=basin_df,
-                    x="variable",
-                    y="cumulative_value",
-                    hue="variable",
-                    split=False,
-                    palette=["#88CCEE", "#DDCC77"],
-                    inner="quart",
-                    cut=0,
-                    linewidth=0.35,
-                    linecolor="k",
-                    ax=ax,
-                    legend=legend,
-                )
-                ax.scatter(
-                    obs_data_x, obs_data_y, s=2, marker="o", edgecolors="k", color="w"
-                )
-                ax.errorbar(
-                    obs_data_x,
-                    obs_data_y,
-                    obs_data_y_err,
-                    fmt="none",
-                    capsize=1.5,
-                    capthick=0.5,
-                    ecolor="k",
-                    elinewidth=0.5,
-                )
-                ax.set_title(basin)
-                ax.set_xlabel(None)
-                if basin == "GIS":
-                    ax.set_ylabel(
-                        f"Cumulative mass change\n{filter_range[0]} to {filter_range[1]} (Gt)"
-                    )
-                else:
-                    ax.set_ylabel(None)
-                ax.spines["top"].set_visible(False)
-                ax.spines["right"].set_visible(False)
-                ax.spines["bottom"].set_visible(False)
-                ax.get_xaxis().set_visible(False)
-                fig.tight_layout()
-                fig.set_dpi(600)
-                fig.savefig(pdf_dir / Path(f"{basin}_cumulative_change.pdf"))
-                fig.savefig(svg_dir / Path(f"{basin}_cumulative_change.svg"))
-                fig.savefig(
-                    png_dir
-                    / Path(
-                        f"{basin}_cumulative_change.png",
-                    )
-                )
-                plt.close()
-                del fig
-
-            # with mpl.rc_context({"font.size": 6}):
-            # fig, axs = plt.subplots(2,4, figsize=(6.4, 4.8))
-
-            # for k, (basin, basin_df) in enumerate(c_df.groupby(by="basin")):
-            #     ax = axs.flatten()[k]
-            #     legend = bool(k==0)
-            #     obs_data = observed_basins_resampled_ds.sel(basin=basin).sel(time=slice(str(filter_range[0]), str(filter_range[-1]))).sum(dim="time")
-            #     obs_data_x = ["grounding_line_flux", "mass_balance"]
-            #     obs_data_y = [obs_data["grounding_line_flux"].to_numpy(), obs_data["mass_balance"].to_numpy()]
-            #     obs_data_y = [0, 0]
-            #     obs_data_y_err = [obs_data["grounding_line_flux_uncertainty"].to_numpy(), obs_data["mass_balance_uncertainty"].to_numpy()]
-            #     sns.violinplot(data=basin_df,
-            #                    x="variable",
-            #                    y="cumulative_value",
-            #                    hue="variable",
-            #                    split=False,
-            #                    palette=["#88CCEE", "#CC6677"],
-            #                    inner="quart",
-            #                    cut=0,
-            #                    linewidth=0.5,
-            #                    ax=ax, legend=legend)
-            #     # ax.scatter(obs_data_x, obs_data_y,
-            #     #            s=2,
-            #     #            marker="o", edgecolors="#117733", color="#117733")
-            #     ax.errorbar(obs_data_x, obs_data_y, obs_data_y_err, fmt="none",
-            #                 capsize=1.5,
-            #                 capthick=0.5,
-            #                 ecolor="#117733",
-            #                 elinewidth=0.5)
-            #     ax.set_title(basin)
-            # fig.tight_layout()
-            # fig.set_dpi(600)
-            # fig.savefig(
-            #     pdf_dir
-            #     / Path(
-            #         "cumulative_change.pdf"
-            #     )
-            # )
-            # fig.savefig(
-            #     png_dir
-            #     / Path(
-            #         "cumulative_change.png",
-            #         dpi=300,
-            #     )
-            # )
-            # plt.close()
-            # del fig
 
         # Apply the functions to the corresponding columns
         for col, functions in column_function_mapping.items():
             for func in functions:
                 prior_posterior[col] = prior_posterior[col].apply(func)
-
-        if "frontal_melt.routing.parameter_a" in prior_posterior.columns:
-            prior_posterior["frontal_melt.routing.parameter_a"] *= 10**4
-        if "ocean.th.gamma_T" in prior_posterior.columns:
-            prior_posterior["ocean.th.gamma_T"] *= 10**4
-        if "calving.vonmises_calving.sigma_max" in prior_posterior.columns:
-            prior_posterior["calving.vonmises_calving.sigma_max"] *= 10**-3
 
         prior_posterior.to_parquet(
             data_dir
@@ -611,20 +428,31 @@ if __name__ == "__main__":
             )
         )
 
+        if "frontal_melt.routing.parameter_a" in prior_posterior.columns:
+            prior_posterior["frontal_melt.routing.parameter_a"] *= 10**4
+        if "ocean.th.gamma_T" in prior_posterior.columns:
+            prior_posterior["ocean.th.gamma_T"] *= 10**4
+        if "calving.vonmises_calving.sigma_max" in prior_posterior.columns:
+            prior_posterior["calving.vonmises_calving.sigma_max"] *= 10**-3
+
+        for col in [
+            "basin",
+            "geometry.front_retreat.prescribed.file",
+            "ocean.th.file",
+            "surface.given.file",
+            "ensemble",
+            "filtered_by",
+            "retreat_method",
+        ]:
+            if col in prior_posterior.columns:
+                prior_posterior[col] = prior_posterior[col].astype("category")
+
         plot_prior_posteriors(
             prior_posterior.rename(columns=plot_params),
             x_order=plot_params.values(),
             fig_dir=fig_dir,
             bins_dict=short_bins_dict,
         )
-
-        # plot_posteriors(
-        #     prior_posterior.rename(columns=params_sorted_dict),
-        #     x_order=params_sorted_dict.values(),
-        #     y_order=posterior_basins_sorted,
-        #     hue="filtered_by",
-        #     fig_dir=fig_dir,
-        # )
 
         p_df = prior_posterior
         p_df["retreat_method"] = retreat_method
@@ -634,29 +462,10 @@ if __name__ == "__main__":
 
     retreat_df = pd.concat(pp_retreat_list).reset_index(drop=True)
 
-    ps = params_sorted_dict.copy()
-    del ps["geometry.front_retreat.prescribed.file"]
-
-    for f_var in ["grounding_line_flux", "mass_balance"]:
-        fig_p_dir = result_dir / Path(f"filtered_by_{f_var.lower()}") / Path("figures")
-        fig_p_dir.mkdir(parents=True, exist_ok=True)
-
-        df = retreat_df[
-            (retreat_df["filtered_by"] == f_var)
-            & (retreat_df["ensemble"] == "Posterior")
-        ]
-        df = df[df["retreat_method"] != "All"].drop(columns=["filtered_by"])
-        plot_posteriors(
-            df.rename(columns=params_sorted_dict),
-            x_order=ps.values(),
-            y_order=["GIS", "CW"],
-            hue="retreat_method",
-            fig_dir=fig_p_dir,
-        )
-
+    # Sensitivity Analysis
     prior_config = prp.filter_config(simulated["pism_config"], params)
     prior_df = prp.config_to_dataframe(prior_config, ensemble="Prior")
-    params_df = prp.prepare_input(prior_df).drop(columns=["aux_id"])
+    params_df = prp.convert_category_to_integer(prior_df).drop(columns=["aux_id"])
 
     sensitivity_indices_list = []
     for basin_group, intersection, filtering_vars in zip(

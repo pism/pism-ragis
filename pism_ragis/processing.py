@@ -1012,6 +1012,26 @@ def simplify_calving(my_str: str) -> int:
     return int(my_str.split("_")[3])
 
 
+def convert_column_to_category(column: pd.Series) -> pd.Series:
+    """
+    Convert column to category if possible.
+
+    Parameters
+    ----------
+    column : pd.Series
+        The column to convert.
+
+    Returns
+    -------
+    pd.Series
+        The converted column, or the original column if conversion fails.
+    """
+    try:
+        return column.astype("category")
+    except ValueError:
+        return column
+
+
 def convert_column_to_numeric(column: pd.Series) -> pd.Series:
     """
     Convert column to numeric if possible.
@@ -1059,7 +1079,7 @@ def filter_config(da: xr.DataArray, params: list[str]) -> xr.DataArray:
     """
     Filter the configuration parameters from the dataset.
 
-    This function selects the specified configuration parameters from the dataset
+    This function selects the specified configuration parameters from a DataArray
     and returns them as a DataArray.
 
     Parameters
@@ -1270,7 +1290,7 @@ def add_prefix_coord(
     return sensitivity_indices
 
 
-def prepare_input(
+def convert_category_to_integer(
     df: pd.DataFrame,
     params: list[str] = [
         "surface.given.file",
@@ -1307,7 +1327,7 @@ def prepare_input(
     ...     "ensemble": [1, 2, 3],
     ...     "exp_id": [101, 102, 103]
     ... })
-    >>> prepare_input(df)
+    >>> convert_category_to_integer(df)
        surface.given.file  ocean.th.file  geometry.front_retreat.prescribed.file
     0                   0              0                                      0
     1                   1              1                                      1

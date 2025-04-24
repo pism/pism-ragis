@@ -207,9 +207,11 @@ def plot_prior_posteriors(
     with mpl.rc_context(rc=rc_params):
         with tqdm(
             desc="Plotting prior and posterior histograms",
-            total=len(df.groupby(by=group_columns)),
+            total=len(df.groupby(by=group_columns, observed=True)),
         ) as progress_bar:
-            for (basin, filter_var), m_df in df.groupby(by=group_columns):
+            for (basin, filter_var), m_df in df.groupby(
+                by=group_columns, observed=True
+            ):
                 fig, axs = plt.subplots(
                     4,
                     4,
