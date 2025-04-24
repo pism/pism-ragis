@@ -39,6 +39,7 @@ import seaborn as sns
 import toml
 import xarray as xr
 from dask.diagnostics import ProgressBar
+from dask.distributed import Client, progress
 from tqdm.auto import tqdm
 
 import pism_ragis.processing as prp
@@ -49,7 +50,7 @@ from pism_ragis.filtering import (
 )
 from pism_ragis.likelihood import log_jaccard_score_xr, log_normal_xr
 from pism_ragis.logger import get_logger
-from pism_ragis.plotting import plot_prior_posteriors
+from pism_ragis.plotting import plot_mapplane, plot_prior_posteriors
 from pism_ragis.processing import filter_by_retreat_method, preprocess_config
 
 xr.set_options(
@@ -521,6 +522,31 @@ if __name__ == "__main__":
     }
     plot_params = params_sorted_dict.copy()
     del plot_params["geometry.front_retreat.prescribed.file"]
+
+    v = "velsurf_mag"
+    time = 0
+    fig_dir = result_dir / Path("figures")
+    fig_dir.mkdir(parents=True, exist_ok=True)
+    plot_dir = fig_dir / Path("mapplane")
+    plot_dir.mkdir(parents=True, exist_ok=True)
+
+    client = Client()
+    print(f"Open client in browser: {client.dashboard_link}")
+
+    das = [
+        simulated.isel({"time": time})
+        .sel({"exp_id": exp_id})
+        .sel({"x": slice(-374500, -97590), "y": slice(-1176000, -901783)})[v]
+        for exp_id in simulated.exp_id
+    ]
+    fnames = [
+        plot_dir / Path(f"{v}_exp_id_{exp_id.values}_time_{time}.png")
+        for exp_id in simulated.exp_id
+    ]
+    futures = client.map(
+        plot_mapplane, das, fnames, vmin=10, vmax=1500, cmap="speed_colorblind"
+    )
+    progress(futures)
 
     for retreat_method in retreat_methods:
         print("-" * 80)

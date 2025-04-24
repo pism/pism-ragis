@@ -25,6 +25,7 @@ import warnings
 from importlib.resources import files
 from pathlib import Path
 
+import cartopy.crs as ccrs
 import matplotlib as mpl
 import matplotlib.dates as mdates
 import matplotlib.pylab as plt
@@ -34,6 +35,7 @@ import seaborn as sns
 import toml
 import xarray as xr
 from dask.distributed import Client, progress
+from matplotlib import colors
 from tqdm.auto import tqdm
 
 from pism_ragis.decorators import profileit, timeit
@@ -56,6 +58,147 @@ obs_alpha = config["Plotting"]["obs_alpha"]
 obs_cmap = config["Plotting"]["obs_cmap"]
 sim_alpha = config["Plotting"]["sim_alpha"]
 sim_cmap = config["Plotting"]["sim_cmap"]
+
+
+def qgis2cmap(
+    filename: Path | str,
+    num_levels: int = 256,  # Renamed from N to num_levels
+    name: str = "my colormap",
+) -> colors.LinearSegmentedColormap:
+    """
+    Read a colormap exported from QGIS raster layers and return a matplotlib.colors.LinearSegmentedColormap.
+
+    Parameters
+    ----------
+    filename : Path or str
+        The path to the QGIS colormap file.
+    num_levels : int, optional
+        The number of RGB quantization levels, by default 256.
+    name : str, optional
+        The name of the colormap, by default "my colormap".
+
+    Returns
+    -------
+    matplotlib.colors.LinearSegmentedColormap
+        The matplotlib colormap.
+    """
+    m_data = np.loadtxt(filename, skiprows=2, delimiter=",")[:, :-1]
+    values_scaled = (m_data[:, 0] - np.min(m_data[:, 0])) / (
+        np.max(m_data[:, 0]) - np.min(m_data[:, 0])
+    )
+    colors_scaled = m_data[:, 1::] / 255.0
+    m_colors = [(values_scaled[k], colors_scaled[k]) for k in range(len(values_scaled))]
+    cmap = colors.LinearSegmentedColormap.from_list(name, m_colors, N=num_levels)
+
+    return cmap
+
+
+def register_colormaps(path: str | Path | None = None) -> None:
+    """
+    Register colormaps from text files.
+
+    Parameters
+    ----------
+    path : str, Path, optional
+        The directory where the colormap text files are located. If not provided, the
+        'pism_ragis.data' directory is used.
+
+    Examples
+    --------
+    >>> register_colormaps()
+    >>> register_colormaps('/path/to/colormap/files')
+    """
+    if path is not None:
+        cmap_files = Path(path).glob("*.txt")
+    else:
+        cmap_files = Path(str(files("pism_ragis.data").joinpath("*.txt"))).parent.glob(
+            "*.txt"
+        )
+    for cmap_file in cmap_files:
+        name = cmap_file.name.removesuffix(".txt")
+        cmap = qgis2cmap(cmap_file, name=name)
+        plt.colormaps.register(cmap)
+
+
+def plot_mapplane(
+    da: xr.DataArray,
+    fname: str | Path,
+    figwidth: float = 3.2,
+    fontsize: float = 6,
+    **kwargs,
+):
+    """
+    Plot a 2D map of a DataArray on a polar stereographic projection.
+
+    Parameters
+    ----------
+    da : xr.DataArray
+        The data array to be plotted.
+    fname : str or Path
+        The filename or path where the plot will be saved.
+    figwidth : float, optional
+        The width of the figure in inches, by default 3.2.
+    fontsize : float, optional
+        The font size for the plot, by default 6.
+    **kwargs : dict
+        Additional keyword arguments passed to the `plot` method of the DataArray.
+
+    Notes
+    -----
+    - The function uses a North Polar Stereographic projection with specific settings.
+    - Colormaps are registered before plotting.
+    - The aspect ratio of the figure is adjusted dynamically based on the data bounds.
+
+    Examples
+    --------
+    >>> import xarray as xr
+    >>> da = xr.DataArray([[1, 2], [3, 4]])
+    >>> plot_mapplane(da, "output.png")
+    """
+
+    try:
+        register_colormaps()
+    except:
+        pass
+    rc_params = {
+        "font.size": fontsize,
+        "font.family": "DejaVu Sans",
+        # Add other rcParams settings if needed
+    }
+    ar = 1.0  # initial aspect ratio for first trial
+    wi = figwidth  # width in inches
+    hi = wi * ar  # height in inches
+    cartopy_crs = ccrs.NorthPolarStereo(
+        central_longitude=-45, true_scale_latitude=70, globe=None
+    )
+    with mpl.rc_context(rc=rc_params):
+
+        fig = plt.figure(figsize=(wi, hi))
+        ax = fig.add_subplot(111, projection=cartopy_crs)
+
+        da.plot(ax=ax, transform=cartopy_crs, cbar_kwargs={"shrink": 0.7}, **kwargs)
+
+        ax.gridlines(
+            draw_labels={"top": "x", "left": "y"},
+            dms=True,
+            x_inline=False,
+            y_inline=False,
+            rotate_labels=20,
+            ls="dotted",
+            color="k",
+            xlabel_style={"size": fontsize},
+            ylabel_style={"size": fontsize},
+        )
+
+    # Get proper ratio here
+    xmin, xmax = ax.get_xbound()
+    ymin, ymax = ax.get_ybound()
+    y2x_ratio = (ymax - ymin) / (xmax - xmin)
+    fig.tight_layout()
+    fig.set_figheight(wi * y2x_ratio)
+    fig.savefig(fname, dpi=300)
+    plt.close()
+    del fig
 
 
 @timeit
