@@ -120,10 +120,13 @@ def register_colormaps(path: str | Path | None = None) -> None:
         plt.colormaps.register(cmap)
 
 
+register_colormaps()
+
+
 def plot_mapplane(
     da: xr.DataArray,
     fname: str | Path,
-    figwidth: float = 3.2,
+    figwidth: float = 6.4,
     fontsize: float = 6,
     **kwargs,
 ):
@@ -156,48 +159,51 @@ def plot_mapplane(
     >>> plot_mapplane(da, "output.png")
     """
 
-    try:
-        register_colormaps()
-    except:
-        pass
     rc_params = {
         "font.size": fontsize,
         "font.family": "DejaVu Sans",
         # Add other rcParams settings if needed
     }
-    ar = 1.0  # initial aspect ratio for first trial
+    # ar = 1.0  # initial aspect ratio for first trial
     wi = figwidth  # width in inches
-    hi = wi * ar  # height in inches
-    cartopy_crs = ccrs.NorthPolarStereo(
+    # hi = wi * ar  # height in inches
+    crs = ccrs.NorthPolarStereo(
         central_longitude=-45, true_scale_latitude=70, globe=None
     )
     with mpl.rc_context(rc=rc_params):
 
-        fig = plt.figure(figsize=(wi, hi))
-        ax = fig.add_subplot(111, projection=cartopy_crs)
-
-        da.plot(ax=ax, transform=cartopy_crs, cbar_kwargs={"shrink": 0.7}, **kwargs)
-
-        ax.gridlines(
-            draw_labels={"top": "x", "left": "y"},
-            dms=True,
-            x_inline=False,
-            y_inline=False,
-            rotate_labels=20,
-            ls="dotted",
-            color="k",
-            xlabel_style={"size": fontsize},
-            ylabel_style={"size": fontsize},
+        p = da.plot(
+            transform=crs,
+            cbar_kwargs={"shrink": 0.7},
+            subplot_kws={"projection": crs},
+            **kwargs,
         )
 
-    # Get proper ratio here
-    xmin, xmax = ax.get_xbound()
-    ymin, ymax = ax.get_ybound()
-    y2x_ratio = (ymax - ymin) / (xmax - xmin)
-    fig.tight_layout()
-    fig.set_figheight(wi * y2x_ratio)
-    fig.savefig(fname, dpi=300)
-    plt.close()
+        for ax in p.axs.flat:
+            ax.gridlines(
+                draw_labels={"top": "x", "left": "y"},
+                dms=True,
+                x_inline=False,
+                y_inline=False,
+                rotate_labels=20,
+                ls="dotted",
+                color="k",
+                xlabel_style={"size": fontsize},
+                ylabel_style={"size": fontsize},
+            )
+
+            # Get proper ratio here
+            xmin, xmax = ax.get_xbound()
+            ymin, ymax = ax.get_ybound()
+            y2x_ratio = (ymax - ymin) / (xmax - xmin)
+            ax.set_aspect(
+                y2x_ratio,
+                adjustable="box",
+            )
+        fig = p.fig
+        fig.set_figwidth(wi)
+        fig.savefig(fname, dpi=300)
+        plt.close()
     del fig
 
 

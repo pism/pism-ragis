@@ -496,10 +496,8 @@ if __name__ == "__main__":
             combine="nested",
             concat_dim="exp_id",
             chunks="auto",
-        ).sel({"time": slice(*filter_range)})
-    observed = xr.open_mfdataset(obs_file, chunks={"time": -1}).sel(
-        {"time": slice(*filter_range)}
-    )
+        )
+    observed = xr.open_mfdataset(obs_file, chunks={"time": -1})
 
     bins_dict = config["Posterior Bins"]
     parameter_categories = config["Parameter Categories"]
@@ -523,30 +521,71 @@ if __name__ == "__main__":
     plot_params = params_sorted_dict.copy()
     del plot_params["geometry.front_retreat.prescribed.file"]
 
-    v = "velsurf_mag"
-    time = 0
-    fig_dir = result_dir / Path("figures")
-    fig_dir.mkdir(parents=True, exist_ok=True)
-    plot_dir = fig_dir / Path("mapplane")
-    plot_dir.mkdir(parents=True, exist_ok=True)
-
-    client = Client()
-    print(f"Open client in browser: {client.dashboard_link}")
-
-    das = [
-        simulated.isel({"time": time})
-        .sel({"exp_id": exp_id})
-        .sel({"x": slice(-374500, -97590), "y": slice(-1176000, -901783)})[v]
-        for exp_id in simulated.exp_id
-    ]
-    fnames = [
-        plot_dir / Path(f"{v}_exp_id_{exp_id.values}_time_{time}.png")
-        for exp_id in simulated.exp_id
-    ]
-    futures = client.map(
-        plot_mapplane, das, fnames, vmin=10, vmax=1500, cmap="speed_colorblind"
+    simulated = simulated.pint.quantify()
+    water_density = xr.DataArray(1000.0).pint.quantify("kg m^-3").pint.to("Gt m^-3")
+    ice_density = xr.DataArray(910.0).pint.quantify("kg m^-3").pint.to("Gt m^-3")
+    dx = (
+        simulated.sel({"pism_config_axis": "grid.dx"})["pism_config"]
+        .astype(float)
+        .values[0]
     )
-    progress(futures)
+    dx = xr.DataArray(dx).pint.quantify("m")
+    simulated["basal_melt"] = (
+        simulated["tendency_of_ice_mass_due_to_basal_mass_flux"]
+        / ice_density
+        / simulated["thk"]
+        / dx
+    )
+    simulated["basal_melt"] = simulated["basal_melt"].where(simulated["basal_melt"] < 0)
+    simulated["frontal_melt"] = (
+        simulated["tendency_of_ice_mass_due_to_frontal_melt"]
+        / ice_density
+        / simulated["thk"]
+        / dx
+    )
+    simulated["frontal_melt"] = simulated["frontal_melt"].where(
+        simulated["frontal_melt"] < 0
+    )
+
+    vs = ["velsurf_mag", "basal_melt", "frontal_melt"]
+    for v, cmap, vmin, vmax in zip(
+        vs, ["speed_colorblind", "turbo_r", "turbo_r"], [10, -250, -1000], [1500, 0, 0]
+    ):
+        time = slice(0, 4)
+        fig_dir = result_dir / Path("figures")
+        fig_dir.mkdir(parents=True, exist_ok=True)
+        plot_dir = fig_dir / Path("mapplane")
+        plot_dir.mkdir(parents=True, exist_ok=True)
+
+        client = Client()
+        print(f"Open client in browser: {client.dashboard_link}")
+
+        for i in range(0, len(simulated.exp_id), 100):
+            exp_ids = simulated.exp_id[i : i + 100]
+            das = [
+                simulated.isel({"time": time})
+                .sel({"exp_id": exp_id})
+                .sel({"x": slice(-374500, -97590), "y": slice(-1176000, -901783)})[v]
+                for exp_id in exp_ids
+            ]
+            fnames = [
+                plot_dir / Path(f"{v}_exp_id_{exp_id.values}.png") for exp_id in exp_ids
+            ]
+            futures = client.map(
+                plot_mapplane,
+                das,
+                fnames,
+                col="time",
+                col_wrap=2,
+                vmin=vmin,
+                vmax=vmax,
+                cmap=cmap,
+            )
+            progress(futures)
+            client.gather(futures)
+
+    simulated = simulated.sel({"time": slice(*filter_range)})
+    observed = observed.sel({"time": slice(*filter_range)})
 
     for retreat_method in retreat_methods:
         print("-" * 80)
