@@ -123,7 +123,8 @@ def extract_gcm_profile(gcm_var, depth_field):
     )
 
 
-def compute_label(da: xr.DataArray, connectivity: int = 2, seed: tuple = None):
+def compute_label(da: xr.DataArray, seed: tuple = None, connectivity: int = 2):
+
     structure = np.ones((3, 3)) if connectivity == 2 else None
     labeled_array, _ = label(da.data, structure=structure)
     seed_label = labeled_array[seed]  # Note: (y,x)
@@ -133,72 +134,25 @@ def compute_label(da: xr.DataArray, connectivity: int = 2, seed: tuple = None):
 
 def compute_label_xr(
     da: xr.DataArray,
+    seed: dict | None = None,
     connectivity: int = 2,
-    seed: tuple = None,
-    dim: str | Iterable[Hashable] | None = ["y", "x"],
+    dim: str | Iterable[Hashable] = ["y", "x"],
 ):
-    return xr.apply_ufunc(
+    # FIXME: do not use "dim" get order from da
+    nearest = da.sel(seed, method="nearest")
+    seed_ij = tuple([da.get_index(d).get_loc(nearest[d].item()) for d in dim])
+
+    da_ = xr.apply_ufunc(
         compute_label,
         da,
         input_core_dims=[dim],
         output_core_dims=[dim],
-        kwargs={"seed": seed},
+        kwargs={"seed": seed_ij},
         vectorize=True,
         dask="parallelized",
     )
-
-
-def compute_connectivity_mask(
-    mask: xr.DataArray, seed_ij: tuple[int, int], connectivity=2
-):
-    """
-    Compute a connectivity mask from a binary mask using a seed point.
-
-    Parameters
-    ----------
-    mask : xarray.DataArray
-        Binary mask (True/False or 1/0) with spatial dimensions.
-    seed_ij : tuple of int
-        (x, y) indices of the seed point.
-    connectivity : int, optional
-        Connectivity for labeling (2 for 8-connectivity), by default 2.
-
-    Returns
-    -------
-    xarray.DataArray
-        Boolean mask of the connected region containing the seed point.
-    """
-    structure = np.ones((3, 3)) if connectivity == 2 else None
-    labeled_array, num_features = label(mask.data, structure=structure)
-    seed_label = labeled_array[seed_ij[1], seed_ij[0]]  # Note: (y,x)
-    conn_mask = labeled_array == seed_label
-    return xr.DataArray(
-        conn_mask, coords=mask.coords, dims=mask.dims, name="connectivity_mask"
-    )
-
-
-def get_ij(ds: xr.Dataset, xp, yp):
-    """
-    Get the (i, j) indices in the dataset closest to the given (x, y) coordinates.
-
-    Parameters
-    ----------
-    ds : xarray.Dataset
-        Dataset with 'x' and 'y' coordinates.
-    xp : float
-        X coordinate.
-    yp : float
-        Y coordinate.
-
-    Returns
-    -------
-    tuple of int
-        (i, j) indices corresponding to the nearest grid point.
-    """
-    nearest = ds.sel(x=xp, y=yp, method="nearest")
-    i = ds.get_index("x").get_loc(nearest.x.item())
-    j = ds.get_index("y").get_loc(nearest.y.item())
-    return (i, j)
+    da_.name = "connectivity_mask"
+    return da_
 
 
 def process_basin(basin, basin_wet):
@@ -336,25 +290,24 @@ if __name__ == "__main__":
         level_masks = []
 
         bed = dem_ds["bed"]
+        masks = []
+        for d in levels:
+            m = bed < d
+            m = m.expand_dims({"depth": [d]})
+            masks.append(m)
+        mask = xr.concat(masks, dim="depth")
 
         for s, seed in tqdm(seeds_gp.iterrows(), total=n_seeds, position=1):
             basin_geometry = basins_df.iloc[s].geometry
-            seed_point = seed.geometry.coords.xy
-            seed_ij = get_ij(dem_ds, *seed_point)  # (x_index, y_index)
-            masks = []
+            seed_point = {
+                "x": seed.geometry.coords.xy[0],
+                "y": seed.geometry.coords.xy[1],
+            }
 
-            for d in tqdm(levels, position=2, leave=False):
-                mask = bed < d
-                connectivity_mask = compute_connectivity_mask(
-                    mask, seed_ij, connectivity=2
-                )
-                connectivity_mask = connectivity_mask.astype("float")
-                connectivity_mask = connectivity_mask.expand_dims({"depth": [d]})
-                masks.append(connectivity_mask)
+            deepest_index_ = compute_label_xr(mask, seed_point).astype("float")
 
             level_mask = (
-                xr.concat(masks, dim="depth")
-                .sum(dim="depth", skipna=False)
+                deepest_index_.sum(dim="depth", skipna=False)
                 .rio.write_crs(crs, inplace=True)
                 .rio.clip([basin_geometry], drop=False)
             )
