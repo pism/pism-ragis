@@ -129,6 +129,7 @@ def create_local_grid(
     buffer: float = 500,
     base_resolution: int = 150,
     multipliers: list | np.ndarray = [1, 2, 3, 4, 6, 8, 10, 12, 16, 20, 24, 30],
+    crs: str = "EPSG:3413",
 ) -> xr.Dataset:
     """
     Create a local grid around a GeoSeries geometry with a buffer.
@@ -180,7 +181,7 @@ def create_local_grid(
         local_ds["y_bnds"][0, 0],
         local_ds["y_bnds"][-1, -1],
     ]
-    grid = create_domain(x_bnds, y_bnds)
+    grid = create_domain(x_bnds, y_bnds, crs=crs)
     return grid
 
 

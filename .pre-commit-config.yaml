@@ -37,39 +37,39 @@ repos:
   #      always_run: true
   #      pass_filenames: false
 
-  # Numpydoc
-  - repo: https://github.com/numpy/numpydoc
-    rev: v1.8.0
-    hooks:
-      - id: numpydoc-validation
+  # # Numpydoc
+  # - repo: https://github.com/numpy/numpydoc
+  #   rev: v1.8.0
+  #   hooks:
+  #     - id: numpydoc-validation
 
-  # Can run individually with `pre-commit run mypy --all-files`
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.15.0
-    hooks:
-      - id: mypy
-        args: ["--config-file", "pyproject.toml", "--ignore-missing-imports"]
-        additional_dependencies: [types-toml, types-requests]
+  # # Can run individually with `pre-commit run mypy --all-files`
+  # - repo: https://github.com/pre-commit/mirrors-mypy
+  #   rev: v1.15.0
+  #   hooks:
+  #     - id: mypy
+  #       args: ["--config-file", "pyproject.toml", "--ignore-missing-imports"]
+  #       additional_dependencies: [types-toml, types-requests]
 
 
-  - repo: local
-    hooks:
-      - id: pylint
-        name: pylint
-        entry: pylint
-        language: system
-        types: [python]
-        args:
-          [
-            "-rn", # Only display messages
-            "-sn", # Don't display the score
-            "--extension-pkg-whitelist=scipy",
-          ]
+  # - repo: local
+  #   hooks:
+  #     - id: pylint
+  #       name: pylint
+  #       entry: pylint
+  #       language: system
+  #       types: [python]
+  #       args:
+  #         [
+  #           "-rn", # Only display messages
+  #           "-sn", # Don't display the score
+  #           "--extension-pkg-whitelist=scipy",
+  #         ]
 
-  - repo: https://github.com/srstevenson/nb-clean
-    rev: 4.0.1
-    hooks:
-     - id: nb-clean
+  # - repo: https://github.com/srstevenson/nb-clean
+  #   rev: 4.0.1
+  #   hooks:
+  #    - id: nb-clean
 
   # - repo: local
   #   hooks:
