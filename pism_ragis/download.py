@@ -107,26 +107,34 @@ def unzip_file(zip_path: str, extract_to: str, overwrite: bool = False) -> None:
 
 def save_netcdf(
     ds: xr.Dataset,
-    output_filename: str | Path = "GRE_G0240_1985_2018_IDW_EXP_1.nc",
+    output_filename: str | Path = "output.nc",
     comp={"zlib": True, "complevel": 2},
+    **kwargs,
 ):
     """
-    Save the xarray dataset to a NetCDF file with specified compression.
+    Save the xarray dataset to a NetCDF file with specified compression,
+    preserving existing encodings like grid_mapping.
 
     Parameters
     ----------
     ds : xarray.Dataset
         The dataset to be saved.
-    output_filename : Union[str, Path], optional
-        The output filename for the NetCDF file, by default "GRE_G0240_1985_2018_IDW_EXP_1.nc".
+    output_filename : str or Path, optional
+        The output filename for the NetCDF file.
     comp : dict, optional
-        Compression settings for the NetCDF file, by default {"zlib": True, "complevel": 2}.
+        Compression settings for numerical variables.
     """
-    encoding = {
-        var: comp for var in ds.data_vars if np.issubdtype(ds[var].dtype, np.number)
-    }
+    encoding = {}
+
+    for var in ds.data_vars:
+        if np.issubdtype(ds[var].dtype, np.number):
+            # Copy existing encoding and update with compression settings
+            enc = ds[var].encoding.copy()
+            enc.update(comp)
+            encoding[var] = enc
+
     with ProgressBar():
-        ds.to_netcdf(output_filename, encoding=encoding)
+        ds.to_netcdf(output_filename, encoding=encoding, **kwargs)
 
 
 def download_archive(url: str) -> tarfile.TarFile | zipfile.ZipFile:
