@@ -53,23 +53,6 @@ from tqdm.auto import tqdm
 xr.set_options(keep_attrs=True)
 
 
-def compute_forcing(
-    forcing: xr.Dataset,
-    mask: xr.DataArray,
-    target_depth: xr.DataArray,
-    basin_id: int = 1,
-):
-    ds = (
-        forcing.isel({"depth": target_depth})
-        .where(mask.notnull())
-        .drop_dims("basin", errors="ignore")
-        .drop_vars("basin", errors="ignore")
-    )
-    basin_mask.name = "basin"
-    ds = xr.merge([ds, basin_mask])
-    return ds.expand_dims({"basin_id": [basin_id]})
-
-
 def save_netcdf(
     ds: xr.Dataset,
     output_filename: str | Path = "output.nc",
@@ -100,54 +83,6 @@ def save_netcdf(
 
     with ProgressBar():
         ds.to_netcdf(output_filename, encoding=encoding, **kwargs)
-
-
-def extract_profile(gcm_var, depth_index_da):
-    """
-    Quickly extract a GCM variable profile at specified depth indices.
-
-    Parameters
-    ----------
-    gcm_var : xarray.DataArray
-        The GCM variable with dimensions (time, depth, ...).
-    depth_index_da : xarray.DataArray
-        DataArray of integer indices specifying which depth to extract at each (y, x).
-
-    Returns
-    -------
-    xarray.DataArray
-        The extracted variable, transposed to (time, y, x).
-    """
-    # gcm_var: (time, depth)
-    return gcm_var.isel(depth=depth_index_da)
-
-
-def extract_gcm_profile(gcm_var, depth_field):
-    """
-    Extract a GCM variable profile at the nearest depth for each grid point.
-
-    Parameters
-    ----------
-    gcm_var : xarray.DataArray
-        The GCM variable with dimensions (time, depth, ...).
-    depth_field : xarray.DataArray
-        DataArray of depths to extract at each (y, x).
-
-    Returns
-    -------
-    xarray.DataArray
-        The extracted variable, with time as a dimension.
-    """
-    return xr.apply_ufunc(
-        lambda d: gcm_var.sel(depth=d, method="nearest"),
-        depth_field,
-        input_core_dims=[[]],
-        output_core_dims=[["time"]],
-        dask_gufunc_kwargs={"output_sizes": {"time": gcm_var.sizes["time"]}},
-        vectorize=True,
-        dask="parallelized",
-        output_dtypes=[gcm_var.dtype],
-    )
 
 
 def compute_label(da: xr.DataArray, seed: tuple = None, connectivity: int = 2):
@@ -182,6 +117,102 @@ def compute_label_xr(
     return da_
 
 
+def extract_forcing(p: Path | str):
+    ocean = scipy.io.loadmat(p)
+    z = np.array(ocean["z"].ravel())
+    n_basins = len(ocean["basins"][0])
+
+    dfs = []
+    dss = []
+    for b in range(n_basins):
+        x = (ocean["basins"][0][b][0]).ravel()
+        y = (ocean["basins"][0][b][1]).ravel()
+
+        years = ocean["year"].ravel()
+        T = ocean["T"][b]
+        S = ocean["S"][b]
+        temperature = T.reshape(*T.shape, 1)
+        salinity = S.reshape(*S.shape, 1)
+        date = xr.date_range(start=str(years[0]), end=str(years[-1]), freq="YS")
+
+        coords = {
+            "depth": (
+                ["depth"],
+                z,
+                {"units": "m", "axis": "Z", "positive": "down"},
+            ),
+            "basin": (
+                ["basin_id"],
+                [b + 1],
+            ),
+        }
+
+        ds = xr.Dataset(
+            {
+                "salinity_ocean": xr.DataArray(
+                    data=salinity,
+                    dims=["time", "depth", "basin_id"],
+                    coords={
+                        "time": date,
+                        "depth": coords["depth"],
+                        "basin_id": coords["basin"],
+                    },
+                    attrs={
+                        "units": "g/kg",
+                    },
+                ),
+                "theta_ocean": xr.DataArray(
+                    data=temperature,
+                    dims=["time", "depth", "basin_id"],
+                    coords={
+                        "time": date,
+                        "depth": coords["depth"],
+                        "basin_id": coords["basin"],
+                    },
+                    attrs={
+                        "units": "degree_Celsius",
+                    },
+                ),
+            },
+            attrs={"Conventions": "CF-1.8"},
+        )
+
+        polygon_coords = list(zip(x, y))
+        if polygon_coords[0] != polygon_coords[-1]:
+            polygon_coords.append(polygon_coords[0])
+
+        polygon = Polygon(polygon_coords)
+        df = gpd.GeoDataFrame([{"basin_id": b + 1, "geometry": polygon}], crs=crs)
+        dfs.append(df)
+        dss.append(ds)
+    basins_df = pd.concat(dfs).reset_index(drop=True)
+    forcing = xr.concat(dss, dim="basin_id")
+    return forcing, basins_df, z
+
+
+def compute_deepest_index(basins_df, seeds_gp):
+    level_masks = []
+    for s, seed in tqdm(seeds_gp.iterrows(), total=n_seeds):
+        basin_geometry = basins_df.iloc[s].geometry
+        seed_point = {
+            "x": seed.geometry.coords.xy[0],
+            "y": seed.geometry.coords.xy[1],
+        }
+
+        deepest_index_ = compute_label_xr(mask, seed_point).astype("float")
+
+        level_mask = (
+            deepest_index_.sum(dim="depth", skipna=False)
+            .rio.write_crs(crs, inplace=True)
+            .rio.clip([basin_geometry], drop=False)
+        ).drop_vars(["spatial_ref"], errors="ignore")
+        level_masks.append(level_mask.expand_dims({"seed": [s]}))
+
+    # levels are 0-indexed
+    deepest_index = xr.concat(level_masks, dim="seed").sum(dim="seed").astype(int)
+    return deepest_index
+
+
 # Suppress specific warning from loky
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -193,92 +224,25 @@ if __name__ == "__main__":
     parser.description = "Prepare GrIMP and BedMachine."
     options = parser.parse_args()
 
-    thin = 12
+    start = time.time()
+    thin = 40
     crs = "EPSG:3413"
     dem_ds = xr.open_dataset("dem/BedMachineGreenland-v5.nc").thin(
         {"x": thin, "y": thin}
     )
     dem_ds = dem_ds.rio.set_spatial_dims(x_dim="x", y_dim="y")
     dem_ds.rio.write_crs(crs, inplace=True)
+    bed = dem_ds["bed"]
 
     for gcm in ["MIROC5_RCP85"]:
 
-        ocean = scipy.io.loadmat(f"ocean/ocean_extrap_{gcm}.mat")
-        z = np.array(ocean["z"].ravel())
+        p = f"ocean/ocean_extrap_{gcm}.mat"
+        forcing, basins_df, z = extract_forcing(p)
         levels = z[:-1] + np.diff(z) / 2
-        n_basins = len(ocean["basins"][0])
-
-        dfs = []
-        dss = []
-        for b in range(n_basins):
-            x = (ocean["basins"][0][b][0]).ravel()
-            y = (ocean["basins"][0][b][1]).ravel()
-
-            years = ocean["year"].ravel()
-            T = ocean["T"][b]
-            S = ocean["S"][b]
-            temperature = T.reshape(*T.shape, 1)
-            salinity = S.reshape(*S.shape, 1)
-            date = xr.date_range(start=str(years[0]), end=str(years[-1]), freq="YS")
-
-            coords = {
-                "depth": (
-                    ["depth"],
-                    z,
-                    {"units": "m", "axis": "Z", "positive": "down"},
-                ),
-                "basin": (
-                    ["basin_id"],
-                    [b + 1],
-                ),
-            }
-
-            ds = xr.Dataset(
-                {
-                    "salinity_ocean": xr.DataArray(
-                        data=salinity,
-                        dims=["time", "depth", "basin_id"],
-                        coords={
-                            "time": date,
-                            "depth": coords["depth"],
-                            "basin_id": coords["basin"],
-                        },
-                        attrs={
-                            "units": "g/kg",
-                        },
-                    ),
-                    "theta_ocean": xr.DataArray(
-                        data=temperature,
-                        dims=["time", "depth", "basin_id"],
-                        coords={
-                            "time": date,
-                            "depth": coords["depth"],
-                            "basin_id": coords["basin"],
-                        },
-                        attrs={
-                            "units": "degree_Celsius",
-                        },
-                    ),
-                },
-                attrs={"Conventions": "CF-1.8"},
-            )
-
-            polygon_coords = list(zip(x, y))
-            if polygon_coords[0] != polygon_coords[-1]:
-                polygon_coords.append(polygon_coords[0])
-
-            polygon = Polygon(polygon_coords)
-            df = gpd.GeoDataFrame([{"basin_id": b + 1, "geometry": polygon}], crs=crs)
-            dfs.append(df)
-            dss.append(ds)
-        basins_df = pd.concat(dfs).reset_index(drop=True)
-        forcing = xr.concat(dss, dim="basin_id")
 
         seeds_gp = gpd.read_file("ocean/seed_points.gpkg")
         n_seeds = len(seeds_gp)
-        level_masks = []
 
-        bed = dem_ds["bed"]
         masks = []
         for d in levels:
             m = bed < d
@@ -286,24 +250,7 @@ if __name__ == "__main__":
             masks.append(m)
         mask = xr.concat(masks, dim="depth")
 
-        for s, seed in tqdm(seeds_gp.iterrows(), total=n_seeds, position=1):
-            basin_geometry = basins_df.iloc[s].geometry
-            seed_point = {
-                "x": seed.geometry.coords.xy[0],
-                "y": seed.geometry.coords.xy[1],
-            }
-
-            deepest_index_ = compute_label_xr(mask, seed_point).astype("float")
-
-            level_mask = (
-                deepest_index_.sum(dim="depth", skipna=False)
-                .rio.write_crs(crs, inplace=True)
-                .rio.clip([basin_geometry], drop=False)
-            ).drop_vars(["spatial_ref"], errors="ignore")
-            level_masks.append(level_mask.expand_dims({"seed": [s]}))
-
-        # levels are 0-indexed
-        deepest_index = xr.concat(level_masks, dim="seed").sum(dim="seed").astype(int)
+        deepest_index = compute_deepest_index(basins_df, seeds_gp)
         deepest_index.to_netcdf("deepest_index.nc")
 
         # Use vectorized indexing
@@ -316,11 +263,8 @@ if __name__ == "__main__":
         )
 
         n_basins = len(basins_df)
-        start = time.time()
         print(f"Generating {gcm} forcing")
         print("-" * 80)
-
-        bed_below_sea_level = (bed.where(bed < 0.0)).rio.write_crs(crs, inplace=True)
 
         depths = forcing.depth.values  # (D,) float64
         target_depth = deepest_level.data
