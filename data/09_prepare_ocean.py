@@ -65,7 +65,6 @@ def compute_forcing(
         .drop_dims("basin", errors="ignore")
         .drop_vars("basin", errors="ignore")
     )
-    basin_mask = xr.where(mask < 0, basin_id, 0)
     basin_mask.name = "basin"
     ds = xr.merge([ds, basin_mask])
     return ds.expand_dims({"basin_id": [basin_id]})
@@ -194,7 +193,7 @@ if __name__ == "__main__":
     parser.description = "Prepare GrIMP and BedMachine."
     options = parser.parse_args()
 
-    thin = 4
+    thin = 12
     crs = "EPSG:3413"
     dem_ds = xr.open_dataset("dem/BedMachineGreenland-v5.nc").thin(
         {"x": thin, "y": thin}
@@ -229,7 +228,7 @@ if __name__ == "__main__":
                     {"units": "m", "axis": "Z", "positive": "down"},
                 ),
                 "basin": (
-                    ["basin"],
+                    ["basin_id"],
                     [b + 1],
                 ),
             }
@@ -238,7 +237,7 @@ if __name__ == "__main__":
                 {
                     "salinity_ocean": xr.DataArray(
                         data=salinity,
-                        dims=["time", "depth", "basin"],
+                        dims=["time", "depth", "basin_id"],
                         coords={
                             "time": date,
                             "depth": coords["depth"],
@@ -250,11 +249,11 @@ if __name__ == "__main__":
                     ),
                     "theta_ocean": xr.DataArray(
                         data=temperature,
-                        dims=["time", "depth", "basin"],
+                        dims=["time", "depth", "basin_id"],
                         coords={
                             "time": date,
                             "depth": coords["depth"],
-                            "basin": coords["basin"],
+                            "basin_id": coords["basin"],
                         },
                         attrs={
                             "units": "degree_Celsius",
@@ -269,11 +268,11 @@ if __name__ == "__main__":
                 polygon_coords.append(polygon_coords[0])
 
             polygon = Polygon(polygon_coords)
-            df = gpd.GeoDataFrame([{"basin": b + 1, "geometry": polygon}], crs=crs)
+            df = gpd.GeoDataFrame([{"basin_id": b + 1, "geometry": polygon}], crs=crs)
             dfs.append(df)
             dss.append(ds)
         basins_df = pd.concat(dfs).reset_index(drop=True)
-        gcm_ds = xr.concat(dss, dim="basin")
+        forcing = xr.concat(dss, dim="basin_id")
 
         seeds_gp = gpd.read_file("ocean/seed_points.gpkg")
         n_seeds = len(seeds_gp)
@@ -323,7 +322,7 @@ if __name__ == "__main__":
 
         bed_below_sea_level = (bed.where(bed < 0.0)).rio.write_crs(crs, inplace=True)
 
-        depths = gcm_ds.depth.values  # (D,) float64
+        depths = forcing.depth.values  # (D,) float64
         target_depth = deepest_level.data
 
         # Compute the nearest depth index for each point
@@ -336,44 +335,31 @@ if __name__ == "__main__":
             dims=deepest_level.dims,
         )
 
-        basin_ids = [b.basin for _, b in basins_df.iterrows()]
+        mask = xr.concat(
+            [
+                bed.rio.write_crs(crs)
+                .rio.clip([basin.geometry], drop=False)
+                .drop_vars(["spatial_ref"], errors="ignore")
+                .expand_dims({"basin_id": [basin.basin_id]})
+                for _, basin in basins_df.iterrows()
+            ],
+            dim="basin_id",
+        )
+        mask.name = "deepest_index_mask"
 
-        mask_scattered = [
-            bed.rio.write_crs(crs)
-            .rio.clip([basin.geometry], drop=False)
-            .drop_vars(["spatial_ref"], errors="ignore")
-            for b, basin in basins_df.iterrows()
-        ]
+        forcing_3d = forcing.isel({"depth": target_depth_da}).where(mask.notnull())
+        basin_mask = xr.zeros_like(mask)
 
-        gcm_ds = gcm_ds.chunk({"time": 40})
-        forcing_scattered = [gcm_ds.isel(basin=b) for b, _ in basins_df.iterrows()]
+        for b in mask["basin_id"].values:
+            cond = mask.sel({"basin_id": b}).notnull()
+            basin_mask.loc[{"basin_id": b}] = xr.where(cond, b, 0)
+            basin_mask = basin_mask.astype(int)
+            basin_mask.name = "basin"
 
-        result = []
-        for b, basin in tqdm(basins_df.iterrows(), total=n_basins):
-            """
-            Iterate over each basin, extract and mask ocean variables, and
-            append the processed dataset to the list.
-
-            Parameters
-            ----------
-            b : int
-                Basin index.
-            basin : GeoSeries
-                Basin geometry.
-            """
-            ds = compute_forcing(
-                forcing_scattered[b],
-                mask_scattered[b],
-                target_depth_da,
-                basin_ids[b],
-            )
-
-            result.append(ds)
-
-        ds = xr.concat(result, dim="basin_id").sum(dim="basin_id")
+        ds = xr.merge([forcing_3d, basin_mask]).sum(dim="basin_id")
         ds = ds.rio.set_spatial_dims(x_dim="x", y_dim="y")
         ds.rio.write_crs(crs, inplace=True)
-        ds = ds.drop_vars(["mapping"], errors="ignore").cf.add_bounds("time")
+        ds = ds.drop_vars(["mapping", "depth"], errors="ignore").cf.add_bounds("time")
         save_netcdf(ds, f"{gcm}.nc", engine="h5netcdf")
         end = time.time()
         time_elapsed = end - start
