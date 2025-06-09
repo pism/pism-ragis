@@ -123,68 +123,6 @@ def get_bounds(
     return x_bnds, y_bnds
 
 
-def create_local_grid(
-    series: gp.GeoSeries,
-    ds: xr.Dataset,
-    buffer: float = 500,
-    base_resolution: int = 150,
-    multipliers: list | np.ndarray = [1, 2, 3, 4, 6, 8, 10, 12, 16, 20, 24, 30],
-    crs: str = "EPSG:3413",
-) -> xr.Dataset:
-    """
-    Create a local grid around a GeoSeries geometry with a buffer.
-
-    Parameters
-    ----------
-    series : geopandas.GeoSeries
-        The GeoSeries containing the geometry to buffer.
-    ds : xarray.Dataset
-        The dataset containing the x and y coordinates.
-    buffer : float, optional
-        The buffer distance around the geometry, by default 500.
-    base_resolution : int, optional
-        The base resolution in meters, by default 150.
-    multipliers : list or numpy.ndarray, optional
-        A list or array of multipliers to compute the set of grid resolutions,
-        by default [1, 2, 3, 4, 6, 8, 10, 12, 16, 20, 24, 30].
-
-    Returns
-    -------
-    xarray.Dataset
-        A dataset representing the local grid.
-
-    Notes
-    -----
-    The function uses the buffered geometry to determine the bounds of the local grid.
-    """
-    minx, miny, maxx, maxy = series["geometry"].buffer(buffer).bounds
-    max_mult = multipliers[-1]
-    resolution_coarse = base_resolution * max_mult
-    x_bnds, y_bnds = get_bounds(
-        ds, base_resolution=base_resolution, multipliers=multipliers
-    )
-    coarse_ds = create_domain(x_bnds, y_bnds, resolution=resolution_coarse)
-
-    ll = coarse_ds.sel({"x": minx, "y": miny}, method="nearest")
-    ur = coarse_ds.sel({"x": maxx, "y": maxy}, method="nearest")
-
-    if miny < maxy:
-        local_ds = coarse_ds.sel(
-            {"x": slice(ll["x"], ur["x"]), "y": slice(ll["y"], ur["y"])}
-        )
-    else:
-        local_ds = coarse_ds.sel(
-            {"x": slice(ll["x"], ur["x"]), "y": slice(ur["y"], ll["y"])}
-        )
-
-    x_bnds, y_bnds = [local_ds["x_bnds"][0, 0], local_ds["x_bnds"][-1, -1]], [
-        local_ds["y_bnds"][0, 0],
-        local_ds["y_bnds"][-1, -1],
-    ]
-    grid = create_domain(x_bnds, y_bnds, crs=crs)
-    return grid
-
-
 def create_domain(
     x_bnds: list | np.ndarray,
     y_bnds: list | np.ndarray,

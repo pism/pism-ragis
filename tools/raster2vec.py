@@ -9,19 +9,18 @@ optionally prunes and scales the vectors, and outputs a vector file (e.g., GeoJS
 with lines representing the velocity vectors.
 """
 
+# pylint: disable=unused-argument,unused-import
+
 import logging
 import logging.handlers
-import re
-import sys
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
-import cftime
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 import rioxarray as rxr
 import xarray as xr
-from shapely.geometry import LineString, mapping
+from shapely.geometry import LineString
 from tqdm.auto import tqdm
 
 # create logger

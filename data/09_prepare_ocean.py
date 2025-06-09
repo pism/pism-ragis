@@ -53,6 +53,9 @@ from tqdm.auto import tqdm
 xr.set_options(keep_attrs=True)
 
 
+# ...existing code...
+
+
 def save_netcdf(
     ds: xr.Dataset,
     output_filename: str | Path = "output.nc",
@@ -60,8 +63,7 @@ def save_netcdf(
     **kwargs,
 ):
     """
-    Save the xarray dataset to a NetCDF file with specified compression,
-    preserving existing encodings like grid_mapping.
+    Save the xarray dataset to a NetCDF file with specified compression.
 
     Parameters
     ----------
@@ -71,6 +73,8 @@ def save_netcdf(
         The output filename for the NetCDF file.
     comp : dict, optional
         Compression settings for numerical variables.
+    **kwargs
+        Additional keyword arguments passed to xarray.Dataset.to_netcdf.
     """
     encoding = {}
 
@@ -85,8 +89,24 @@ def save_netcdf(
         ds.to_netcdf(output_filename, encoding=encoding, **kwargs)
 
 
-def compute_label(da: xr.DataArray, seed: tuple = None, connectivity: int = 2):
+def compute_label(da: xr.DataArray, seed: tuple | None = None, connectivity: int = 2):
+    """
+    Compute a connectivity mask from a binary mask using a seed point.
 
+    Parameters
+    ----------
+    da : xarray.DataArray
+        Binary mask (True/False or 1/0) with spatial dimensions.
+    seed : tuple of int, optional
+        (y, x) indices of the seed point.
+    connectivity : int, optional
+        Connectivity for labeling (2 for 8-connectivity), by default 2.
+
+    Returns
+    -------
+    np.ndarray
+        Boolean mask of the connected region containing the seed point.
+    """
     structure = np.ones((3, 3)) if connectivity == 2 else None
     labeled_array, _ = label(da.data, structure=structure)
     seed_label = labeled_array[seed]  # Note: (y,x)
@@ -100,16 +120,34 @@ def compute_label_xr(
     connectivity: int = 2,
     dim: str | Iterable[Hashable] = ["y", "x"],
 ):
-    # FIXME: do not use "dim" get order from da
+    """
+    Compute a connectivity mask as an xarray.DataArray using a seed point.
+
+    Parameters
+    ----------
+    da : xarray.DataArray
+        Binary mask (True/False or 1/0) with spatial dimensions.
+    seed : dict, optional
+        Dictionary with 'x' and 'y' keys for the seed point.
+    connectivity : int, optional
+        Connectivity for labeling (2 for 8-connectivity), by default 2.
+    dim : str or Iterable, optional
+        Dimensions to use for connectivity, by default ["y", "x"].
+
+    Returns
+    -------
+    xarray.DataArray
+        Boolean mask of the connected region containing the seed point.
+    """
     nearest = da.sel(seed, method="nearest")
-    seed_ij = tuple([da.get_index(d).get_loc(nearest[d].item()) for d in dim])
+    seed_ij = tuple(da.get_index(d).get_loc(nearest[d].item()) for d in dim)
 
     da_ = xr.apply_ufunc(
         compute_label,
         da,
         input_core_dims=[dim],
         output_core_dims=[dim],
-        kwargs={"seed": seed_ij},
+        kwargs={"seed": seed_ij, "connectivity": connectivity},
         vectorize=True,
         dask="parallelized",
     )
@@ -117,7 +155,27 @@ def compute_label_xr(
     return da_
 
 
-def extract_forcing(p: Path | str):
+def extract_forcing(p: Path | str, crs: str = "EPSG:3413"):
+    """
+    Extract ocean forcing fields and basin polygons from a .mat file.
+
+    Parameters
+    ----------
+    p : Path or str
+        Path to the .mat file.
+    crs : str, optional
+        Coordinate reference system to assign to the basin polygons.
+        Default is "EPSG:3413".
+
+    Returns
+    -------
+    forcing : xarray.Dataset
+        Dataset containing salinity and temperature for each basin.
+    basins_df : geopandas.GeoDataFrame
+        GeoDataFrame with basin polygons.
+    z : np.ndarray
+        Depth levels.
+    """
     ocean = scipy.io.loadmat(p)
     z = np.array(ocean["z"].ravel())
     n_basins = len(ocean["basins"][0])
@@ -190,9 +248,33 @@ def extract_forcing(p: Path | str):
     return forcing, basins_df, z
 
 
-def compute_deepest_index(basins_df, seeds_gp):
+def compute_deepest_index(
+    mask: xr.DataArray,
+    basins_df: gpd.GeoDataFrame,
+    seeds_gp: gpd.GeoDataFrame,
+    crs: str = "EPSG:3413",
+):
+    """
+    Compute the deepest index mask for each seed point and basin.
+
+    Parameters
+    ----------
+    mask : xarray.DataArray
+        Boolean mask (True/False or 1/0) with dimensions (depth, y, x), indicating where bed < depth.
+    basins_df : geopandas.GeoDataFrame
+        GeoDataFrame with basin polygons.
+    seeds_gp : geopandas.GeoDataFrame
+        GeoDataFrame with seed points.
+    crs : str, optional
+        Coordinate reference system to use for clipping and writing CRS. Default is "EPSG:3413".
+
+    Returns
+    -------
+    xarray.DataArray
+        DataArray with the deepest index for each (y, x) location.
+    """
     level_masks = []
-    for s, seed in tqdm(seeds_gp.iterrows(), total=n_seeds):
+    for s, seed in tqdm(seeds_gp.iterrows(), total=len(seeds_gp)):
         basin_geometry = basins_df.iloc[s].geometry
         seed_point = {
             "x": seed.geometry.coords.xy[0],
@@ -237,7 +319,7 @@ if __name__ == "__main__":
     for gcm in ["MIROC5_RCP85"]:
 
         p = f"ocean/ocean_extrap_{gcm}.mat"
-        forcing, basins_df, z = extract_forcing(p)
+        forcing, basins_df, z = extract_forcing(p, crs=crs)
         levels = z[:-1] + np.diff(z) / 2
 
         seeds_gp = gpd.read_file("ocean/seed_points.gpkg")
@@ -250,12 +332,12 @@ if __name__ == "__main__":
             masks.append(m)
         mask = xr.concat(masks, dim="depth")
 
-        deepest_index = compute_deepest_index(basins_df, seeds_gp)
+        deepest_index = compute_deepest_index(mask, basins_df, seeds_gp)
         deepest_index.to_netcdf("deepest_index.nc")
 
         # Use vectorized indexing
         deepest_level = xr.apply_ufunc(
-            lambda idx: z[idx],
+            lambda idx, z=z: z[idx],
             deepest_index,
             vectorize=True,
             dask="parallelized",

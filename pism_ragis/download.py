@@ -112,8 +112,7 @@ def save_netcdf(
     **kwargs,
 ):
     """
-    Save the xarray dataset to a NetCDF file with specified compression,
-    preserving existing encodings like grid_mapping.
+    Save the xarray dataset to a NetCDF file with specified compression.
 
     Parameters
     ----------
@@ -123,6 +122,8 @@ def save_netcdf(
         The output filename for the NetCDF file.
     comp : dict, optional
         Compression settings for numerical variables.
+    **kwargs
+        Additional keyword arguments passed to xarray.Dataset.to_netcdf.
     """
     encoding = {}
 
