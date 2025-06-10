@@ -303,12 +303,31 @@ if __name__ == "__main__":
 
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
-    parser.description = "Prepare GrIMP and BedMachine."
+    parser.description = "Prepare ISMIP6 Ocean Forcing"
+    parser.add_argument(
+        "--crs",
+        help="""Coordinate reference system. Default is EPSG:3413.""",
+        type=str,
+        default="EPSG:3413",
+    )
+    parser.add_argument(
+        "--engine",
+        help="""Engine for xarray. Default="netcdf4".""",
+        type=str,
+        default="h5netcdf",
+    )
+    parser.add_argument(
+        "--thin",
+        help="""Thinnig BedMachine. 1=150m, 4=600m. Default=4.""",
+        type=int,
+        default=40,
+    )
     options = parser.parse_args()
+    crs = options.crs
+    engine = options.engine
+    thin = options.thin
 
     start = time.time()
-    thin = 40
-    crs = "EPSG:3413"
     dem_ds = xr.open_dataset("dem/BedMachineGreenland-v5.nc").thin(
         {"x": thin, "y": thin}
     )
@@ -333,7 +352,9 @@ if __name__ == "__main__":
         mask = xr.concat(masks, dim="depth")
 
         deepest_index = compute_deepest_index(mask, basins_df, seeds_gp)
-        deepest_index.to_netcdf("deepest_index.nc")
+        deepest_index = xr.where(bed < 0, deepest_index, 0)
+        deepest_index.name = "deepest_index"
+        deepest_index.to_netcdf("ocean/deepest_index.nc")
 
         # Use vectorized indexing
         deepest_level = xr.apply_ufunc(
@@ -386,7 +407,8 @@ if __name__ == "__main__":
         ds = ds.rio.set_spatial_dims(x_dim="x", y_dim="y")
         ds.rio.write_crs(crs, inplace=True)
         ds = ds.drop_vars(["mapping", "depth"], errors="ignore").cf.add_bounds("time")
-        save_netcdf(ds, f"{gcm}.nc", engine="h5netcdf")
+
+        save_netcdf(ds, f"ocean/{gcm}.nc", engine=engine)
         end = time.time()
         time_elapsed = end - start
         print(f"...time elapsed {time_elapsed:.0f}s")
