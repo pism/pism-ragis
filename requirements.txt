@@ -1,6 +1,7 @@
 SALib
 bokeh
 cartopy
+cdo
 cf-xarray
 cf_units
 cftime
