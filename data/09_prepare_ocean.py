@@ -53,9 +53,6 @@ from tqdm.auto import tqdm
 xr.set_options(keep_attrs=True)
 
 
-# ...existing code...
-
-
 def save_netcdf(
     ds: xr.Dataset,
     output_filename: str | Path = "output.nc",
@@ -314,7 +311,7 @@ if __name__ == "__main__":
         "--engine",
         help="""Engine for xarray. Default="netcdf4".""",
         type=str,
-        default="netcdf4",
+        default="h5netcdf",
     )
     parser.add_argument(
         "--thin",
@@ -352,7 +349,7 @@ if __name__ == "__main__":
         mask = xr.concat(masks, dim="depth")
 
         deepest_index = compute_deepest_index(mask, basins_df, seeds_gp)
-        deepest_index = xr.where(bed >= 0, 0, deepest_index)
+        deepest_index = xr.where(bed < 0, deepest_index, 0)
         deepest_index.name = "deepest_index"
         deepest_index.to_netcdf("ocean/deepest_index.nc")
 
@@ -410,6 +407,7 @@ if __name__ == "__main__":
         ds = ds.rio.set_spatial_dims(x_dim="x", y_dim="y")
         ds.rio.write_crs(crs, inplace=True)
         ds = ds.drop_vars(["mapping", "depth"], errors="ignore").cf.add_bounds("time")
+
         save_netcdf(ds, f"ocean/{gcm}.nc", engine=engine)
         end = time.time()
         time_elapsed = end - start
