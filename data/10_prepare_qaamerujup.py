@@ -60,4 +60,5 @@ for m_id, basin in basins.iterrows():
         grid = create_domain(x_bnds, y_bnds)
         grid.attrs.update({"domain": name})
         name_str = name.replace(" ", "_")
+        print(m_id, name_str)
         grid.to_netcdf(Path("grids") / Path(f"{m_id}_{name_str}.nc"))
