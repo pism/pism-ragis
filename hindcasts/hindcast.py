@@ -27,7 +27,6 @@ import subprocess as sub
 import sys
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from os.path import abspath, dirname, join, realpath
-from typing import Any, Dict, List, Union
 
 import pandas as pd
 import xarray as xr
@@ -374,33 +373,11 @@ done\n\n
     cmd = f"cp {ensemble_file} {ensemble_outfile}"
     sub.call(shlex.split(cmd))
 
-    pism_timefile = join(time_dir, f"timefile_{start_date}_{end_date}.nc")
-    try:
-        os.remove(pism_timefile)
-    except OSError:
-        pass
-
     periodicity = "daily"
     if os.environ.get("PISM_PREFIX") == "":
         pism_path = "~/pism"
     else:
         pism_path = os.environ.get("PISM_PREFIX")  # type: ignore
-
-    print(f"""Using PISM found in {os.environ.get("PISM_PREFIX")}""")
-    print("+++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n")
-    tm_cmd: List[Any] = [
-        join(pism_path, "bin/pism_create_timeline"),
-        "-a",
-        start_date,
-        "-e",
-        end_date,
-        "-p",
-        periodicity,
-        "-d",
-        "1980-01-01",
-        pism_timefile,
-    ]
-    sub.call(tm_cmd)
 
     # ########################################################
     # set up model initialization
@@ -463,7 +440,9 @@ done\n\n
             pism = computing.generate_prefix_str(pism_exec)
 
             general_params_dict = {
-                "time.file": pism_timefile,
+                "time.start": simulation_start_year,
+                "time.end": simulation_end_year,
+                "time.calendar": "standard",
                 "output.format": oformat,
                 "output.compression_level": compression_level,
                 "config_override": "$config",
@@ -505,7 +484,7 @@ done\n\n
 
             grid_params_dict = grid
 
-            sb_params_dict: Dict[str, Union[str, int, float]] = {
+            sb_params_dict: dict[str, str | int | float] = {
                 "stress_balance.sia.enhancement_factor": combination[
                     "stress_balance.sia.enhancement_factor"
                 ],
@@ -574,7 +553,7 @@ done\n\n
                 uq_dir, f"""ragis_offset_file_id_{combination["id"]}.nc"""
             )
 
-            climate_parameters: Dict[str, Union[str, int, float]] = {
+            climate_parameters: dict[str, str | int | float] = {
                 "atmosphere.given.file": climate_file_p,
                 "surface.given.file": climate_file_p,
             }
@@ -604,7 +583,7 @@ done\n\n
             )
 
             runoff_file_p = f"""$data_dir/climate/{combination["climate_file"]}"""
-            hydrology_parameters: Dict[str, Union[str, int, float]] = {
+            hydrology_parameters: dict[str, str | int | float] = {
                 "hydrology.routing.include_floating_ice": True,
                 "hydrology.surface_input.file": runoff_file_p,
                 "hydrology.add_water_input_to_till_storage": False,
@@ -658,7 +637,7 @@ done\n\n
                 combination["ocean.models"], **ocean_parameters
             )
 
-            calving_parameters: Dict[str, Union[str, int, float]] = {
+            calving_parameters: dict[str, str | int | float] = {
                 "calving.float_kill.calve_near_grounding_line": float_kill_calve_near_grounding_line,
                 "calving.vonmises_calving.use_custom_flow_law": True,
                 "calving.vonmises_calving.Glen_exponent": 3.0,
@@ -695,7 +674,7 @@ done\n\n
             scalar_ts_dict = computing.generate_scalar_ts(
                 outfile, tsstep, odir=dirs["scalar"]
             )
-            solver_dict: Dict[str, Union[str, int, float]] = {}
+            solver_dict: dict[str, str | int | float] = {}
 
             all_params_dict = computing.merge_dicts(
                 general_params_dict,

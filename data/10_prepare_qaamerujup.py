@@ -35,7 +35,7 @@ multipliers = [1, 2, 3, 9]
 max_mult = multipliers[-1]
 
 # buffer in m
-buffer = 450
+buffer = 1200
 
 crs = "EPSG:3413"
 basins = gp.read_file("grids/domain_qaamerujup.gpkg").to_crs(crs)

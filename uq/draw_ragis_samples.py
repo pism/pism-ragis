@@ -85,6 +85,32 @@ dists: Dict[str, Any] = {
             "stress_balance.ssa.Glen_exponent": 3.309718,
         },
     },
+    "calving-calib": {
+        "uq": {
+            "calving.vonmises_calving.sigma_max": uniform(loc=250_000, scale=750_000),
+        },
+        "default_values": {
+            "basal_resistance.pseudo_plastic.q": 0.7508221,
+            "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden": 0.01845403,
+            "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max": 42.79528,
+            "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min": 7.193718,
+            "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max": 243.8239,
+            "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min": -369.6359,
+            "calving.thickness_calving.threshold": 50,
+            "calving.vonmises_calving.sigma_max": 750000,
+            "climate": "given_smb",
+            "climate_file": "HIRHAM5-monthly-ERA5_1975_2021.nc",
+            "fractures": "false",
+            "frontal_melt": "routing",
+            "hydrology": "routing",
+            "ocean.models": "th",
+            "ocean.th.gamma_T": 0.0001,
+            "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
+            "sliding_law": "pseudo_plastic",
+            "stress_balance.sia.enhancement_factor": 2.608046,
+            "stress_balance.ssa.Glen_exponent": 3.309718,
+        },
+    },
     "flow": {
         "uq": {
             "basal_resistance.pseudo_plastic.q": uniform(0.25, 0.75),
