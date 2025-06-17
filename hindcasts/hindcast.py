@@ -241,6 +241,12 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
+        "--regional",
+        action="store_true",
+        help="Use regional mode",
+        default=False,
+    )
+    parser.add_argument(
         "--stable_gl",
         dest="float_kill_calve_near_grounding_line",
         action="store_false",
@@ -290,6 +296,7 @@ if __name__ == "__main__":
     float_kill_calve_near_grounding_line = options.float_kill_calve_near_grounding_line
     horizontal_resolution = options.horizontal_resolution
 
+    regional = options.regional
     stress_balance = options.stress_balance
     ensemble_file = options.ensemble_file
     pism_exec = "pism"
@@ -465,6 +472,9 @@ done\n\n
                 "energy.ch_warming.enabled": "false",
                 "energy.bedrock_thermal.file": "$data_dir/bheatflux/geothermal_heat_flow_map_10km.nc",
             }
+
+            if regional:
+                general_params_dict["regional"] = ""
 
             outfile = f"g{horizontal_resolution}m_{experiment}.nc"
 

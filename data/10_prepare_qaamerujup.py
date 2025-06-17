@@ -31,14 +31,11 @@ import xarray as xr
 
 from pism_ragis.domain import create_domain, get_bounds
 
-# 150, 300, 450, 600, 900, 1200, 1500, 1800, 2400, 3000, 3600, and 4500m
-multipliers = [1, 2, 4, 6, 8, 10, 12, 20]
+multipliers = [1, 2, 3, 9]
 max_mult = multipliers[-1]
 
 # buffer in m
-buffer = 3e3
-
-buffer = 3e3
+buffer = 450
 
 crs = "EPSG:3413"
 basins = gp.read_file("grids/domain_qaamerujup.gpkg").to_crs(crs)

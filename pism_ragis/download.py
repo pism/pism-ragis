@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with PISM; if not, write to the Free Software
 
-# pylint: disable=too-many-positional-arguments
+# pylint: disable=too-many-positional-arguments,consider-using-with
 
 """
 Module for data processing.
@@ -162,10 +162,13 @@ def download_archive(url: str) -> tarfile.TarFile | zipfile.ZipFile:
             buffer.write(chunk)
         buffer.seek(0)
 
+    archive: tarfile.TarFile | zipfile.ZipFile
     if url.endswith("tar.gz"):
-        return tarfile.open(fileobj=buffer, mode="r|gz")
+        archive = tarfile.open(fileobj=buffer, mode="r|gz")
     else:
-        return zipfile.ZipFile(buffer)
+        archive = zipfile.ZipFile(buffer)
+
+    return archive
 
 
 def download_earthaccess(
