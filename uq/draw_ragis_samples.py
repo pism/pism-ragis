@@ -106,6 +106,7 @@ dists: Dict[str, Any] = {
             "ocean.models": "th",
             "ocean.th.gamma_T": 0.0001,
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
+            "prescribed_retreat_file": "",
             "sliding_law": "pseudo_plastic",
             "stress_balance.sia.enhancement_factor": 2.608046,
             "stress_balance.ssa.Glen_exponent": 3.309718,
