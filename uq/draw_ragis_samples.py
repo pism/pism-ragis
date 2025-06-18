@@ -332,9 +332,9 @@ def convert_samples(unif_sample):
 dist_sample, n_samples = convert_samples(unif_sample)
 dist_median_sample, _ = convert_samples(np.median(unif_sample, axis=0, keepdims=True))
 
-dist_median_sample[0, 3] = gcms[0]
-dist_median_sample = np.vstack([dist_median_sample] * 2)
-dist_median_sample[:, -1] = retreatfiles.values()
+# dist_median_sample[0, 3] = gcms[0]
+# dist_median_sample = np.vstack([dist_median_sample] * 2)
+# dist_median_sample[:, -1] = retreatfiles.values()
 
 if posterior_file:
     X_posterior = pd.read_csv(posterior_file).drop(
@@ -367,19 +367,19 @@ ensemble_df = add_default_values(df, dists, distribution_name)
 ensemble_df.to_csv(ensemble_outfile, index=True, index_label="id")
 
 
-median_outfile = outfile.parent / Path(f"median_{outfile.name}")
-median_df = pd.DataFrame(
-    dist_median_sample, columns=keys_prior, index=["MEDIAN-FREE", "MEDIAN-PRESCRIBED"]
-)
-median_df.to_csv(median_outfile, index=True, index_label="id")
+# median_outfile = outfile.parent / Path(f"median_{outfile.name}")
+# median_df = pd.DataFrame(
+#     dist_median_sample, columns=keys_prior, index=["MEDIAN-FREE", "MEDIAN-PRESCRIBED"]
+# )
+# median_df.to_csv(median_outfile, index=True, index_label="id")
 
 
-ensemble_median_outfile = outfile.parent.parent / Path(
-    f"ensemble_median_{outfile.name}"
-)
-ensemble_median_df = add_default_values(median_df, dists, distribution_name)
-ensemble_median_df.to_csv(
-    ensemble_median_outfile,
-    index=["MEDIAN-FREE", "MEDIAN-PRESCRIBED"],
-    index_label="id",
-)
+# ensemble_median_outfile = outfile.parent.parent / Path(
+#     f"ensemble_median_{outfile.name}"
+# )
+# ensemble_median_df = add_default_values(median_df, dists, distribution_name)
+# ensemble_median_df.to_csv(
+#     ensemble_median_outfile,
+#     index=["MEDIAN-FREE", "MEDIAN-PRESCRIBED"],
+#     index_label="id",
+# )
