@@ -21,15 +21,17 @@
 """
 Module for filtering (calibration).
 """
+from __future__ import annotations
 
 import logging
 import warnings
-from typing import Callable, Tuple
+from typing import Callable
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 from dask.diagnostics import ProgressBar
+from dask.distributed import Client, progress, wait
 
 import pism_ragis.processing as prp
 from pism_ragis.decorators import timeit
@@ -124,7 +126,8 @@ def importance_sampling(
     obs_std_var: str = "mass_balance_uncertainty",
     sim_var: str = "mass_balance",
     seed: int = 0,
-) -> np.ndarray:
+    compute: bool = True,
+) -> xr.Dataset:
     """
     Filter an ensemble of simulated data to match observed data using a likelihood-based approach.
 
@@ -157,11 +160,13 @@ def importance_sampling(
         by default "mass_balance".
     seed : int, optional
         The random seed for reproducibility, by default 0.
+    compute : bool, optional
+        Set to True if you want to force compute the result.
 
     Returns
     -------
-    np.ndarray
-        An array of ensemble member IDs selected through the filtering process.
+    xr.Dataset
+        A dataset containing the selected members, log_likes, and weights the filtering process.
 
     Notes
     -----
@@ -200,10 +205,13 @@ def importance_sampling(
     weights.name = "weights"
 
     samples = sample_with_replacement_xr(weights, n_samples=n_samples, seed=seed)
-    return xr.merge([log_likes, weights, samples])
+    ds = xr.merge([log_likes, weights, samples])
+
+    if compute:
+        ds = ds.compute()
+    return ds
 
 
-@timeit
 def run_importance_sampling(
     observed: xr.Dataset,
     simulated: xr.Dataset,
@@ -214,11 +222,11 @@ def run_importance_sampling(
     ],
     sim_vars: list[str] = ["grounding_line_flux", "mass_balance"],
     log_likelihood: Callable = log_normal_xr,
-    filter_range: list[int] = [1990, 2019],
+    filter_range: list = [1990, 2019],
     fudge_factor: float = 3.0,
-    sum_dims: list = ["time"],
+    sum_dims: list | None = ["time"],
     params: list[str] = [],
-) -> Tuple[pd.DataFrame, xr.Dataset, xr.Dataset, xr.Dataset]:
+) -> tuple[pd.DataFrame, xr.Dataset, xr.Dataset, xr.Dataset]:
     """
     Run sampling to process observed and simulated datasets.
 
@@ -250,7 +258,7 @@ def run_importance_sampling(
 
     Returns
     -------
-    Tuple[pd.DataFrame, xr.Dataset, xr.Dataset, xr.Dataset]
+    tuple[pd.DataFrame, xr.Dataset, xr.Dataset, xr.Dataset]
         A tuple containing:
         - A DataFrame with the prior and posterior configurations.
         - The prior simulated dataset.
@@ -281,14 +289,12 @@ def run_importance_sampling(
         obs_mean_vars, obs_std_vars, sim_vars
     ):
         print(f"Importance sampling using {obs_mean_var}")
+        sim = simulated.sel(time=slice(str(filter_start_year), str(filter_end_year)))
+        obs = observed.sel(time=slice(str(filter_start_year), str(filter_end_year)))
 
         f = importance_sampling(
-            simulated=simulated.sel(
-                time=slice(str(filter_start_year), str(filter_end_year))
-            ),
-            observed=observed.sel(
-                time=slice(str(filter_start_year), str(filter_end_year))
-            ),
+            simulated=sim,
+            observed=obs,
             log_likelihood=log_likelihood,
             fudge_factor=fudge_factor,
             n_samples=simulated.sizes["exp_id"],
@@ -296,40 +302,14 @@ def run_importance_sampling(
             obs_std_var=obs_std_var,
             sim_var=sim_var,
             sum_dims=sum_dims,
+            compute=False,
         )
-
         with ProgressBar() as pbar:
             result = f.compute()
             logger.info(
                 "Importance Sampling: Finished in %2.2f seconds",
                 pbar.last_duration,
             )
-        # # # result = f.persist()  # start computation in the background
-        # # # progress(result)  # watch progress
-
-        # # # result.compute()
-
-        # simulated_dist = simulated.sel(
-        #     time=slice(str(filter_start_year), str(filter_end_year))
-        # )
-
-        # observed_dist = observed.sel(
-        #     time=slice(str(filter_start_year), str(filter_end_year))
-        # )
-        # f = client.submit(
-        #     importance_sampling,
-        #     simulated=simulated_dist,
-        #     observed=observed_dist,
-        #     log_likelihood=log_likelihood,
-        #     fudge_factor=fudge_factor,
-        #     n_samples=simulated.sizes["exp_id"],
-        #     obs_mean_var=obs_mean_var,
-        #     obs_std_var=obs_std_var,
-        #     sim_var=sim_var,
-        #     sum_dims=sum_dims,
-        # )
-        # progress(f)
-        # result = client.gather(f)
 
         importance_sampled_ids = result["exp_id_sampled"]
         simulated_posterior = simulated.sel(exp_id=importance_sampled_ids)
@@ -364,7 +344,7 @@ def filter_outliers(
     outlier_variable: str,
     freq: str = "YS",
     subset: dict[str, str | int] = {"basin": "GIS", "ensemble_id": "RAGIS"},
-) -> Tuple[xr.Dataset, xr.Dataset]:
+) -> tuple[xr.Dataset, xr.Dataset]:
     """
     Filter outliers from a dataset based on a specified variable and range.
 
@@ -380,14 +360,14 @@ def filter_outliers(
         A list containing the lower and upper bounds for the valid range.
     outlier_variable : str
         The variable in the dataset to be used for outlier detection.
-    freq : str, optional
+    freq : str, optinal
         The frequency for resampling the data, by default "YS".
     subset : dict[str, Union[str, int]], optional
         A dictionary specifying the subset of the dataset to apply the filter on, by default {"basin": "GIS", "ensemble_id": "RAGIS"}.
 
     Returns
     -------
-    Tuple[xr.Dataset, xr.Dataset]
+    tuple[xr.Dataset, xr.Dataset]
         A tuple containing two xarray.Dataset objects:
         - The valid dataset without outliers.
         - The dataset containing only the outliers.

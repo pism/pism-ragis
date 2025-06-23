@@ -108,7 +108,7 @@ def unzip_file(zip_path: str, extract_to: str, overwrite: bool = False) -> None:
 def save_netcdf(
     ds: xr.Dataset,
     output_filename: str | Path = "output.nc",
-    comp={"zlib": True, "complevel": 2},
+    comp: dict = {"zlib": True, "complevel": 2},
     **kwargs,
 ):
     """
@@ -125,17 +125,30 @@ def save_netcdf(
     **kwargs
         Additional keyword arguments passed to xarray.Dataset.to_netcdf.
     """
+    valid_encoding_keys = {
+        "zlib",
+        "complevel",
+        "shuffle",
+        "fletcher32",
+        "contiguous",
+        "chunksizes",
+        "dtype",
+        "endian",
+        "least_significant_digit",
+        "_FillValue",
+    }
+
     encoding = {}
 
     for var in ds.data_vars:
         if np.issubdtype(ds[var].dtype, np.number):
-            # Copy existing encoding and update with compression settings
-            enc = ds[var].encoding.copy()
+            enc = ds[var].encoding.copy() if hasattr(ds[var], "encoding") else {}
+            # Clean and apply compression
+            enc = {k: v for k, v in enc.items() if k in valid_encoding_keys}
             enc.update(comp)
             encoding[var] = enc
 
-    with ProgressBar():
-        ds.to_netcdf(output_filename, encoding=encoding, **kwargs)
+    ds.to_netcdf(output_filename, encoding=encoding, **kwargs)
 
 
 def download_archive(url: str) -> tarfile.TarFile | zipfile.ZipFile:

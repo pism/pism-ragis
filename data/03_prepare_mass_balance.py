@@ -201,7 +201,7 @@ def prepare_grace_tellus(result_dir: Path = Path("mass_balance")):
     df = pd.read_csv(
         grace_file,
         header=32,  # Skip the header lines
-        sep="\s+",
+        sep=r"\s+",
         names=[
             "year",
             "cumulative_mass_balance",

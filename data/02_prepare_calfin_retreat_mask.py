@@ -308,31 +308,27 @@ if __name__ == "__main__":
     ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
     ds.rio.write_crs(crs, inplace=True)
 
-    comp = {"zlib": True, "complevel": 2, "_FillValue": None}
-    encoding_compression = {var: comp for var in ds.data_vars}
-    encoding.update(encoding_compression)
-
-    ds.to_netcdf(p_fn, encoding=encoding)
+    ds.to_netcdf(p_fn)
 
     p = Path("front_retreat")
     fn = Path(f"pism_g{resolution}m_frontretreat_calfin_1980_2019_YM.nc")
     p_fn = p / fn
 
     ds.sel({"time": slice("1980", "2019")}).resample({"time": "YS"}).mean().to_netcdf(
-        p_fn, encoding=encoding
+        p_fn
     )
 
     p = Path("front_retreat")
     fn = Path(f"pism_g{resolution}m_frontretreat_calfin_1972.nc")
     p_fn = p / fn
 
-    ds.sel({"time": "1972"}).isel({"time": 0}).to_netcdf(p_fn, encoding=encoding)
+    ds.sel({"time": "1972"}).isel({"time": 0}).to_netcdf(p_fn)
 
     p = Path("front_retreat")
     fn = Path(f"pism_g{resolution}m_frontretreat_calfin_2007.nc")
     p_fn = p / fn
 
-    ds.sel({"time": "2007"}).isel({"time": -1}).to_netcdf(p_fn, encoding=encoding)
+    ds.sel({"time": "2007"}).isel({"time": -1}).to_netcdf(p_fn)
     end = time.time()
     time_elapsed = end - start
     print(f"Time elapsed {time_elapsed:.0f}s")

@@ -531,7 +531,7 @@ def plot_sensitivity_indices(
     png_dir = plot_dir / "pngs"
     png_dir.mkdir(parents=True, exist_ok=True)
 
-    with mpl.rc_context({"font.size": fontsize, "font.family": "DejaVu Sans"}):
+    with mpl.rc_context({"font.size": fontsize, "font.family": "Arial"}):
 
         fig, ax = plt.subplots(1, 1, figsize=figsize)
         for g in ds[dim]:
@@ -680,7 +680,7 @@ def plot_timeseries(
                     q, dim="exp_id", skipna=True
                 )
 
-    with mpl.rc_context({"font.size": fontsize, "font.family": "DejaVu Sans"}):
+    with mpl.rc_context({"font.size": fontsize, "font.family": "Arial"}):
 
         fig, axs = plt.subplots(
             level,
@@ -717,7 +717,7 @@ def plot_timeseries(
                     color=obs_cmap[0],
                     alpha=obs_alpha,
                     lw=0,
-                    label=f"Observed ({sigma}-$\sigma$ uncertainty)",
+                    label=rf"Observed ({sigma}-$\sigma$ uncertainty)",
                 )
                 obs_cis.append(obs_ci)
                 if sim_prior is not None:

@@ -4,15 +4,12 @@ channels:
 dependencies:
   - black
   - cdo
-  - hdf5
-  - mypy
   - nco
   - ncview
-  - netcdf4
   - petsc
   - petsc4py
   - pre-commit
-  - python=3.11.7
+  - python=3.12.6
   - pylint
   - pytest
   - pip
