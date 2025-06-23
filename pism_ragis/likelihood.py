@@ -23,7 +23,7 @@ Log likelihood models.
 
 import numpy as np
 import xarray as xr
-from scipy.special import pseudo_huber
+from scipy.special import pseudo_huber  # pylint: disable=no-name-in-module
 from sklearn.metrics import jaccard_score
 
 

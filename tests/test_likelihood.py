@@ -17,6 +17,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 # mypy: disable-error-code="no-redef"
+# pylint: disable=no-name-in-module
 """
 Tests for likelihood module.
 """
@@ -27,7 +28,11 @@ import xarray as xr
 from scipy.special import pseudo_huber
 from sklearn.metrics import jaccard_score
 
-from pism_ragis.likelihood import log_jaccard_score, log_normal, log_pseudo_huber
+from pism_ragis.likelihood import (
+    log_jaccard_score,
+    log_normal,
+    log_pseudo_huber,
+)
 
 
 @pytest.fixture(name="weights_da")

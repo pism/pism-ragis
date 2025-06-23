@@ -32,7 +32,6 @@ import earthaccess
 import numpy as np
 import requests
 import xarray as xr
-from dask.diagnostics import ProgressBar
 from tqdm.auto import tqdm
 
 

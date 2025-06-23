@@ -29,9 +29,9 @@ import re
 import shutil
 import zipfile
 from collections import OrderedDict
-from collections.abc import Callable
+from collections.abc import Callable, Hashable, Mapping
 from pathlib import Path
-from typing import Any, Dict, Hashable, Mapping
+from typing import Any
 
 import joblib
 import numpy as np
@@ -919,7 +919,7 @@ def simplify_climate(my_str: str) -> str:
     >>> simplify_climate("Other_2020")
     'HIRHAM'
     """
-    climate_mapping: Dict[str, str] = {
+    climate_mapping: dict[str, str] = {
         "MAR": "MAR",
         "RACMO": "RACMO",
         "HIRHAM": "HIRHAM",
@@ -979,7 +979,7 @@ def simplify_ocean(my_str: str) -> int:
     int
         The simplified ocean value.
     """
-    gcms: Dict[str, int] = {
+    gcms: dict[str, int] = {
         "ACCESS1-3_rcp85": 0,
         "CNRM-CM6_ssp126": 1,
         "CNRM-ESM2_ssp585": 2,
@@ -1254,7 +1254,7 @@ def sort_columns(df: pd.DataFrame, sorted_columns: list[str]) -> pd.DataFrame:
 
 
 def add_prefix_coord(
-    sensitivity_indices: xr.Dataset, parameter_groups: Dict[str, str]
+    sensitivity_indices: xr.Dataset, parameter_groups: dict[str, str]
 ) -> xr.Dataset:
     """
     Add prefix coordinates to an xarray Dataset.
@@ -1267,7 +1267,7 @@ def add_prefix_coord(
     ----------
     sensitivity_indices : xr.Dataset
         The input dataset containing sensitivity indices.
-    parameter_groups : Dict[str, str]
+    parameter_groups : dict[str, str]
         A dictionary mapping parameter names to their corresponding groups.
 
     Returns
@@ -1338,7 +1338,7 @@ def convert_category_to_integer(
     )
 
     for param in params:
-        m_dict: Dict[str, int] = {v: k for k, v in enumerate(df[param].unique())}
+        m_dict: dict[str, int] = {v: k for k, v in enumerate(df[param].unique())}
         df[param] = df[param].map(m_dict)
 
     return df
@@ -1365,7 +1365,7 @@ def prepare_simulations(
     ----------
     filenames : list[[Path | str]
         A list of file paths to the ensemble datasets.
-    config : Dict[str, Any]
+    config : dict[str, Any]
         A dictionary containing configuration settings for processing the datasets.
     reference_date : str
         The reference date for normalizing cumulative variables.
@@ -1431,7 +1431,7 @@ def prepare_observations(
     ----------
     url : Path or str
         The URL or path to the basin observation dataset.
-    config : Dict[str, Any]
+    config : dict[str, Any]
         A dictionary containing configuration settings for processing the datasets.
     reference_date : str
         The reference date for normalizing cumulative variables.

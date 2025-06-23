@@ -31,7 +31,6 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from dask.diagnostics import ProgressBar
-from dask.distributed import Client, progress, wait
 
 import pism_ragis.processing as prp
 from pism_ragis.decorators import timeit
@@ -117,7 +116,7 @@ def importance_sampling(
     simulated: xr.Dataset,
     observed: xr.Dataset,
     log_likelihood: Callable = log_normal_xr,
-    likelihood_kwargs={},
+    likelihood_kwargs: dict | None = None,
     dim: str = "exp_id",
     sum_dims: list = ["time"],
     fudge_factor: float = 3.0,
@@ -186,6 +185,9 @@ def importance_sampling(
 
     # Extract the simulated data
     sim = simulated[sim_var]
+
+    if likelihood_kwargs is None:
+        likelihood_kwargs = {}
 
     # Compute the log-likelihood of each simulated data point
     log_likes = log_likelihood(

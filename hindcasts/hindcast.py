@@ -50,7 +50,6 @@ script_directory = current_script_directory()
 
 sys.path.append(join(script_directory, "../pism_ragis"))
 import computing  # pylint: disable=C0413
-from systems import Systems  # pylint: disable=C0413
 
 
 def create_offset_file(file_name: str, delta_T: float = 0.0, frac_P: float = 1.0):
@@ -92,9 +91,6 @@ def create_offset_file(file_name: str, delta_T: float = 0.0, frac_P: float = 1.0
     )
     ds.to_netcdf(file_name)
 
-
-available_systems = Systems()
-available_systems.default_path = "../hpc-systems"
 
 if __name__ == "__main__":
     # set up the option parser
@@ -286,7 +282,6 @@ if __name__ == "__main__":
     osize = options.osize
     queue = options.queue
     walltime = options.walltime
-    # system = available_systems[options.system]
     gid = options.gid
 
     spatial_ts = options.spatial_ts

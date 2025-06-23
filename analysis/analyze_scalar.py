@@ -472,70 +472,71 @@ if __name__ == "__main__":
 
     retreat_df = pd.concat(pp_retreat_list).reset_index(drop=True)
 
-    # # Sensitivity Analysis
-    # prior_config = prp.filter_config(simulated["pism_config"], params)
-    # prior_df = prp.config_to_dataframe(prior_config, ensemble="Prior")
-    # params_df = prp.convert_category_to_integer(prior_df).drop(columns=["aux_id"])
+    # Sensitivity Analysis
+    prior_config = prp.filter_config(simulated["pism_config"], params)
+    prior_df = prp.config_to_dataframe(prior_config, ensemble="Prior")
+    params_df = prp.convert_category_to_integer(prior_df).drop(columns=["aux_id"])
 
-    # sensitivity_indices_list = []
-    # for basin_group, intersection, filtering_vars in zip(
-    #     [simulated_basins],
-    #     [intersection],
-    #     [["mass_balance", "grounding_line_flux"]],
-    # ):
-    #     sobol_response = basin_group
-    #     sobol_input_df = params_df[params_df["basin"].isin(intersection)]
+    sensitivity_indices_list = []
+    for basin_group, intersection, filtering_vars in zip(
+        [simulated],
+        [intersection],
+        [["mass_balance", "grounding_line_flux"]],
+    ):
+        sobol_response = basin_group
+        sobol_input_df = params_df[params_df["basin"].isin(intersection)]
 
-    #     sensitivity_indices_list.append(
-    #         run_sensitivity_analysis(
-    #             sobol_input_df,
-    #             sobol_response,
-    #             filtering_vars,
-    #             notebook=notebook,
-    #         )
-    #     )
+        sensitivity_indices_list.append(
+            run_sensitivity_analysis(
+                sobol_input_df,
+                sobol_response,
+                filtering_vars,
+                notebook=notebook,
+            )
+        )
 
-    # sensitivity_indices = xr.concat(sensitivity_indices_list, dim="basin")
-    # si_dir = result_dir / Path("sensitivity_indices")
-    # si_dir.mkdir(parents=True, exist_ok=True)
-    # sensitivity_indices.to_netcdf(si_dir / Path("sensitivity_indices.nc"))
+    sensitivity_indices = xr.concat(sensitivity_indices_list, dim="basin")
+    si_dir = result_dir / Path("sensitivity_indices")
+    si_dir.mkdir(parents=True, exist_ok=True)
+    sensitivity_indices.to_netcdf(si_dir / Path("sensitivity_indices.nc"))
 
-    # sensitivity_indices = prp.add_prefix_coord(
-    #     sensitivity_indices, parameter_categories
-    # )
+    sensitivity_indices = prp.add_prefix_coord(
+        sensitivity_indices, parameter_categories
+    )
 
-    # # Group by the new coordinate and compute the sum for each group
-    # indices_vars = [v for v in sensitivity_indices.data_vars if "_conf" not in v]
-    # aggregated_indices = (
-    #     sensitivity_indices[indices_vars].groupby("sensitivity_indices_group").sum()
-    # )
-    # # Group by the new coordinate and compute the sum the squares for each group
-    # # then take the root.
-    # indices_conf = [v for v in sensitivity_indices.data_vars if "_conf" in v]
-    # aggregated_conf = (
-    #     sensitivity_indices[indices_conf]
-    #     .apply(np.square)
-    #     .groupby("sensitivity_indices_group")
-    #     .sum()
-    #     .apply(np.sqrt)
-    # )
-    # aggregated = xr.merge([aggregated_indices, aggregated_conf])
-    # aggregated.to_netcdf(si_dir / Path("aggregated_sensitivity_indices.nc"))
+    # Group by the new coordinate and compute the sum for each group
+    indices_vars = [v for v in sensitivity_indices.data_vars if "_conf" not in v]
+    aggregated_indices = (
+        sensitivity_indices[indices_vars].groupby("sensitivity_indices_group").sum()
+    )
+    # Group by the new coordinate and compute the sum the squares for each group
+    # then take the root.
+    indices_conf = [v for v in sensitivity_indices.data_vars if "_conf" in v]
+    aggregated_conf = (
+        sensitivity_indices[indices_conf]
+        .apply(np.square)
+        .groupby("sensitivity_indices_group")
+        .sum()
+        .apply(np.sqrt)
+    )
+    aggregated = xr.merge([aggregated_indices, aggregated_conf])
+    aggregated.to_netcdf(si_dir / Path("aggregated_sensitivity_indices.nc"))
 
-    # for indices_var, indices_conf_var in zip(indices_vars, indices_conf):
-    #     for basin in aggregated.basin.values:
-    #         for filter_var in aggregated.filtered_by.values:
-    #             plot_sensitivity_indices(
-    #                 aggregated.sel(basin=basin, filtered_by=filter_var)
-    #                 .rolling({"time": 13})
-    #                 .mean()
-    #                 .sel(time=slice("1980-01-01", "2020-01-01")),
-    #                 indices_var=indices_var,
-    #                 indices_conf_var=indices_conf_var,
-    #                 basin=basin,
-    #                 filter_var=filter_var,
-    #                 fig_dir=fig_dir,
-    #             )
+    for indices_var, indices_conf_var in zip(indices_vars, indices_conf):
+        for basin in aggregated.basin.values:
+            for filter_var in aggregated.filtered_by.values:
+                plot_sensitivity_indices(
+                    aggregated.sel(basin=basin, filtered_by=filter_var)
+                    .rolling({"time": 13})
+                    .mean()
+                    .sel(time=slice("1980-01-01", "2020-01-01")),
+                    indices_var=indices_var,
+                    indices_conf_var=indices_conf_var,
+                    basin=basin,
+                    filter_var=filter_var,
+                    fig_dir=fig_dir,
+                )
+
     end = time.time()
     time_elapsed = end - start
     print(f"Time elapsed {time_elapsed:.0f}s")
