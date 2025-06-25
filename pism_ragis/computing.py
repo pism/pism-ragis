@@ -194,7 +194,8 @@ spatial_ts_vars["calibrate"] = [
 spatial_ts_vars["ml"] = [
     "climatic_mass_balance",
     "effictive_viscosity",
-    "deviatoric_stressed" "flux_divergence",
+    "deviatoric_stressed",
+    "flux_divergence",
     "dHdt",
     "mask",
     "mass_fluxes",
