@@ -193,7 +193,8 @@ spatial_ts_vars["calibrate"] = [
 
 spatial_ts_vars["ml"] = [
     "climatic_mass_balance",
-    "ice_surface_temp",
+    "effictive_viscosity",
+    "deviatoric_stressed" "flux_divergence",
     "dHdt",
     "mask",
     "mass_fluxes",
@@ -201,7 +202,9 @@ spatial_ts_vars["ml"] = [
     "usurf",
     "velsurf_mag",
     "velbase_mag",
+    "strain_rates",
     "topg",
+    "taud",
 ]
 
 spatial_ts_vars["standard"] = [
