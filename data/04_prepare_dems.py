@@ -43,6 +43,4 @@ if __name__ == "__main__":
     result_dir = Path("dem")
     filter_str = "v5.nc"
     doi = "10.5067/GMEVBWFLWA7X"
-    results = download_earthaccess(
-        doi=doi, filter_str=filter_str, result_dir=result_dir
-    )
+    results = download_earthaccess(doi=doi, filter_str=filter_str, result_dir=result_dir)

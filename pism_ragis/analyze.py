@@ -96,12 +96,9 @@ def run_sensitivity_analysis(
                 f"  ...sensitivity indices for basin {gdim} filtered by {filter_var} ",
             )
 
-            responses = response_ds.sel({"basin": gdim})[filter_var].load()
+            responses = response_ds.sel({group_dim: gdim})[filter_var].load()
             responses_scattered = client.scatter(
-                [
-                    responses.isel({"time": k}).to_numpy()
-                    for k in range(len(responses[iter_dim]))
-                ]
+                [responses.isel({"time": k}).to_numpy() for k in range(len(responses[iter_dim]))]
             )
 
             futures = client.map(
@@ -113,9 +110,7 @@ def run_sensitivity_analysis(
             progress(futures, notebook=notebook)
             result = client.gather(futures)
 
-            sensitivity_indices = xr.concat(
-                [r.expand_dims(iter_dim) for r in result], dim=iter_dim
-            )
+            sensitivity_indices = xr.concat([r.expand_dims(iter_dim) for r in result], dim=iter_dim)
             sensitivity_indices[iter_dim] = responses[iter_dim]
             sensitivity_indices = sensitivity_indices.expand_dims(group_dim, axis=1)
             sensitivity_indices[group_dim] = [gdim]
@@ -164,9 +159,7 @@ def delta_analysis(
         )
         df = delta_moments.to_df()[["S1", "S1_conf"]]  # pylint: disable=not-callable
     except Exception:  # pylint: disable=broad-exception-caught
-        delta_df = {
-            key: np.empty(problem["num_vars"]) + np.nan for key in ["S1", "S1_conf"]
-        }
+        delta_df = {key: np.empty(problem["num_vars"]) + np.nan for key in ["S1", "S1_conf"]}
         df = pd.DataFrame.from_dict(delta_df)
         df[dim] = problem["names"]
         df.set_index(dim, inplace=True)
@@ -209,9 +202,7 @@ def sobol_analysis(
         )
         df = sobol_moments.to_df()  # pylint: disable=not-callable
     except Exception:  # pylint: disable=broad-exception-caught
-        sobol_df = {
-            key: np.empty(problem["num_vars"]) + np.nan for key in ["S1", "S1_conf"]
-        }
+        sobol_df = {key: np.empty(problem["num_vars"]) + np.nan for key in ["S1", "S1_conf"]}
         df = pd.DataFrame.from_dict(sobol_df)
         df[dim] = problem["names"]
         df.set_index(dim, inplace=True)

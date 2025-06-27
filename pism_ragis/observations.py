@@ -87,9 +87,7 @@ def load_imbie_2021(
 
 
 def load_imbie(
-    url: (
-        str | Path
-    ) = "http://imbie.org/wp-content/uploads/2012/11/imbie_dataset_greenland_dynamics-2020_02_28.xlsx",
+    url: str | Path = "http://imbie.org/wp-content/uploads/2012/11/imbie_dataset_greenland_dynamics-2020_02_28.xlsx",
 ) -> xr.Dataset:
     """
     Load the IMBIE Greenland dataset from an Excel file and return as an xarray Dataset.
@@ -160,9 +158,7 @@ def load_imbie(
 
 
 def load_mouginot(
-    url: (
-        str | Path
-    ) = "https://www.pnas.org/doi/suppl/10.1073/pnas.1904242116/suppl_file/pnas.1904242116.sd02.xlsx",
+    url: str | Path = "https://www.pnas.org/doi/suppl/10.1073/pnas.1904242116/suppl_file/pnas.1904242116.sd02.xlsx",
     norm_year: float | None = None,
 ) -> xr.Dataset:
     """
@@ -197,12 +193,8 @@ def load_mouginot(
     cbu_vars = [f"{v}_uncertainty" for v in cb_vars]
 
     # Load the main data and the uncertainty data
-    df_m = pd.read_excel(
-        url, sheet_name="(2) MB_GIS", header=8, usecols="B,P:BJ", engine="openpyxl"
-    )
-    df_u = pd.read_excel(
-        url, sheet_name="(2) MB_GIS", header=8, usecols="B,CE:DY", engine="openpyxl"
-    )
+    df_m = pd.read_excel(url, sheet_name="(2) MB_GIS", header=8, usecols="B,P:BJ", engine="openpyxl")
+    df_u = pd.read_excel(url, sheet_name="(2) MB_GIS", header=8, usecols="B,CE:DY", engine="openpyxl")
 
     # Process the main data
     dfs = []
@@ -217,16 +209,11 @@ def load_mouginot(
             "cumulative_surface_mass_balance",
         ],
     ):
-        p_dfs = [
-            process_row(row, m_var, norm_year)
-            for _, row in df_m.loc[k : k + 7].iterrows()
-        ]
+        p_dfs = [process_row(row, m_var, norm_year) for _, row in df_m.loc[k : k + 7].iterrows()]
         dfs.append(pd.concat(p_dfs).reset_index(drop=True))
 
     df = reduce(
-        lambda left, right: pd.merge(
-            left, right, on=["basin", "year", "time"], how="outer"
-        ),
+        lambda left, right: pd.merge(left, right, on=["basin", "year", "time"], how="outer"),
         dfs,
     )
 
@@ -243,16 +230,11 @@ def load_mouginot(
             "cumulative_surface_mass_balance_uncertainty",
         ],
     ):
-        p_dfs = [
-            process_row(row, m_var, norm_year)
-            for _, row in df_u.loc[k : k + 7].iterrows()
-        ]
+        p_dfs = [process_row(row, m_var, norm_year) for _, row in df_u.loc[k : k + 7].iterrows()]
         dfs_u.append(pd.concat(p_dfs).reset_index(drop=True))
 
     df_u = reduce(
-        lambda left, right: pd.merge(
-            left, right, on=["basin", "year", "time"], how="outer"
-        ),
+        lambda left, right: pd.merge(left, right, on=["basin", "year", "time"], how="outer"),
         dfs_u,
     )
 

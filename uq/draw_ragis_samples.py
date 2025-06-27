@@ -115,21 +115,11 @@ dists: Dict[str, Any] = {
     "flow": {
         "uq": {
             "basal_resistance.pseudo_plastic.q": uniform(0.25, 0.75),
-            "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden": uniform(
-                loc=0.01, scale=0.03
-            ),
-            "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max": uniform(
-                loc=40.0, scale=20.0
-            ),
-            "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min": uniform(
-                loc=5.0, scale=30.0
-            ),
-            "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min": uniform(
-                loc=-1000, scale=1000
-            ),
-            "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max": uniform(
-                loc=0, scale=1500
-            ),
+            "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden": uniform(loc=0.01, scale=0.03),
+            "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max": uniform(loc=40.0, scale=20.0),
+            "basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min": uniform(loc=5.0, scale=30.0),
+            "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min": uniform(loc=-1000, scale=1000),
+            "basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max": uniform(loc=0, scale=1500),
             "stress_balance.sia.enhancement_factor": uniform(loc=1.0, scale=3.0),
             "stress_balance.ssa.Glen_exponent": uniform(loc=2.75, scale=0.75),
             "stress_balance.sia.Glen_exponent": uniform(loc=1.0, scale=3.0),
@@ -244,9 +234,7 @@ print(keys_prior)
 
 # Generate uniform samples (i.e. one unit hypercube)
 if method == "sobol":
-    unif_sample = sobol.sample(
-        problem, n_draw_samples, calc_second_order=calc_second_order, seed=42
-    )
+    unif_sample = sobol.sample(problem, n_draw_samples, calc_second_order=calc_second_order, seed=42)
 else:
     unif_sample = lhs(len(keys_prior), n_draw_samples)
 
@@ -299,31 +287,19 @@ def convert_samples(unif_sample):
     # For each variable, transform with the inverse of the CDF (inv(CDF)=ppf)
     for i, key in enumerate(keys_prior):
         if key == "sliding_law":
-            dist_sample[:, i] = [
-                slidinglaw[id] for id in distributions[key].ppf(unif_sample[:, i])
-            ]
+            dist_sample[:, i] = [slidinglaw[id] for id in distributions[key].ppf(unif_sample[:, i])]
         elif key == "climate_file":
-            dist_sample[:, i] = [
-                rcms[id] for id in distributions[key].ppf(unif_sample[:, i])
-            ]
+            dist_sample[:, i] = [rcms[id] for id in distributions[key].ppf(unif_sample[:, i])]
         elif key == "input.regrid.file":
-            dist_sample[:, i] = [
-                initialstates[id] for id in distributions[key].ppf(unif_sample[:, i])
-            ]
+            dist_sample[:, i] = [initialstates[id] for id in distributions[key].ppf(unif_sample[:, i])]
         elif key == "prescribed_retreat_file":
-            dist_sample[:, i] = [
-                retreatfiles[id] for id in distributions[key].ppf(unif_sample[:, i])
-            ]
+            dist_sample[:, i] = [retreatfiles[id] for id in distributions[key].ppf(unif_sample[:, i])]
         elif key == "stress_balance":
-            dist_sample[:, i] = [
-                f"{sb_dict[int(id)]}"
-                for id in distributions[key].ppf(unif_sample[:, i])
-            ]
+            dist_sample[:, i] = [f"{sb_dict[int(id)]}" for id in distributions[key].ppf(unif_sample[:, i])]
 
         elif key == "ocean_file":
             dist_sample[:, i] = [
-                f"MAR3.9_{gcms[int(id)]}_ocean_1960-2100_v4.nc"
-                for id in distributions[key].ppf(unif_sample[:, i])
+                f"MAR3.9_{gcms[int(id)]}_ocean_1960-2100_v4.nc" for id in distributions[key].ppf(unif_sample[:, i])
             ]
         else:
             dist_sample[:, i] = distributions[key].ppf(unif_sample[:, i])
@@ -338,9 +314,7 @@ dist_median_sample, _ = convert_samples(np.median(unif_sample, axis=0, keepdims=
 # dist_median_sample[:, -1] = retreatfiles.values()
 
 if posterior_file:
-    X_posterior = pd.read_csv(posterior_file).drop(
-        columns=["Unnamed: 0", "exp_id"], errors="ignore"
-    )
+    X_posterior = pd.read_csv(posterior_file).drop(columns=["Unnamed: 0", "exp_id"], errors="ignore")
     keys_mc = list(X_posterior.keys())
     keys = list(set(keys_prior + keys_mc))
     print(f"Prior: {keys_prior}")

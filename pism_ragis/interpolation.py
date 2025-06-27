@@ -375,9 +375,7 @@ def scatter_from_0(vector_0, vector, scatter):
     comm.barrier()
 
 
-def create_laplacian_matrix(
-    interior_points: np.ndarray, mask: np.ndarray, n: int, m: int
-) -> csc_matrix:
+def create_laplacian_matrix(interior_points: np.ndarray, mask: np.ndarray, n: int, m: int) -> csc_matrix:
     """
     Create the Laplacian matrix for the given interior points and mask.
 
@@ -408,33 +406,25 @@ def create_laplacian_matrix(
 
         if i > 0:
             if mask[i - 1, j]:
-                neighbor_index = np.where((interior_points == [i - 1, j]).all(axis=1))[
-                    0
-                ][0]
+                neighbor_index = np.where((interior_points == [i - 1, j]).all(axis=1))[0][0]
                 row_indices.append(k)
                 col_indices.append(neighbor_index)
                 data_values.append(1)
         if i < n - 1:
             if mask[i + 1, j]:
-                neighbor_index = np.where((interior_points == [i + 1, j]).all(axis=1))[
-                    0
-                ][0]
+                neighbor_index = np.where((interior_points == [i + 1, j]).all(axis=1))[0][0]
                 row_indices.append(k)
                 col_indices.append(neighbor_index)
                 data_values.append(1)
         if j > 0:
             if mask[i, j - 1]:
-                neighbor_index = np.where((interior_points == [i, j - 1]).all(axis=1))[
-                    0
-                ][0]
+                neighbor_index = np.where((interior_points == [i, j - 1]).all(axis=1))[0][0]
                 row_indices.append(k)
                 col_indices.append(neighbor_index)
                 data_values.append(1)
         if j < m - 1:
             if mask[i, j + 1]:
-                neighbor_index = np.where((interior_points == [i, j + 1]).all(axis=1))[
-                    0
-                ][0]
+                neighbor_index = np.where((interior_points == [i, j + 1]).all(axis=1))[0][0]
                 row_indices.append(k)
                 col_indices.append(neighbor_index)
                 data_values.append(1)
@@ -447,9 +437,7 @@ def create_laplacian_matrix(
     return L
 
 
-def create_rhs_vector(
-    data: np.ndarray, interior_points: np.ndarray, mask: np.ndarray, n: int, m: int
-) -> np.ndarray:
+def create_rhs_vector(data: np.ndarray, interior_points: np.ndarray, mask: np.ndarray, n: int, m: int) -> np.ndarray:
     """
     Create the right-hand side vector for the linear system.
 

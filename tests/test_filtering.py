@@ -101,9 +101,7 @@ def test_sample_with_replacement():
 
     result = sample_with_replacement(weights, exp_id, n_samples, seed)
 
-    assert (
-        len(result) == n_samples
-    ), "The number of samples should be equal to n_samples"
+    assert len(result) == n_samples, "The number of samples should be equal to n_samples"
     assert set(result).issubset(set(exp_id)), "All sampled IDs should be from exp_id"
     assert np.allclose(
         np.bincount(result, minlength=len(exp_id)) / n_samples, weights, atol=0.1
@@ -151,21 +149,15 @@ def test_filter_outliers():
     outlier_variable = "grounding_line_flux"
 
     # Call the function
-    filtered_ds, outliers_ds = filter_outliers(
-        ds, outlier_range, outlier_variable, freq=freq
-    )
+    filtered_ids, outliers_ids = filter_outliers(ds, outlier_range, outlier_variable, freq=freq)
 
     # Assert the results
-    assert isinstance(filtered_ds, xr.Dataset)
-    assert isinstance(outliers_ds, xr.Dataset)
-    assert "grounding_line_flux" in filtered_ds
-    assert "grounding_line_flux" in outliers_ds
+    assert isinstance(filtered_ids, np.ndarray)
+    assert isinstance(outliers_ids, np.ndarray)
 
     # Check that the filtered dataset does not contain outliers
-    assert (filtered_ds[outlier_variable] <= outlier_range[1]).all()
-    assert (filtered_ds[outlier_variable] >= outlier_range[0]).all()
+    assert (filtered_ids <= outlier_range[1]).all()
+    assert (filtered_ids >= outlier_range[0]).all()
 
     # Check that the outliers dataset contains only outliers
-    assert (outliers_ds[outlier_variable] > outlier_range[1]).any() or (
-        outliers_ds[outlier_variable] < outlier_range[0]
-    ).any()
+    assert (outliers_ids > outlier_range[1]).any() or (outliers_ids < outlier_range[0]).any()

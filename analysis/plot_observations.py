@@ -44,12 +44,8 @@ logger = get_logger("pism_ragis")
 xr.set_options(keep_attrs=True)
 plt.style.use("tableau-colorblind10")
 # Ignore specific RuntimeWarnings
-warnings.filterwarnings(
-    "ignore", category=RuntimeWarning, message="overflow encountered in exp"
-)
-warnings.filterwarnings(
-    "ignore", category=RuntimeWarning, message="invalid value encountered in divide"
-)
+warnings.filterwarnings("ignore", category=RuntimeWarning, message="overflow encountered in exp")
+warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in divide")
 
 
 def plot_basin(
@@ -253,9 +249,7 @@ if __name__ == "__main__":
     parallel = options.parallel
     resampling_frequency = options.resampling_frequency
     reference_date = options.reference_date
-    ragis_config_file = Path(
-        str(files("pism_ragis.data").joinpath("ragis_config.toml"))
-    )
+    ragis_config_file = Path(str(files("pism_ragis.data").joinpath("ragis_config.toml")))
     ragis_config = toml.load(ragis_config_file)
     config = json.loads(json.dumps(ragis_config))
 
@@ -279,28 +273,16 @@ if __name__ == "__main__":
     mpl.rcParams.update(rcparams)
 
     cumulative_vars = list(config["Cumulative Variables"].values())
-    cumulative_uncertainty_vars = list(
-        config["Cumulative Uncertainty Variables"].values()
-    )
+    cumulative_uncertainty_vars = list(config["Cumulative Uncertainty Variables"].values())
     normalize_vars = cumulative_vars + cumulative_uncertainty_vars
-    mou_ds = load_mouginot(
-        "/Users/andy/base/pism-ragis/data/mass_balance/pnas.1904242116.sd02.xlsx"
-    )
-    mou_ds = normalize_cumulative_variables(
-        mou_ds, normalize_vars, reference_date=reference_date
-    )
+    mou_ds = load_mouginot("/Users/andy/base/pism-ragis/data/mass_balance/pnas.1904242116.sd02.xlsx")
+    mou_ds = normalize_cumulative_variables(mou_ds, normalize_vars, reference_date=reference_date)
     mou_ds["name"] = "MOU19"
 
     man_ds = xr.open_dataset("data/mass_balance/mankoff_greenland_mass_balance.nc")
-    man_ds = normalize_cumulative_variables(
-        man_ds, normalize_vars, reference_date=reference_date
-    )
-    man_pub_ds = xr.open_dataset(
-        "data/mass_balance/mankoff_greenland_mass_balance_no_smb_err.nc"
-    )
-    man_pub_ds = normalize_cumulative_variables(
-        man_pub_ds, normalize_vars, reference_date=reference_date
-    )
+    man_ds = normalize_cumulative_variables(man_ds, normalize_vars, reference_date=reference_date)
+    man_pub_ds = xr.open_dataset("data/mass_balance/mankoff_greenland_mass_balance_no_smb_err.nc")
+    man_pub_ds = normalize_cumulative_variables(man_pub_ds, normalize_vars, reference_date=reference_date)
 
     grace_ds = xr.open_dataset("data/mass_balance/grace_greenland_mass_balance.nc")
     grace_ds = normalize_cumulative_variables(

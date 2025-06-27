@@ -70,9 +70,7 @@ obs_alpha = 1.0
 obs_cmap = ["0.8", "0.7"]
 # obs_cmap = ["#88CCEE", "#44AA99"]
 hist_cmap = ["#a6cee3", "#1f78b4"]
-cartopy_crs = ccrs.NorthPolarStereo(
-    central_longitude=-45, true_scale_latitude=70, globe=None
-)
+cartopy_crs = ccrs.NorthPolarStereo(central_longitude=-45, true_scale_latitude=70, globe=None)
 
 
 def prepare_liafr(
@@ -161,9 +159,7 @@ if __name__ == "__main__":
         type=str,
         default="land_ice_are_fraction_retreat",
     )
-    parser.add_argument(
-        "--n_jobs", help="""Number of parallel jobs.""", type=int, default=4
-    )
+    parser.add_argument("--n_jobs", help="""Number of parallel jobs.""", type=int, default=4)
     parser.add_argument(
         "--notebook",
         help="""Use when running in a notebook to display a nicer progress bar. Default=False.""",
@@ -204,9 +200,7 @@ if __name__ == "__main__":
     input_data_dir = options.data_dir
     resampling_frequency = options.resampling_frequency
     outlier_variable = options.outlier_variable
-    ragis_config_file = Path(
-        str(files("pism_ragis.data").joinpath("ragis_config.toml"))
-    )
+    ragis_config_file = Path(str(files("pism_ragis.data").joinpath("ragis_config.toml")))
     ragis_config = toml.load(ragis_config_file)
     config = json.loads(json.dumps(ragis_config))
     params_short_dict = config["Parameters"]
@@ -225,9 +219,7 @@ if __name__ == "__main__":
     sim_var = "land_ice_area_fraction_retreat"
     filter_range = ["1980", "2019"]
     sum_dims = ["y", "x", "time"]
-    obs_file = (
-        input_data_dir + "/front_retreat/pism_g450m_frontretreat_calfin_1980_2019_YM.nc"
-    )
+    obs_file = input_data_dir + "/front_retreat/pism_g450m_frontretreat_calfin_1980_2019_YM.nc"
     log_likelihood = log_jaccard_score_xr
     prepare_input = prepare_liafr
 

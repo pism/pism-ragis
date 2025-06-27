@@ -63,9 +63,7 @@ def unzip_files(
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = []
         for f in files:
-            futures.append(
-                executor.submit(unzip_file, f, str(output_dir), overwrite=overwrite)
-            )
+            futures.append(executor.submit(unzip_file, f, str(output_dir), overwrite=overwrite))
         for future in as_completed(futures):
             try:
                 future.result()
@@ -168,9 +166,7 @@ def download_archive(url: str) -> tarfile.TarFile | zipfile.ZipFile:
     with urlopen(url) as req:
         total_size = int(req.info().get("Content-Length").strip())
         buffer = BytesIO()
-        for chunk in tqdm(
-            iter(lambda: req.read(1024), b""), total=total_size // 1024, unit="KB"
-        ):
+        for chunk in tqdm(iter(lambda: req.read(1024), b""), total=total_size // 1024, unit="KB"):
             buffer.write(chunk)
         buffer.seek(0)
 
@@ -183,9 +179,7 @@ def download_archive(url: str) -> tarfile.TarFile | zipfile.ZipFile:
     return archive
 
 
-def download_earthaccess(
-    filter_str: str | None = None, result_dir: Path | str = ".", **kwargs
-) -> list:
+def download_earthaccess(filter_str: str | None = None, result_dir: Path | str = ".", **kwargs) -> list:
     """
     Download datasets via Earthaccess.
 
@@ -212,8 +206,7 @@ def download_earthaccess(
         results = [
             granule
             for granule in results
-            if filter_str
-            in granule["umm"]["DataGranule"]["Identifiers"][0]["Identifier"]
+            if filter_str in granule["umm"]["DataGranule"]["Identifiers"][0]["Identifier"]
         ]
     earthaccess.get_s3_credentials(results=results)
     return earthaccess.download(results, p)

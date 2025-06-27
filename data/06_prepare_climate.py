@@ -44,9 +44,7 @@ cdo = Cdo()
 cdo.debug = True
 
 
-def process_year(
-    year: int, output_dir: Path, vars_dict: Dict, start_date: str = "1975-01-01"
-) -> Path:
+def process_year(year: int, output_dir: Path, vars_dict: Dict, start_date: str = "1975-01-01") -> Path:
     """
     Prepare and process NetCDF files for a given year and generate a monthly averaged dataset.
 
@@ -69,9 +67,7 @@ def process_year(
     output_file = output_dir / Path(f"monthly_{year}.nc")
     p = output_dir / Path(str(year))
     responses = sorted(p.glob("*.nc"))
-    ds = xr.open_mfdataset(
-        responses, parallel=True, chunks={"time": -1}, engine="netcdf4"
-    )
+    ds = xr.open_mfdataset(responses, parallel=True, chunks={"time": -1}, engine="netcdf4")
     ds = ds[list(vars_dict.keys()) + ["lat", "lon"]]
 
     for v in ["lat", "lon", "gld", "rogl"]:
@@ -113,11 +109,7 @@ def process_year(
     encoding = {var: {"_FillValue": False} for var in ["rlat", "rlon", "lon", "lat"]}
     comp = {"zlib": True, "complevel": 2}
 
-    encoding_compression = {
-        var: comp
-        for var in ds.data_vars
-        if var not in ("time", "time_bounds", "time_bnds")
-    }
+    encoding_compression = {var: comp for var in ds.data_vars if var not in ("time", "time_bounds", "time_bnds")}
     encoding.update(encoding_compression)
 
     with ProgressBar():
@@ -222,18 +214,13 @@ def process_hirham_cdo(
         print(f"Time elapsed {time_elapsed:.0f}s")
 
     start = time.time()
-    infiles = [
-        str((hirham_nc_dir / Path(f"monthly_{year}.nc")).absolute())
-        for year in range(start_year, end_year + 1)
-    ]
+    infiles = [str((hirham_nc_dir / Path(f"monthly_{year}.nc")).absolute()) for year in range(start_year, end_year + 1)]
     infiles = " ".join(infiles)
     merged_ofile = cdo.mergetime(
         input=infiles,
         options=f"-f nc4 -z zip_2 -P {max_workers}",
     )
-    pre_1980 = cdo.settbounds(
-        "1mon", input=" -settaxis,1975-01-01,,1mon -selyear,1981/1985 " + merged_ofile
-    )
+    pre_1980 = cdo.settbounds("1mon", input=" -settaxis,1975-01-01,,1mon -selyear,1981/1985 " + merged_ofile)
     merged = cdo.mergetime(
         input=pre_1980 + " " + merged_ofile,
         options=f"-f nc4 -z zip_2 -P {max_workers}",
@@ -257,11 +244,7 @@ def process_hirham_cdo(
     encoding = {var: {"_FillValue": False} for var in ["rlat", "rlon"]}
     comp = {"zlib": True, "complevel": 2, "_FillValue": None}
 
-    encoding_compression = {
-        var: comp
-        for var in ds.data_vars
-        if var not in ("time", "time_bounds", "time_bnds")
-    }
+    encoding_compression = {var: comp for var in ds.data_vars if var not in ("time", "time_bounds", "time_bnds")}
     encoding.update(encoding_compression)
     print(f"Writing to {output_file}")
     with ProgressBar():
@@ -344,11 +327,7 @@ def process_racmo_cdo(
     encoding = {var: {"_FillValue": None} for var in ["rlat", "rlon"]}
     comp = {"zlib": True, "complevel": 2, "_FillValue": None}
 
-    encoding_compression = {
-        var: comp
-        for var in ds.data_vars
-        if var not in ("time", "time_bounds", "time_bnds")
-    }
+    encoding_compression = {var: comp for var in ds.data_vars if var not in ("time", "time_bounds", "time_bnds")}
     encoding.update(encoding_compression)
     print(f"Writing to {output_file}")
     with ProgressBar():
@@ -606,9 +585,7 @@ def download_hirham(
 
 hirham_url = "http://ensemblesrt3.dmi.dk/data/prudence/temp/nichan/Daily2D_GrIS/"
 mar_url = "http://ftp.climato.be/fettweis/MARv3.14/Greenland/ERA5-1km-monthly/"
-mar20cr_url = (
-    "http://ftp.climato.be/fettweis/MARv3.5.2/Greenland/20CRv2c_1900-2014_20km/"
-)
+mar20cr_url = "http://ftp.climato.be/fettweis/MARv3.5.2/Greenland/20CRv2c_1900-2014_20km/"
 
 xr.set_options(keep_attrs=True)
 
@@ -619,9 +596,7 @@ if __name__ == "__main__":
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Prepare climate forcing."
-    parser.add_argument(
-        "--n_jobs", help="""Number of parallel jobs.""", type=int, default=8
-    )
+    parser.add_argument("--n_jobs", help="""Number of parallel jobs.""", type=int, default=8)
     options = parser.parse_args()
     max_workers = options.n_jobs
     overwrite = False

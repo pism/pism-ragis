@@ -63,9 +63,7 @@ def run_stats(
         with xr.open_dataset(m_file) as ds:
             dfs.append(
                 pd.DataFrame(
-                    data=np.array(
-                        [ds["run_stats"].attrs[stats_var] for stats_var in stats_vars]
-                    ).reshape(1, -1),
+                    data=np.array([ds["run_stats"].attrs[stats_var] for stats_var in stats_vars]).reshape(1, -1),
                     columns=stats_vars,
                 )
             )

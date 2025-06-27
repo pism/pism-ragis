@@ -181,9 +181,7 @@ if __name__ == "__main__":
         data_filled, data_masked, data_true = profile_petsc(D, method="iterative")
         end = time.time()
         time_elapsed = end - start
-        print(
-            f"PETSc iterative solver: filling a {D}x{D} matrix took {time_elapsed:.2f}s"
-        )
+        print(f"PETSc iterative solver: filling a {D}x{D} matrix took {time_elapsed:.2f}s")
         start = time.time()
         data_filled, data_masked, data_true = profile_petsc(D, method="direct")
         end = time.time()

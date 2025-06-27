@@ -52,11 +52,11 @@ def timeit(func):
     --------
     >>> @timeit
     ... def example_function():
-    ...     time.sleep(1)
+    ...     import time; time.sleep(1)
     ...
     >>> example_function()
-    INFO:__main__:Starting example_function
-    INFO:__main__:Finished example_function in 1.0001 seconds
+    INFO:__main__:example_function: Starting
+    INFO:__main__:example_function: Finished in 1.00 seconds
     """
 
     @wraps(func)
@@ -74,13 +74,12 @@ def timeit(func):
         Returns
         -------
         Any
-            The result of the decorated function.
+           The result of the decorated function.
         """
         start_time = time.time()
         logger.info("%s: Starting", func.__name__)
         result = func(*args, **kwargs)
-        end_time = time.time()
-        elapsed_time = end_time - start_time
+        elapsed_time = time.time() - start_time
         logger.info("%s: Finished in %2.2f seconds", func.__name__, elapsed_time)
         return result
 

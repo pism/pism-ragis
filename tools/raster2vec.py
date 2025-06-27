@@ -34,9 +34,7 @@ fh.setLevel(logging.DEBUG)
 ch = logging.StreamHandler()
 ch.setLevel(logging.ERROR)
 # create formatter
-formatter = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(module)s:%(lineno)d - %(message)s"
-)
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(module)s:%(lineno)d - %(message)s")
 
 # add formatter to ch and fh
 ch.setFormatter(formatter)
@@ -113,9 +111,7 @@ vx_var = args.vx
 vy_var = args.vy
 crs = args.crs
 
-ds = xr.open_dataset(infile, decode_timedelta=True).thin(
-    {"x": prune_factor, "y": prune_factor}
-)
+ds = xr.open_dataset(infile, decode_timedelta=True).thin({"x": prune_factor, "y": prune_factor})
 ds = ds.rio.set_spatial_dims(x_dim="x", y_dim="y")
 ds.rio.write_crs(crs, inplace=True)
 
@@ -134,9 +130,7 @@ if "time" in ds.coords:
     # Loop over each time step
     gdfs = []
     for t in tqdm(ds.time.values):
-        timestamp = (
-            np.datetime64(t).astype("datetime64[ns]").item()
-        )  # convert to Python datetime
+        timestamp = np.datetime64(t).astype("datetime64[ns]").item()  # convert to Python datetime
 
         # Select single time slice (still lazy until .compute())
         vx = ds[vx_var].sel(time=t)
@@ -168,10 +162,7 @@ if "time" in ds.coords:
         # Efficient filtering
         valid_idx = np.flatnonzero(mask_flat)
 
-        lines = [
-            LineString([(x_a_flat[i], y_a_flat[i]), (x_e_flat[i], y_e_flat[i])])
-            for i in valid_idx
-        ]
+        lines = [LineString([(x_a_flat[i], y_a_flat[i]), (x_e_flat[i], y_e_flat[i])]) for i in valid_idx]
 
         gdf = gpd.GeoDataFrame(
             {
@@ -219,10 +210,7 @@ else:
     # Efficient filtering
     valid_idx = np.flatnonzero(mask_flat)
 
-    lines = [
-        LineString([(x_a_flat[i], y_a_flat[i]), (x_e_flat[i], y_e_flat[i])])
-        for i in valid_idx
-    ]
+    lines = [LineString([(x_a_flat[i], y_a_flat[i]), (x_e_flat[i], y_e_flat[i])]) for i in valid_idx]
 
     gdf = gpd.GeoDataFrame(
         {

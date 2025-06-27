@@ -125,9 +125,7 @@ def log_normal(
     np.ndarray or xr.DataArray
         The log-likelihood of the data given the distribution parameters.
     """
-    return -0.5 * ((x - mu) / (fudge_factor * std)) ** 2 - 0.5 * np.log(
-        2 * np.pi * (fudge_factor * std) ** 2
-    )
+    return -0.5 * ((x - mu) / (fudge_factor * std)) ** 2 - 0.5 * np.log(2 * np.pi * (fudge_factor * std) ** 2)
 
 
 def log_normal_xr(

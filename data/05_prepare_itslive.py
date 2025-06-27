@@ -71,17 +71,13 @@ if __name__ == "__main__":
     filter_str = "GRE_G0240"
     result_dir = Path("itslive")
     doi = "10.5067/6II6VW8LLWJ7"
-    results = download_earthaccess(
-        doi=doi, filter_str=filter_str, result_dir=result_dir
-    )
+    results = download_earthaccess(doi=doi, filter_str=filter_str, result_dir=result_dir)
 
     comp = {"zlib": True, "complevel": 2}
     regexp = "GRE_G0240_(.+?).nc"
     vars_to_process = ["v", "vx", "vy", "v_err", "vx_err", "vy_err", "ice"]
 
-    years = np.array(
-        [int(Path(r).name.split(".")[0][-4::]) for r in results if "0000" not in r]
-    )
+    years = np.array([int(Path(r).name.split(".")[0][-4::]) for r in results if "0000" not in r])
     start_year, end_year = years.min(), years.max()
     output_files = []
     for r in results:
@@ -120,9 +116,7 @@ if __name__ == "__main__":
     speed = ds["v"]
     distance = np.isfinite(speed) * dt.broadcast_like(speed)
     weights = idw_weights(distance, power=power)
-    idw_ofile = result_dir / Path(
-        f"ITS_LIVE_GRE_G0240_{start_year}_{end_year}_IDW_EXP_{power}.nc"
-    )
+    idw_ofile = result_dir / Path(f"ITS_LIVE_GRE_G0240_{start_year}_{end_year}_IDW_EXP_{power}.nc")
     print(f"Inverse-Distance Weighting with power = {power} and saving to {idw_ofile}")
     weighted_mean = ds.weighted(weights).mean(dim="time")
     save_netcdf(weighted_mean, idw_ofile)

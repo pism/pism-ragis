@@ -94,8 +94,8 @@ module = "pism_ragis.*"
 ignore_missing_imports = true
 
 [tool.black]
-line-length = 88
-target-version = ['py311']
+line-length = 120
+target-version = ['py312']
 include = '\.pyi?$'
 exclude = '''
 /(

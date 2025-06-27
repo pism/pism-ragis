@@ -72,17 +72,9 @@ def prepare_basin(basin_dict: Dict, col: str = "SUBREGION1"):
     shelves = gp.read_file("basins/GRE_Basins_shelf_extensions.gpkg").to_crs(crs)
     basin_dissolved_by_basin = basin_gp.dissolve(col)
     shelves_dissolved_by_basin = shelves.dissolve(col)
-    basin_plus_shelves_geom = basin_dissolved_by_basin.union(
-        shelves_dissolved_by_basin, align=True
-    )
-    basin_plus_shelves = gp.GeoDataFrame(
-        basin_dissolved_by_basin, geometry=basin_plus_shelves_geom
-    )
-    m = (
-        pd.concat([basin_dissolved_by_basin, basin_plus_shelves])
-        .dissolve(col)
-        .reset_index()
-    )
+    basin_plus_shelves_geom = basin_dissolved_by_basin.union(shelves_dissolved_by_basin, align=True)
+    basin_plus_shelves = gp.GeoDataFrame(basin_dissolved_by_basin, geometry=basin_plus_shelves_geom)
+    m = pd.concat([basin_dissolved_by_basin, basin_plus_shelves]).dissolve(col).reset_index()
     m_no_periphery = m[m[col] != "ICE_CAP"]
     gis = gp.GeoDataFrame(m_no_periphery.dissolve())
 

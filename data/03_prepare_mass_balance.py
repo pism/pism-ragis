@@ -45,9 +45,7 @@ xr.set_options(keep_attrs=True)
 # Precompute the transformer
 proj_wgs84 = Proj(proj="latlong", datum="WGS84")
 proj_equal_area = Proj(proj="aea", lat_1=0, lat_2=90)
-project = Transformer.from_crs(
-    proj_wgs84.crs, proj_equal_area.crs, always_xy=True
-).transform
+project = Transformer.from_crs(proj_wgs84.crs, proj_equal_area.crs, always_xy=True).transform
 
 
 def calculate_polygon_area(lat_0, lat_1, lon_0, lon_1):
@@ -114,7 +112,9 @@ def prepare_grace_goddard(result_dir: Path = Path("mass_balance")):
     result_dir : Path, optional
         Directory to save the results, by default "mass_balance".
     """
-    url = "https://earth.gsfc.nasa.gov/sites/default/files/geo/gsfc.glb_.200204_202410_rl06v2.0_obp-ice6gd_halfdegree.nc"
+    url = (
+        "https://earth.gsfc.nasa.gov/sites/default/files/geo/gsfc.glb_.200204_202410_rl06v2.0_obp-ice6gd_halfdegree.nc"
+    )
     fn = "grace_gsfc_greenland_mass_balance_clean.nc"
     p_fn = result_dir / fn
     ds = download_netcdf(url)
@@ -134,12 +134,8 @@ def prepare_grace_goddard(result_dir: Path = Path("mass_balance")):
     lat_bounds_2d = lat_bounds_2d.transpose("lat", "lon", "bounds")
     lon_bounds_2d = lon_bounds_2d.transpose("lat", "lon", "bounds")
 
-    lats_0, lats_1 = lat_bounds_2d.isel({"bounds": 0}), lat_bounds_2d.isel(
-        {"bounds": 1}
-    )
-    lons_0, lons_1 = lon_bounds_2d.isel({"bounds": 0}), lon_bounds_2d.isel(
-        {"bounds": 1}
-    )
+    lats_0, lats_1 = lat_bounds_2d.isel({"bounds": 0}), lat_bounds_2d.isel({"bounds": 1})
+    lons_0, lons_1 = lon_bounds_2d.isel({"bounds": 0}), lon_bounds_2d.isel({"bounds": 1})
 
     area = xr.apply_ufunc(
         _calculate_area,
@@ -159,23 +155,13 @@ def prepare_grace_goddard(result_dir: Path = Path("mass_balance")):
 
     water_density = xr.DataArray(1000.0).pint.quantify("kg m^-3").pint.to("Gt m^-3")
     ds["cumulative_mass_balance"] = (
-        ds["lwe_thickness"].where(ds["land_mask"]).pint.to("m")
-        * area.pint.quantify()
-        * water_density
+        ds["lwe_thickness"].where(ds["land_mask"]).pint.to("m") * area.pint.quantify() * water_density
     )
-    days_in_interval = (
-        (ds.time.diff(dim="time") / np.timedelta64(1, "s"))
-        .pint.quantify("s")
-        .pint.to("year")
-    )
-    ds["mass_balance"] = (
-        ds["cumulative_mass_balance"].diff(dim="time") / days_in_interval
-    )
+    days_in_interval = (ds.time.diff(dim="time") / np.timedelta64(1, "s")).pint.quantify("s").pint.to("year")
+    ds["mass_balance"] = ds["cumulative_mass_balance"].diff(dim="time") / days_in_interval
     ds["mass_balance_err"] = (
         xr.zeros_like(ds["mass_balance"])
-        + xr.DataArray(4).pint.quantify("cm yr^-1").pint.to("m yr^-1")
-        * area.pint.quantify()
-        * water_density
+        + xr.DataArray(4).pint.quantify("cm yr^-1").pint.to("m yr^-1") * area.pint.quantify() * water_density
     )
 
     fn = "grace_gsfc_greenland_mass_balance.nc"
@@ -218,22 +204,14 @@ def prepare_grace_tellus(result_dir: Path = Path("mass_balance")):
 
     ds = xr.Dataset.from_dataframe(df.set_index(df["time"]))
     ds["cumulative_mass_balance"].attrs.update({"units": "Gt"})
-    ds["cumulative_mass_balance_uncertainty"] = np.sqrt(
-        (ds["mass_balance_uncertainty"] ** 2).cumsum(dim="time")
-    )
+    ds["cumulative_mass_balance_uncertainty"] = np.sqrt((ds["mass_balance_uncertainty"] ** 2).cumsum(dim="time"))
     ds["cumulative_mass_balance_uncertainty"].attrs.update({"units": "Gt"})
 
     ds = ds.pint.quantify()
 
-    days_in_interval = (
-        (ds.time.diff(dim="time") / np.timedelta64(1, "s"))
-        .pint.quantify("s")
-        .pint.to("year")
-    )
+    days_in_interval = (ds.time.diff(dim="time") / np.timedelta64(1, "s")).pint.quantify("s").pint.to("year")
 
-    ds["mass_balance"] = (
-        ds["cumulative_mass_balance"].diff(dim="time") / days_in_interval
-    )
+    ds["mass_balance"] = ds["cumulative_mass_balance"].diff(dim="time") / days_in_interval
     fn = "grace_greenland_mass_balance.nc"
     p_fn = result_dir / fn
     grace_ds = ds.pint.dequantify()
@@ -254,9 +232,7 @@ def prepare_mankoff(
     result_dir : Path, optional
         Directory to save the results, by default "mass_balance".
     """
-    ragis_config_file = Path(
-        str(files("pism_ragis.data").joinpath("ragis_config.toml"))
-    )
+    ragis_config_file = Path(str(files("pism_ragis.data").joinpath("ragis_config.toml")))
     ragis_config = toml.load(ragis_config_file)
 
     basin_vars_dict = ragis_config["Mankoff"]["basin"]
@@ -292,11 +268,7 @@ def prepare_mankoff(
     # The data is unevenly space in time. Until 1986, the interval is 1 year, and
     # from 1986 on, the interval is 1 day. We thus compute the amount of days in a given
     # interval.
-    dt = (
-        (ds.time.diff(dim="time", label="lower") / np.timedelta64(1, "s"))
-        .pint.quantify("s")
-        .pint.to("day")
-    )
+    dt = (ds.time.diff(dim="time", label="lower") / np.timedelta64(1, "s")).pint.quantify("s").pint.to("day")
     for v in basin_vars + basin_uncertainty_vars:
         ds[f"cumulative_{v}"] = (ds[v].pint.to("Gt day^-1") * dt).cumsum(dim="time")
         ds[v] = ds[v].pint.to("Gt year^-1")

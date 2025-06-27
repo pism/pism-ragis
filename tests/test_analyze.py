@@ -83,10 +83,10 @@ def test_delta_analyze(sensitivity_data):
             index_col="param",
         )
 
-        result = delta.analyze(
-            problem, df.values, response.to_numpy(), seed=42, method="sobol"
-        ).to_df()[["S1", "S1_conf"]]
-        result = delta_analysis(
-            Y=response.to_numpy(), X=df.to_numpy(), problem=problem
-        ).to_dataframe()[["S1", "S1_conf"]]
+        result = delta.analyze(problem, df.values, response.to_numpy(), seed=42, method="sobol").to_df()[
+            ["S1", "S1_conf"]
+        ]
+        result = delta_analysis(Y=response.to_numpy(), X=df.to_numpy(), problem=problem).to_dataframe()[
+            ["S1", "S1_conf"]
+        ]
         np.testing.assert_array_almost_equal(result_true.values, result.values)

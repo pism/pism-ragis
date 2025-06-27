@@ -101,11 +101,7 @@ def calculate_area(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
 
     for i in range(len(lat) - 1):
         for j in range(len(lon) - 1):
-            area[i, j] = (
-                (R**2)
-                * np.abs(np.sin(lat_rad[i + 1]) - np.sin(lat_rad[i]))
-                * np.abs(dlon[j])
-            )
+            area[i, j] = (R**2) * np.abs(np.sin(lat_rad[i + 1]) - np.sin(lat_rad[i])) * np.abs(dlon[j])
 
     return area
 
@@ -173,15 +169,11 @@ def preprocess_time(
     time_centered = time[:-1] + (time[1:] - time[:-1]) / 2
     ds = ds.assign_coords(time=time_centered)
 
-    time_bounds = xr.DataArray(
-        np.vstack([time[:-1], time[1:]]).T, dims=["time", "bounds"]
-    )
+    time_bounds = xr.DataArray(np.vstack([time[:-1], time[1:]]).T, dims=["time", "bounds"])
     # Add bounds to the dataset
     ds = ds.assign_coords(time_bounds=time_bounds)
 
-    return ds.drop_vars(drop_vars, errors="ignore").drop_dims(
-        drop_dims, errors="ignore"
-    )
+    return ds.drop_vars(drop_vars, errors="ignore").drop_dims(drop_dims, errors="ignore")
 
 
 def preprocess_nc(
@@ -231,9 +223,7 @@ def preprocess_nc(
         m_id = str(m_id_re.group(1))
     ds[dim] = [m_id]
 
-    return ds.drop_vars(drop_vars, errors="ignore").drop_dims(
-        drop_dims, errors="ignore"
-    )
+    return ds.drop_vars(drop_vars, errors="ignore").drop_dims(drop_dims, errors="ignore")
 
 
 def preprocess_config(
@@ -273,15 +263,17 @@ def preprocess_config(
     AssertionError
         If the regular expression does not match any part of the filename.
     """
-    m_id_re = re.search(regexp, ds.encoding["source"])
-    ds = ds.expand_dims(dim)
-    assert m_id_re is not None
-    m_id: str | int
-    try:
-        m_id = int(m_id_re.group(1))
-    except:
-        m_id = str(m_id_re.group(1))
-    ds[dim] = [m_id]
+
+    if dim not in ds.dimensions:
+        m_id_re = re.search(regexp, ds.encoding["source"])
+        ds = ds.expand_dims(dim)
+        assert m_id_re is not None
+        m_id: str | int
+        try:
+            m_id = int(m_id_re.group(1))
+        except:
+            m_id = str(m_id_re.group(1))
+        ds[dim] = [m_id]
 
     p_config = ds["pism_config"]
     p_run_stats = ds["run_stats"]
@@ -290,11 +282,7 @@ def preprocess_config(
     suffixes_to_exclude = ["_doc", "_type", "_units", "_option", "_choices"]
 
     # Filter the dictionary
-    config = {
-        k: v
-        for k, v in p_config.attrs.items()
-        if not any(k.endswith(suffix) for suffix in suffixes_to_exclude)
-    }
+    config = {k: v for k, v in p_config.attrs.items() if not any(k.endswith(suffix) for suffix in suffixes_to_exclude)}
     if "geometry.front_retreat.prescribed.file" not in config.keys():
         config["geometry.front_retreat.prescribed.file"] = "false"
 
@@ -327,9 +315,7 @@ def preprocess_config(
             run_stats,
         ]
     )
-    return ds.drop_vars(drop_vars, errors="ignore").drop_dims(
-        drop_dims, errors="ignore"
-    )
+    return ds.drop_vars(drop_vars, errors="ignore").drop_dims(drop_dims, errors="ignore")
 
 
 def preprocess_scalar_nc(
@@ -421,14 +407,10 @@ def preprocess_scalar_nc(
         m_id = str(m_id_re.group(1))
     ds[dim] = [m_id]
 
-    return ds.drop_vars(drop_vars, errors="ignore").drop_dims(
-        drop_dims, errors="ignore"
-    )
+    return ds.drop_vars(drop_vars, errors="ignore").drop_dims(drop_dims, errors="ignore")
 
 
-def compute_basin(
-    ds: xr.Dataset, name: str = "basin", dim: list = ["x", "y"]
-) -> xr.Dataset:
+def compute_basin(ds: xr.Dataset, name: str = "basin", dim: list = ["x", "y"]) -> xr.Dataset:
     """
     Compute the sum of the dataset over the 'x' and 'y' dimensions and add a new dimension 'basin'.
 
@@ -451,7 +433,7 @@ def compute_basin(
     >>> ds = xr.Dataset({'var': (('x', 'y'), np.random.rand(5, 5))})
     >>> compute_basin(ds, 'new_basin')
     """
-    ds = ds.sum(dim=dim).expand_dims("basin", axis=-1)
+    ds = ds.sum(dim=dim).expand_dims("basin")
     ds["basin"] = [name]
     return ds.compute()
 
@@ -547,25 +529,17 @@ def check_file(infile: str | pathlib.Path, norm_year: None | float = None) -> bo
         is_ok: bool = False
         if "time" in ds.indexes:
             datetimeindex = ds.indexes["time"]
-            years = np.array(
-                [to_decimal_year(x.to_pydatetime()) for x in datetimeindex]
-            )
-            monotonically_increasing = np.all(
-                years.reshape(1, -1)[:, 1:] >= years.reshape(1, -1)[:, :-1], axis=1
-            )[0]
+            years = np.array([to_decimal_year(x.to_pydatetime()) for x in datetimeindex])
+            monotonically_increasing = np.all(years.reshape(1, -1)[:, 1:] >= years.reshape(1, -1)[:, :-1], axis=1)[0]
             if norm_year:
                 if (years[-1] >= norm_year) and monotonically_increasing:
                     is_ok = True
             else:
-                print(
-                    f"{infile} time-series too short or not monotonically-increasing."
-                )
+                print(f"{infile} time-series too short or not monotonically-increasing.")
         return is_ok
 
 
-def check_paleo_file(
-    infile: str | pathlib.Path, norm_year: None | float = None
-) -> bool:
+def check_paleo_file(infile: str | pathlib.Path, norm_year: None | float = None) -> bool:
     """
     Check netCDF file.
 
@@ -586,16 +560,12 @@ def check_paleo_file(
         if "time" in ds.indexes:
             datetimeindex = ds.indexes["time"]
             years = datetimeindex.year
-            monotonically_increasing = np.all(
-                years.reshape(1, -1)[:, 1:] >= years.reshape(1, -1)[:, :-1], axis=1
-            )[0]
+            monotonically_increasing = np.all(years.reshape(1, -1)[:, 1:] >= years.reshape(1, -1)[:, :-1], axis=1)[0]
             if norm_year:
                 if (years[-1] >= norm_year) and monotonically_increasing:
                     is_ok = True
             else:
-                print(
-                    f"{infile} time-series too short or not monotonically-increasing."
-                )
+                print(f"{infile} time-series too short or not monotonically-increasing.")
         return is_ok
 
 
@@ -691,11 +661,7 @@ class UtilsMethods:
             temperature  (x, y) float64 15.5 16.2 14.8 15.1
             humidity     (x, y) int64 80 85 78 82
         """
-        nonnumeric_vars = [
-            v
-            for v in self._obj.data_vars
-            if not np.issubdtype(self._obj[v].dtype, np.number)
-        ]
+        nonnumeric_vars = [v for v in self._obj.data_vars if not np.issubdtype(self._obj[v].dtype, np.number)]
 
         return self._obj.drop_vars(nonnumeric_vars, errors=errors)
 
@@ -788,9 +754,7 @@ def normalize_cumulative_variables(
     return ds
 
 
-def standardize_variable_names(
-    ds: xr.Dataset, name_dict: Mapping[Any, Hashable] | None
-) -> xr.Dataset:
+def standardize_variable_names(ds: xr.Dataset, name_dict: Mapping[Any, Hashable] | None) -> xr.Dataset:
     """
     Standardize variable names in an xarray Dataset.
 
@@ -845,9 +809,7 @@ def select_experiments(df: pd.DataFrame, ids_to_select: list[int]) -> pd.DataFra
     selected_rows = df[df["exp_id"].isin(ids_to_select)]
 
     # Repeat the indices according to the number of times they appear in ids_to_select
-    repeated_indices = selected_rows.index.repeat(
-        [ids_to_select.count(id) for id in selected_rows["exp_id"]]
-    )
+    repeated_indices = selected_rows.index.repeat([ids_to_select.count(id) for id in selected_rows["exp_id"]])
 
     # Select the rows based on the repeated indices
     return df.loc[repeated_indices]
@@ -1108,65 +1070,88 @@ def filter_config(da: xr.DataArray, params: list[str]) -> xr.DataArray:
     return config
 
 
+@timeit
 def config_to_dataframe(
-    config: xr.DataArray, ensemble: str | None = None
+    config: xr.DataArray,
+    ensemble: str | None = None,
+    aux_dim_name: str = "aux_id",
+    config_axis_name: str = "pism_config_axis",
 ) -> pd.DataFrame:
     """
-    Convert an xarray DataArray configuration to a pandas DataFrame.
+    Convert an xarray DataArray configuration into a pandas DataFrame.
 
-    This function converts the input DataArray containing configuration data into a
-    pandas DataFrame. The dimensions of the DataArray (excluding 'pism_config_axis')
-    are used as the index, and the 'pism_config_axis' values are used as columns.
+    This function pivots a DataArray containing configuration values (e.g., for
+    ensemble modeling) into a wide-format DataFrame. It supports multi-dimensional
+    sample spaces and handles non-unique coordinate combinations by introducing an
+    auxiliary identifier dimension to ensure uniqueness during reshaping.
 
     Parameters
     ----------
     config : xr.DataArray
-        The input DataArray containing the configuration data.
-    ensemble : str | None, optional
-        An optional string to add as a column named 'ensemble' in the DataFrame, by default None.
+        An xarray DataArray with a configuration axis (e.g., 'pism_config_axis') and
+        one or more sampling dimensions (e.g., 'exp_id', 'basin', 'filtered_by').
+    ensemble : str or None, optional
+        Optional label for the ensemble to include as a column in the output DataFrame.
+    aux_dim_name : str, default "aux_id"
+        The name of the auxiliary dimension added to create a unique index for reshaping.
+    config_axis_name : str, default "pism_config_axis"
+        The name of the dimension corresponding to configuration parameters (used as
+        columns in the output DataFrame).
 
     Returns
     -------
     pd.DataFrame
-        A DataFrame where the dimensions of the DataArray (excluding 'pism_config_axis')
-        are used as the index, and the 'pism_config_axis' values are used as columns.
+        A DataFrame with a row for each sample (including coordinates as columns),
+        and configuration parameters as additional columns.
+
+    Raises
+    ------
+    ValueError
+        If `config_axis_name` is not a dimension of the DataArray.
 
     Examples
     --------
-    >>> config = xr.DataArray(
-    ...     data=[[1, 2, 3], [4, 5, 6]],
-    ...     dims=["time", "pism_config_axis"],
-    ...     coords={"time": [0, 1], "pism_config_axis": ["param1", "param2", "param3"]}
-    ... )
-    >>> df = config_to_dataframe(config)
-    >>> print(df)
-    pism_config_axis  time  param1  param2  param3
-    0                   0       1       2       3
-    1                   1       4       5       6
-
-    >>> df = config_to_dataframe(config, ensemble="ensemble1")
-    >>> print(df)
-    pism_config_axis  time  param1  param2  param3   ensemble
-    0                   0       1       2       3  ensemble1
-    1                   1       4       5       6  ensemble1
+    >>> config_to_dataframe(config_da)
+    >>> config_to_dataframe(config_da, ensemble="Prior", aux_dim_name="uid", config_axis_name="params")
     """
 
-    n_exp = config.sizes["exp_id"]
-    da = xr.DataArray(data=range(n_exp), dims=["exp_id"])
-    config.coords["aux_id"] = da.broadcast_like(config["exp_id"])
-    dims = [dim for dim in config.dims if dim != "pism_config_axis"] + ["aux_id"]
-    df = config.to_dataframe().reset_index()
-    df = df.pivot(index=dims, columns="pism_config_axis", values="pism_config")
-    df.reset_index(inplace=True)
-    if ensemble:
-        df["ensemble"] = ensemble
-    return df
+    if config_axis_name not in config.dims:
+        raise ValueError(f"'{config_axis_name}' must be a dimension of the input DataArray.")
+
+    # Identify dimensions that define samples (excluding the config axis)
+    sample_dims = [dim for dim in config.dims if dim != config_axis_name]
+    n_samples = np.prod([config.sizes[dim] for dim in sample_dims])
+
+    # Create a unique auxiliary dimension
+    aux_dim = xr.DataArray(np.arange(n_samples).reshape(*[config.sizes[dim] for dim in sample_dims]), dims=sample_dims)
+    config = config.copy()
+    config.coords[aux_dim_name] = aux_dim
+
+    # Convert to DataFrame
+    df = config.to_dataframe(name="pism_config").reset_index()
+
+    # Pivot to wide format
+    wide = df.pivot(index=sample_dims + [aux_dim_name], columns=config_axis_name, values="pism_config").reset_index()
+
+    # Restore any original coordinates that are not 1D
+    for name, coord in config.coords.items():
+        if name in sample_dims or name in [aux_dim_name, config_axis_name]:
+            continue
+        if set(coord.dims).issubset(sample_dims):
+            try:
+                values = coord.values.reshape(n_samples)
+            except ValueError:
+                values = xr.DataArray(coord).broadcast_like(config).values.reshape(n_samples)
+            wide[name] = values
+
+    if ensemble is not None:
+        wide["ensemble"] = ensemble
+
+    return wide
 
 
 @timeit
-def filter_by_retreat_method(
-    ds: xr.Dataset, retreat_method: str, compute: bool = False
-) -> xr.Dataset:
+def filter_by_retreat_method(ds: xr.Dataset, retreat_method: str, compute: bool = False) -> xr.Dataset:
     """
     Filter retreat experiments based on the retreat method.
 
@@ -1207,13 +1192,9 @@ def filter_by_retreat_method(
         retreat = retreat.compute()
 
     if retreat_method == "Free":
-        retreat_exp_ids = retreat.where(
-            retreat["pism_config"] == "false", drop=True
-        ).exp_id.values
+        retreat_exp_ids = retreat.where(retreat["pism_config"] == "false", drop=True).exp_id.values
     elif retreat_method == "Prescribed":
-        retreat_exp_ids = retreat.where(
-            retreat["pism_config"] != "false", drop=True
-        ).exp_id.values
+        retreat_exp_ids = retreat.where(retreat["pism_config"] != "false", drop=True).exp_id.values
     else:
         retreat_exp_ids = ds.exp_id
 
@@ -1253,9 +1234,7 @@ def sort_columns(df: pd.DataFrame, sorted_columns: list[str]) -> pd.DataFrame:
     return df.reindex(columns=new_column_order)
 
 
-def add_prefix_coord(
-    sensitivity_indices: xr.Dataset, parameter_groups: dict[str, str]
-) -> xr.Dataset:
+def add_prefix_coord(sensitivity_indices: xr.Dataset, parameter_groups: dict[str, str]) -> xr.Dataset:
     """
     Add prefix coordinates to an xarray Dataset.
 
@@ -1275,18 +1254,12 @@ def add_prefix_coord(
     xr.Dataset
         The dataset with added prefix coordinates and sensitivity indices groups.
     """
-    prefixes = [
-        name.split(".")[0] for name in sensitivity_indices.pism_config_axis.values
-    ]
+    prefixes = [name.split(".")[0] for name in sensitivity_indices.pism_config_axis.values]
 
-    sensitivity_indices = sensitivity_indices.assign_coords(
-        prefix=("pism_config_axis", prefixes)
-    )
+    sensitivity_indices = sensitivity_indices.assign_coords(prefix=("pism_config_axis", prefixes))
     si_prefixes = [parameter_groups[name] for name in sensitivity_indices.prefix.values]
 
-    sensitivity_indices = sensitivity_indices.assign_coords(
-        sensitivity_indices_group=("pism_config_axis", si_prefixes)
-    )
+    sensitivity_indices = sensitivity_indices.assign_coords(sensitivity_indices_group=("pism_config_axis", si_prefixes))
     return sensitivity_indices
 
 
@@ -1333,9 +1306,7 @@ def convert_category_to_integer(
     1                   1              1                                      1
     2                   0              0                                      0
     """
-    df = df.apply(convert_column_to_numeric).drop(
-        columns=["ensemble", "exp_id"], errors="ignore"
-    )
+    df = df.apply(convert_column_to_numeric).drop(columns=["ensemble", "exp_id"], errors="ignore")
 
     for param in params:
         m_dict: dict[str, int] = {v: k for k, v in enumerate(df[param].unique())}
@@ -1350,6 +1321,7 @@ def prepare_simulations(
     config: dict[str, Any],
     reference_date: str,
     parallel: bool = True,
+    preprocess: Callable | None = None,
     engine: str = "h5netcdf",
 ) -> xr.Dataset:
     """
@@ -1371,6 +1343,8 @@ def prepare_simulations(
         The reference date for normalizing cumulative variables.
     parallel : bool, optional
         Whether to load the datasets in parallel, by default True.
+    preprocess : Callable, optional
+        Pass a preprocess function to xr.open_mfdataset.
     engine : str, optional
         The engine to use for loading the datasets, by default "h5netcdf".
 
@@ -1396,16 +1370,16 @@ def prepare_simulations(
     >>> reference_date = "2000-01-01"
     >>> ds = prepare_simulations(filenames, config, reference_date)
     """
-    ds = load_ensemble(filenames, parallel=parallel, engine=engine).sortby("basin")
+    ds = load_ensemble(filenames, preprocess=preprocess, parallel=parallel, engine=engine)
     ds = xr.apply_ufunc(np.vectorize(convert_bstrings_to_str), ds, dask="parallelized")
 
     ds = standardize_variable_names(ds, config["PISM Spatial"])
     ds[config["Cumulative Variables"]["cumulative_grounding_line_flux"]] = ds[
         config["Flux Variables"]["grounding_line_flux"]
     ].cumsum() / len(ds.time)
-    ds[config["Cumulative Variables"]["cumulative_smb_flux"]] = ds[
-        config["Flux Variables"]["smb_flux"]
-    ].cumsum() / len(ds.time)
+    ds[config["Cumulative Variables"]["cumulative_smb_flux"]] = ds[config["Flux Variables"]["smb_flux"]].cumsum() / len(
+        ds.time
+    )
     ds = normalize_cumulative_variables(
         ds,
         variables=list(config["Cumulative Variables"].values()),
@@ -1454,9 +1428,7 @@ def prepare_observations(
     """
     time_coder = xr.coders.CFDatetimeCoder()
 
-    ds = xr.open_dataset(
-        url, engine=engine, chunks=-1, decode_times=time_coder, decode_timedelta=True
-    )
+    ds = xr.open_dataset(url, engine=engine, chunks=-1, decode_times=time_coder, decode_timedelta=True)
     ds = ds.sortby("basin")
 
     cumulative_vars = config["Cumulative Variables"]

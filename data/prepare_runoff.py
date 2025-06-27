@@ -74,9 +74,7 @@ def unzip_files(
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = []
         for f in files:
-            futures.append(
-                executor.submit(unzip_file, f, str(output_dir), overwrite=overwrite)
-            )
+            futures.append(executor.submit(unzip_file, f, str(output_dir), overwrite=overwrite))
         for future in as_completed(futures):
             try:
                 future.result()
@@ -87,9 +85,7 @@ def unzip_files(
     return responses
 
 
-def process_year(
-    year: int, output_dir: Path, vars_dict: Dict, start_date: str = "1975-01-01"
-) -> Path:
+def process_year(year: int, output_dir: Path, vars_dict: Dict, start_date: str = "1975-01-01") -> Path:
     """
     Prepare and process NetCDF files for a given year and generate a monthly averaged dataset.
 
@@ -112,9 +108,7 @@ def process_year(
     output_file = output_dir / Path(f"monthly_{year}.nc")
     p = output_dir / Path(str(year))
     responses = sorted(p.glob("*.nc"))
-    ds = xr.open_mfdataset(
-        responses, parallel=True, chunks={"time": -1}, engine="netcdf4"
-    )
+    ds = xr.open_mfdataset(responses, parallel=True, chunks={"time": -1}, engine="netcdf4")
     ds = ds[list(vars_dict.keys()) + ["lat", "lon"]]
 
     for v in ["lat", "lon", "gld", "rogl"]:
@@ -156,11 +150,7 @@ def process_year(
     encoding = {var: {"_FillValue": False} for var in ["rlat", "rlon", "lon", "lat"]}
     comp = {"zlib": True, "complevel": 2}
 
-    encoding_compression = {
-        var: comp
-        for var in ds.data_vars
-        if var not in ("time", "time_bounds", "time_bnds")
-    }
+    encoding_compression = {var: comp for var in ds.data_vars if var not in ("time", "time_bounds", "time_bnds")}
     encoding.update(encoding_compression)
 
     with ProgressBar():
@@ -266,10 +256,7 @@ def process_hirham_cdo_daily(
         print(f"Time elapsed {time_elapsed:.0f}s")
 
     start = time.time()
-    infiles = [
-        str((hirham_nc_dir / Path(f"daily_{year}.nc")).absolute())
-        for year in range(start_year, end_year + 1)
-    ]
+    infiles = [str((hirham_nc_dir / Path(f"daily_{year}.nc")).absolute()) for year in range(start_year, end_year + 1)]
     infiles = " ".join(infiles)
     merged_ofile = cdo.mergetime(
         input=infiles,
@@ -294,11 +281,7 @@ def process_hirham_cdo_daily(
     encoding = {var: {"_FillValue": False} for var in ["rlat", "rlon"]}
     comp = {"zlib": True, "complevel": 2, "_FillValue": None}
 
-    encoding_compression = {
-        var: comp
-        for var in ds.data_vars
-        if var not in ("time", "time_bounds", "time_bnds")
-    }
+    encoding_compression = {var: comp for var in ds.data_vars if var not in ("time", "time_bounds", "time_bnds")}
     encoding.update(encoding_compression)
     print(f"Writing to {output_file}")
     with ProgressBar():
@@ -410,9 +393,7 @@ def download_hirham(
     return responses
 
 
-def compute_basin(
-    ds: xr.Dataset, name: str = "basin", dim: list = ["x", "y"]
-) -> xr.Dataset:
+def compute_basin(ds: xr.Dataset, name: str = "basin", dim: list = ["x", "y"]) -> xr.Dataset:
     """
     Compute the sum of the dataset over the 'x' and 'y' dimensions and add a new dimension 'basin'.
 
@@ -474,14 +455,10 @@ def extract_basins(ds: xr.Dataset, basins: gp.GeoDataFrame) -> None:
     client = Client()
     print(f"Open client in browser: {client.dashboard_link}")
 
-    basins_ds_scattered = client.scatter(
-        [ds.rio.clip([basin.geometry]) for _, basin in basins.iterrows()]
-    )
+    basins_ds_scattered = client.scatter([ds.rio.clip([basin.geometry]) for _, basin in basins.iterrows()])
     basin_names = [basin["SUBREGION1"] for _, basin in basins.iterrows()]
 
-    futures = client.map(
-        compute_basin, basins_ds_scattered, basin_names, dim=["rlon", "rlat"]
-    )
+    futures = client.map(compute_basin, basins_ds_scattered, basin_names, dim=["rlon", "rlat"])
 
     progress(futures)
     result = client.gather(futures)
@@ -517,9 +494,7 @@ if __name__ == "__main__":
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Prepare climate forcing."
-    parser.add_argument(
-        "--n_jobs", help="""Number of parallel jobs.""", type=int, default=8
-    )
+    parser.add_argument("--n_jobs", help="""Number of parallel jobs.""", type=int, default=8)
     options = parser.parse_args()
     max_workers = options.n_jobs
     overwrite = False
@@ -545,9 +520,7 @@ if __name__ == "__main__":
     )
 
     ds = xr.open_dataset(output_file)
-    basins = gp.read_file(
-        "/Users/andy/base/pism-ragis/data/basins/Greenland_Basins_PS_v1.4.2_clean.shp"
-    )
+    basins = gp.read_file("/Users/andy/base/pism-ragis/data/basins/Greenland_Basins_PS_v1.4.2_clean.shp")
     extract_basins(ds, basins)
 
 hirham_url = "http://ensemblesrt3.dmi.dk/data/prudence/temp/nichan/Daily2D_GrIS/"
@@ -560,9 +533,7 @@ if __name__ == "__main__":
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Prepare climate forcing."
-    parser.add_argument(
-        "--n_jobs", help="""Number of parallel jobs.""", type=int, default=8
-    )
+    parser.add_argument("--n_jobs", help="""Number of parallel jobs.""", type=int, default=8)
     options = parser.parse_args()
     max_workers = options.n_jobs
     overwrite = False
@@ -588,9 +559,7 @@ if __name__ == "__main__":
     )
 
     ds = xr.open_dataset(output_file)
-    basins = gp.read_file(
-        "/Users/andy/base/pism-ragis/data/basins/Greenland_Basins_PS_v1.4.2_clean.shp"
-    )
+    basins = gp.read_file("/Users/andy/base/pism-ragis/data/basins/Greenland_Basins_PS_v1.4.2_clean.shp")
     extract_basins(ds, basins)
 hirham_url = "http://ensemblesrt3.dmi.dk/data/prudence/temp/nichan/Daily2D_GrIS/"
 xr.set_options(keep_attrs=True)
@@ -602,9 +571,7 @@ if __name__ == "__main__":
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Prepare climate forcing."
-    parser.add_argument(
-        "--n_jobs", help="""Number of parallel jobs.""", type=int, default=8
-    )
+    parser.add_argument("--n_jobs", help="""Number of parallel jobs.""", type=int, default=8)
     options = parser.parse_args()
     max_workers = options.n_jobs
     overwrite = False
@@ -630,7 +597,5 @@ if __name__ == "__main__":
     )
 
     ds = xr.open_dataset(output_file)
-    basins = gp.read_file(
-        "/Users/andy/base/pism-ragis/data/basins/Greenland_Basins_PS_v1.4.2_clean.shp"
-    )
+    basins = gp.read_file("/Users/andy/base/pism-ragis/data/basins/Greenland_Basins_PS_v1.4.2_clean.shp")
     extract_basins(ds, basins)

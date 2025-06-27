@@ -78,11 +78,7 @@ def test_calculate_area():
 
     for i in range(len(lat) - 1):
         for j in range(len(lon) - 1):
-            expected_area[i, j] = (
-                (R**2)
-                * np.abs(np.sin(lat_rad[i + 1]) - np.sin(lat_rad[i]))
-                * np.abs(dlon[j])
-            )
+            expected_area[i, j] = (R**2) * np.abs(np.sin(lat_rad[i + 1]) - np.sin(lat_rad[i])) * np.abs(dlon[j])
 
     # Call the function
     result = calculate_area(lat, lon)

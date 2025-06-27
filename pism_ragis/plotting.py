@@ -83,9 +83,7 @@ def qgis2cmap(
         The matplotlib colormap.
     """
     m_data = np.loadtxt(filename, skiprows=2, delimiter=",")[:, :-1]
-    values_scaled = (m_data[:, 0] - np.min(m_data[:, 0])) / (
-        np.max(m_data[:, 0]) - np.min(m_data[:, 0])
-    )
+    values_scaled = (m_data[:, 0] - np.min(m_data[:, 0])) / (np.max(m_data[:, 0]) - np.min(m_data[:, 0]))
     colors_scaled = m_data[:, 1::] / 255.0
     m_colors = [(values_scaled[k], colors_scaled[k]) for k in range(len(values_scaled))]
     cmap = colors.LinearSegmentedColormap.from_list(name, m_colors, N=num_levels)
@@ -111,9 +109,7 @@ def register_colormaps(path: str | Path | None = None) -> None:
     if path is not None:
         cmap_files = Path(path).glob("*.txt")
     else:
-        cmap_files = Path(str(files("pism_ragis.data").joinpath("*.txt"))).parent.glob(
-            "*.txt"
-        )
+        cmap_files = Path(str(files("pism_ragis.data").joinpath("*.txt"))).parent.glob("*.txt")
     for cmap_file in cmap_files:
         name = cmap_file.name.removesuffix(".txt")
         cmap = qgis2cmap(cmap_file, name=name)
@@ -167,9 +163,7 @@ def plot_mapplane(
     # ar = 1.0  # initial aspect ratio for first trial
     wi = figwidth  # width in inches
     # hi = wi * ar  # height in inches
-    crs = ccrs.NorthPolarStereo(
-        central_longitude=-45, true_scale_latitude=70, globe=None
-    )
+    crs = ccrs.NorthPolarStereo(central_longitude=-45, true_scale_latitude=70, globe=None)
     with mpl.rc_context(rc=rc_params):
 
         p = da.plot(
@@ -290,9 +284,7 @@ def plot_posteriors(
 
         # Create a legend outside the figure at the bottom middle
         handles, labels = axs[0, 0].get_legend_handles_labels()
-        legend_main = fig.legend(
-            handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.0), ncol=2
-        )
+        legend_main = fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.0), ncol=2)
         legend_main.set_title(None)
         legend_main.get_frame().set_linewidth(0.0)
         legend_main.get_frame().set_alpha(0.0)
@@ -358,18 +350,14 @@ def plot_prior_posteriors(
             desc="Plotting prior and posterior histograms",
             total=len(df.groupby(by=group_columns, observed=True)),
         ) as progress_bar:
-            for (basin, filter_var), m_df in df.groupby(
-                by=group_columns, observed=True
-            ):
+            for (basin, filter_var), m_df in df.groupby(by=group_columns, observed=True):
                 fig, axs = plt.subplots(
                     4,
                     4,
                     sharey=True,
                     figsize=figsize,
                 )
-                fig.subplots_adjust(
-                    hspace=0.6, wspace=0.1, left=0.05, right=0.95, bottom=0.1, top=0.95
-                )
+                fig.subplots_adjust(hspace=0.6, wspace=0.1, left=0.05, right=0.95, bottom=0.1, top=0.95)
                 for k, v in enumerate(x_order):
                     if bins_dict is not None:
                         bins = bins_dict.get(v, "auto")
@@ -415,13 +403,9 @@ def plot_prior_posteriors(
                         tick.set_rotation(15)
 
                 fig.set_dpi(600)
-                fn = pdf_dir / Path(
-                    f"{basin}_prior_posterior_filtered_by_{filter_var}.pdf"
-                )
+                fn = pdf_dir / Path(f"{basin}_prior_posterior_filtered_by_{filter_var}.pdf")
                 fig.savefig(fn)
-                fn = png_dir / Path(
-                    f"{basin}_prior_posterior_filtered_by_{filter_var}.png"
-                )
+                fn = png_dir / Path(f"{basin}_prior_posterior_filtered_by_{filter_var}.png")
                 fig.savefig(fn)
                 plt.close()
                 del fig
@@ -434,58 +418,41 @@ def plot_basins(
     prior: xr.Dataset,
     posterior: xr.Dataset,
     x_lim: list[int] = [1980, 2020],
+    client: Client | None = None,
     **kwargs,
 ):
     """
-    Plot basins using observed, prior, and posterior datasets.
+    Plot timeseries of observed, prior, and posterior datasets by basin.
+
+    This function scatters datasets across Dask workers and plots time series for each basin
+    using `plot_timeseries`.
 
     Parameters
     ----------
     observed : xr.Dataset
-        The observed dataset.
+        The observed dataset. Must have a 'basin' and 'time' dimension.
     prior : xr.Dataset
-        The prior dataset.
+        The prior simulation dataset. Must have a 'basin' and 'time' dimension.
     posterior : xr.Dataset
-        The posterior dataset.
-    x_lim : list[int], optional
-        A list containing the start and end years for plotting, by default [1980, 2020].
-    **kwargs : dict
-        Additional keyword arguments for the plotting function.
+        The posterior simulation dataset. Must have a 'basin' and 'time' dimension.
+    x_lim : list of int, optional
+        The [start_year, end_year] for slicing the time dimension before plotting.
+        Default is [1980, 2020].
+    client : dask.distributed.Client or None, optional
+        A Dask client for parallel computation. If None, a new client will be created.
+    **kwargs
+        Additional keyword arguments passed to the `plot_timeseries` function.
+
+    Returns
+    -------
+    None
+        This function plots results and does not return a value.
+
+    See Also
+    --------
+    plot_timeseries : Function used to create individual basin plots.
+    dask.distributed.Client.map : Used to distribute the computation across workers.
     """
-
-    client = Client()
-    observed_scattered = client.scatter(
-        [
-            observed.sel(basin=basin).sel({"time": slice(str(x_lim[0]), str(x_lim[1]))})
-            for basin in observed.basin
-        ]
-    )
-    prior_scattered = client.scatter(
-        [
-            prior.sel(basin=basin).sel({"time": slice(str(x_lim[0]), str(x_lim[1]))})
-            for basin in prior.basin
-        ]
-    )
-    posterior_scattered = client.scatter(
-        [
-            posterior.sel(basin=basin).sel(
-                {"time": slice(str(x_lim[0]), str(x_lim[1]))}
-            )
-            for basin in posterior.basin
-        ]
-    )
-
-    futures = client.map(
-        plot_timeseries,
-        observed_scattered,
-        prior_scattered,
-        posterior_scattered,
-        x_lim=x_lim,
-        **kwargs,
-    )
-
-    progress(futures)
-    client.close()
 
 
 @timeit
@@ -543,9 +510,7 @@ def plot_sensitivity_indices(
                 (indices_da + conf_da),
                 alpha=0.25,
             )
-            indices_da.plot(
-                hue="sensitivity_indices_group", ax=ax, lw=0.5, label=g.values
-            )
+            indices_da.plot(hue="sensitivity_indices_group", ax=ax, lw=0.5, label=g.values)
         legend = ax.legend(loc="upper left")
         legend.get_frame().set_linewidth(0.0)
         legend.get_frame().set_alpha(0.0)
@@ -640,10 +605,7 @@ def plot_timeseries(
     basin = obs.basin.values
 
     v_dict = config["Flux Variables"] | config["Cumulative Variables"]
-    vu_dict = (
-        config["Flux Uncertainty Variables"]
-        | config["Cumulative Uncertainty Variables"]
-    )
+    vu_dict = config["Flux Uncertainty Variables"] | config["Cumulative Uncertainty Variables"]
 
     if isinstance(plot_vars, str):
         plot_vars = [plot_vars]
@@ -660,11 +622,7 @@ def plot_timeseries(
             warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
             sim_prior_quantiles = {}
             for q in [percentiles[0], 0.5, percentiles[1]]:
-                sim_prior_quantiles[
-                    q
-                ] = sim_prior.utils.drop_nonnumeric_vars().quantile(
-                    q, dim="exp_id", skipna=True
-                )
+                sim_prior_quantiles[q] = sim_prior.utils.drop_nonnumeric_vars().quantile(q, dim="exp_id", skipna=True)
     if sim_posterior is not None:
         if "ensemble" in sim_posterior.data_vars:
             sim_posterior = sim_posterior[p_vars + ["ensemble"]]
@@ -674,9 +632,7 @@ def plot_timeseries(
             warnings.filterwarnings("ignore", r"All-NaN (slice|axis) encountered")
             sim_posterior_quantiles = {}
             for q in [percentiles[0], 0.5, percentiles[1]]:
-                sim_posterior_quantiles[
-                    q
-                ] = sim_posterior.utils.drop_nonnumeric_vars().quantile(
+                sim_posterior_quantiles[q] = sim_posterior.utils.drop_nonnumeric_vars().quantile(
                     q, dim="exp_id", skipna=True
                 )
 
@@ -780,14 +736,8 @@ def plot_timeseries(
                             ls="solid",
                         )
 
-                if (
-                    (filter_var is not None)
-                    and (filter_var == p_var)
-                    and (filter_var in obs.data_vars)
-                ):
-                    obs_filtered = obs.sel(
-                        time=slice(f"{filter_range[0]}", f"{filter_range[-1]}")
-                    )
+                if (filter_var is not None) and (filter_var == p_var) and (filter_var in obs.data_vars):
+                    obs_filtered = obs.sel(time=slice(f"{filter_range[0]}", f"{filter_range[-1]}"))
 
                     obs_filtered_ci = ax.fill_between(
                         obs_filtered["time"],
@@ -916,11 +866,7 @@ def plot_outliers(
     with mpl.rc_context({"font.size": fontsize}):
         fig, ax = plt.subplots(1, 1)
         if outliers_da.size > 0:
-            outliers_da.plot(
-                hue="exp_id", color=sim_cmap[0], add_legend=False, ax=ax, lw=0.25
-            )
+            outliers_da.plot(hue="exp_id", color=sim_cmap[0], add_legend=False, ax=ax, lw=0.25)
         if filtered_da.size > 0:
-            filtered_da.plot(
-                hue="exp_id", color=sim_cmap[1], add_legend=False, ax=ax, lw=0.25
-            )
+            filtered_da.plot(hue="exp_id", color=sim_cmap[1], add_legend=False, ax=ax, lw=0.25)
         fig.savefig(filename)

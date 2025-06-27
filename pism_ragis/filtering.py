@@ -41,9 +41,7 @@ from pism_ragis.processing import config_to_dataframe, filter_config
 logger: logging.Logger = get_logger("pism_ragis")
 
 
-def sample_with_replacement(
-    weights: np.ndarray, exp_id: np.ndarray, n_samples: int, seed: int
-) -> np.ndarray:
+def sample_with_replacement(weights: np.ndarray, exp_id: np.ndarray, n_samples: int, seed: int) -> np.ndarray:
     """
     Sample with replacement from exp_id based on the given weights.
 
@@ -71,9 +69,7 @@ def sample_with_replacement(
     return ids
 
 
-def sample_with_replacement_xr(
-    weights, n_samples: int = 100, seed: int = 0, dim="exp_id"
-) -> xr.DataArray:
+def sample_with_replacement_xr(weights, n_samples: int = 100, seed: int = 0, dim="exp_id") -> xr.DataArray:
     """
     Sample with replacement from a DataArray along a specified dimension.
 
@@ -287,14 +283,12 @@ def run_importance_sampling(
     posterior_list = []
     weights_list = []
 
-    for obs_mean_var, obs_std_var, sim_var in zip(
-        obs_mean_vars, obs_std_vars, sim_vars
-    ):
+    for obs_mean_var, obs_std_var, sim_var in zip(obs_mean_vars, obs_std_vars, sim_vars):
         print(f"Importance sampling using {obs_mean_var}")
         sim = simulated.sel(time=slice(str(filter_start_year), str(filter_end_year)))
         obs = observed.sel(time=slice(str(filter_start_year), str(filter_end_year)))
 
-        f = importance_sampling(
+        result = importance_sampling(
             simulated=sim,
             observed=obs,
             log_likelihood=log_likelihood,
@@ -306,19 +300,11 @@ def run_importance_sampling(
             sum_dims=sum_dims,
             compute=False,
         )
-        with ProgressBar() as pbar:
-            result = f.compute()
-            logger.info(
-                "Importance Sampling: Finished in %2.2f seconds",
-                pbar.last_duration,
-            )
 
         importance_sampled_ids = result["exp_id_sampled"]
         simulated_posterior = simulated.sel(exp_id=importance_sampled_ids)
         simulated_posterior["ensemble"] = "Posterior"
-        simulated_posterior = simulated_posterior.expand_dims(
-            {"filtered_by": [obs_mean_var]}
-        )
+        simulated_posterior = simulated_posterior.expand_dims({"filtered_by": [obs_mean_var]})
 
         posterior_config = filter_config(simulated_posterior["pism_config"], params)
         posterior_df = config_to_dataframe(posterior_config, ensemble="Posterior")
@@ -346,7 +332,7 @@ def filter_outliers(
     outlier_variable: str,
     freq: str = "YS",
     subset: dict[str, str | int] = {"basin": "GIS", "ensemble_id": "RAGIS"},
-) -> tuple[xr.Dataset, xr.Dataset]:
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Filter outliers from a dataset based on a specified variable and range.
 
@@ -379,9 +365,7 @@ def filter_outliers(
         outlier_variable_units = ds[outlier_variable].attrs["units"]
     else:
         outlier_variable_units = ""
-    print(
-        f"Filtering outliers [{lower_bound}, {upper_bound}] {outlier_variable_units} for {outlier_variable}"
-    )
+    print(f"Filtering outliers [{lower_bound}, {upper_bound}] {outlier_variable_units} for {outlier_variable}")
 
     # Select the subset and drop non-numeric variables once
     subset_ds = (
@@ -390,20 +374,13 @@ def filter_outliers(
         .drop_vars(subset.keys(), errors="ignore")
     )
 
-    outlier_filter = (
-        subset_ds[outlier_variable].resample({"time": freq}).mean(dim="time")
-    )
+    outlier_filter = subset_ds[outlier_variable].resample({"time": freq}).mean(dim="time")
 
     mask = (outlier_filter <= lower_bound) | (outlier_filter >= upper_bound)
     mask = mask.any(dim="time").compute()  # Compute the mask
 
     # Filter the dataset based on the mask
-    filtered_exp_ids = ds.exp_id.where(~mask, drop=True)
+    valid_exp_ids = ds.exp_id.where(~mask, drop=True)
     outlier_exp_ids = ds.exp_id.where(mask, drop=True)
 
-    n_members = len(ds.exp_id)
-    n_members_filtered = len(filtered_exp_ids)
-    valid_ds = ds.sel(exp_id=filtered_exp_ids)
-    outliers_ds = ds.sel(exp_id=outlier_exp_ids)
-    print(f"Ensemble size: {n_members}, outlier-filtered size: {n_members_filtered}\n")
-    return valid_ds, outliers_ds
+    return valid_exp_ids.to_numpy(), outlier_exp_ids.to_numpy()

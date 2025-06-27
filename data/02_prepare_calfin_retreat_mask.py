@@ -128,9 +128,7 @@ def create_ds(
     resolution: float = 450,
     crs: str = "EPSG:3413",
     result_dir: Union[Path, str] = "front_retreat",
-    encoding_time: Dict = {
-        "time": {"units": "hours since 1972-01-01 00:00:00", "calendar": "standard"}
-    },
+    encoding_time: Dict = {"time": {"units": "hours since 1972-01-01 00:00:00", "calendar": "standard"}},
 ) -> Path:
     """
     Create a dataset representing land ice area fraction retreat and save it to a NetCDF file.
@@ -179,9 +177,7 @@ def create_ds(
     n = len(diff)
     diff_df = {"land_ice_area_fraction_retreat": np.ones(n)}
     diff_gp = gp.GeoDataFrame(data=diff_df, geometry=diff, crs=crs)
-    ds = make_geocube(
-        vector_data=diff_gp, geom=geom, resolution=(resolution, resolution)
-    )
+    ds = make_geocube(vector_data=diff_gp, geom=geom, resolution=(resolution, resolution))
     ds = ds.fillna(0)
     ds["land_ice_area_fraction_retreat"].attrs["units"] = "1"
 
@@ -195,9 +191,7 @@ def create_ds(
     encoding = {var: comp for var in ds.data_vars}
     encoding.update(encoding_time)
 
-    fn = p / Path(
-        f"frontretreat_g{resolution}m_{start.year}-{start.month}-{start.day}.nc"
-    )
+    fn = p / Path(f"frontretreat_g{resolution}m_{start.year}-{start.month}-{start.day}.nc")
     ds.to_netcdf(fn, encoding=encoding)
     ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
     ds.rio.write_crs(crs, inplace=True)
@@ -222,9 +216,7 @@ if __name__ == "__main__":
         type=int,
         default=450,
     )
-    parser.add_argument(
-        "--n_jobs", help="""Number of parallel jobs.""", type=int, default=8
-    )
+    parser.add_argument("--n_jobs", help="""Number of parallel jobs.""", type=int, default=8)
     options = parser.parse_args()
 
     doi = "10.5067/7FILV218JZA2"
@@ -233,17 +225,13 @@ if __name__ == "__main__":
     download_earthaccess(doi=doi, filter_str=filter_str, result_dir=result_dir)
 
     crs = options.crs
-    encoding = {
-        "time": {"units": "hours since 1972-01-01 00:00:00", "calendar": "standard"}
-    }
+    encoding = {"time": {"units": "hours since 1972-01-01 00:00:00", "calendar": "standard"}}
     resolution = options.resolution
     n_jobs = options.n_jobs
 
     print("Preparing datasets")
     imbie = gp.read_file("imbie/GRE_Basins_IMBIE2_v1.3_w_shelves.gpkg").to_crs(crs)
-    calfin = gp.read_file(
-        "calfin/termini_1972-2019_Greenland_polygons_v1.0.shp"
-    ).to_crs(crs)
+    calfin = gp.read_file("calfin/termini_1972-2019_Greenland_polygons_v1.0.shp").to_crs(crs)
 
     date = pd.DatetimeIndex(calfin["Date"])
     calfin["Date"] = date
@@ -262,32 +250,19 @@ if __name__ == "__main__":
         """
         return df.reset_index().iloc[range(k)].dissolve(aggfunc="last")
 
-    n_calfin_grouped = len(
-        [date for date, df in calfin.groupby(by=pd.Grouper(freq="ME")) if len(df) > 0]
-    )
-    with tqdm_joblib(
-        tqdm(desc="Grouping geometries", total=n_calfin_grouped)
-    ) as progress_bar:
+    n_calfin_grouped = len([date for date, df in calfin.groupby(by=pd.Grouper(freq="ME")) if len(df) > 0])
+    with tqdm_joblib(tqdm(desc="Grouping geometries", total=n_calfin_grouped)) as progress_bar:
         result = Parallel(n_jobs=n_jobs)(
-            delayed(dissolve)(ds, date)
-            for date, ds in calfin.groupby(by=pd.Grouper(freq="ME"))
-            if len(ds) > 0
+            delayed(dissolve)(ds, date) for date, ds in calfin.groupby(by=pd.Grouper(freq="ME")) if len(ds) > 0
         )
     calfin_grouped = pd.concat(result)
 
-    with tqdm_joblib(
-        tqdm(desc="Dissolving geometries", total=n_calfin_grouped)
-    ) as progress_bar:
-        result = Parallel(n_jobs=n_jobs)(
-            delayed(dissolve_range)(calfin_grouped, k)
-            for k in range(len(calfin_grouped))
-        )
+    with tqdm_joblib(tqdm(desc="Dissolving geometries", total=n_calfin_grouped)) as progress_bar:
+        result = Parallel(n_jobs=n_jobs)(delayed(dissolve_range)(calfin_grouped, k) for k in range(len(calfin_grouped)))
 
     calfin_aggregated = pd.concat(result[1::]).set_index("Date")
     n_calfin_aggregated = len(calfin_aggregated)
-    with tqdm_joblib(
-        tqdm(desc="Aggregating geometries", total=n_calfin_aggregated)
-    ) as progress_bar:
+    with tqdm_joblib(tqdm(desc="Aggregating geometries", total=n_calfin_aggregated)) as progress_bar:
         result = Parallel(n_jobs=n_jobs)(
             delayed(create_ds)(date, ds, imbie_union, geom=geom, resolution=resolution)
             for date, ds in calfin_aggregated.groupby(by=pd.Grouper(freq="ME"))
@@ -314,9 +289,7 @@ if __name__ == "__main__":
     fn = Path(f"pism_g{resolution}m_frontretreat_calfin_1980_2019_YM.nc")
     p_fn = p / fn
 
-    ds.sel({"time": slice("1980", "2019")}).resample({"time": "YS"}).mean().to_netcdf(
-        p_fn
-    )
+    ds.sel({"time": slice("1980", "2019")}).resample({"time": "YS"}).mean().to_netcdf(p_fn)
 
     p = Path("front_retreat")
     fn = Path(f"pism_g{resolution}m_frontretreat_calfin_1972.nc")

@@ -37,10 +37,15 @@ import numpy as np
 import pandas as pd
 import toml
 import xarray as xr
+from dask.distributed import Client, progress
 
 import pism_ragis.processing as prp
 from pism_ragis.analyze import run_sensitivity_analysis
-from pism_ragis.filtering import filter_outliers, run_importance_sampling
+from pism_ragis.filtering import (
+    filter_outliers,
+    importance_sampling,
+    run_importance_sampling,
+)
 from pism_ragis.logger import get_logger
 from pism_ragis.plotting import (
     plot_basins,
@@ -48,6 +53,7 @@ from pism_ragis.plotting import (
     plot_sensitivity_indices,
     plot_timeseries,
 )
+from pism_ragis.processing import preprocess_config as preprocess
 
 logger = get_logger("pism_ragis")
 
@@ -55,12 +61,8 @@ logger = get_logger("pism_ragis")
 xr.set_options(keep_attrs=True)
 plt.style.use("tableau-colorblind10")
 # Ignore specific RuntimeWarnings
-warnings.filterwarnings(
-    "ignore", category=RuntimeWarning, message="overflow encountered in exp"
-)
-warnings.filterwarnings(
-    "ignore", category=RuntimeWarning, message="invalid value encountered in divide"
-)
+warnings.filterwarnings("ignore", category=RuntimeWarning, message="overflow encountered in exp")
+warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in divide")
 
 
 if __name__ == "__main__":
@@ -106,7 +108,7 @@ if __name__ == "__main__":
         help="""Ensemble members outside this range are removed. Default="-50000 0". """,
         type=float,
         nargs=2,
-        default=[-2500.0, -100.0],
+        default=[-2500.0, 0.0],
     )
     parser.add_argument(
         "--outlier_variable",
@@ -130,19 +132,13 @@ if __name__ == "__main__":
         "--resampling_frequency",
         help="""Resampling data to resampling_frequency for importance sampling. Default is "MS".""",
         type=str,
-        default="YS",
+        default="YE",
     )
     parser.add_argument(
         "--reference_date",
         help="""Reference date.""",
         type=str,
         default="1986-01-1",
-    )
-    parser.add_argument(
-        "--n_jobs",
-        help="""Number of parallel jobs. Default=8.""",
-        type=int,
-        default=8,
     )
     parser.add_argument(
         "--temporal_range",
@@ -179,9 +175,7 @@ if __name__ == "__main__":
     outlier_variable = options.outlier_variable
     temporal_range = options.temporal_range
     valid_range = options.valid_range
-    ragis_config_file = Path(
-        str(files("pism_ragis.data").joinpath("ragis_config.toml"))
-    )
+    ragis_config_file = Path(str(files("pism_ragis.data").joinpath("ragis_config.toml")))
     ragis_config = toml.load(ragis_config_file)
     config = json.loads(json.dumps(ragis_config))
     params_short_dict = config["Parameters"]
@@ -218,24 +212,27 @@ if __name__ == "__main__":
     }
 
     mpl.rcParams.update(rcparams)
+    client = Client()
+    print(f"Open client in browser: {client.dashboard_link}")
     start = time.time()
 
     simulated = prp.prepare_simulations(
-        basin_files, config, reference_date, parallel=parallel, engine=engine
+        basin_files,
+        config,
+        reference_date,
+        parallel=parallel,
+        engine=engine,
     )
-    simulated = simulated.dropna(dim="exp_id")
-    simulated = simulated.sel(
-        {"time": slice(str(temporal_range[0]), str(temporal_range[1]))}
-    )
+    pism_config = simulated["pism_config"].load()
+    # simulated = simulated.dropna(dim="exp_id")
+    simulated = simulated.sel({"time": slice(str(temporal_range[0]), str(temporal_range[1]))})
     observed = prp.prepare_observations(
         options.observed_url,
         config,
         reference_date,
         engine=engine,
     )
-    observed = observed.sel(
-        {"time": slice(str(temporal_range[0]), str(temporal_range[1]))}
-    )
+    observed = observed.sel({"time": slice(str(temporal_range[0]), str(temporal_range[1]))})
 
     obs_basins = set(observed.basin.values)
     sim_basins = set(simulated.basin.values)
@@ -243,11 +240,11 @@ if __name__ == "__main__":
     intersection = list(sim_basins.intersection(obs_basins))
 
     observed = observed.sel({"basin": intersection})
-    simulated = simulated.sel({"basin": intersection})
-
     observed = observed.resample({"time": resampling_frequency}).mean()
 
-    stats = simulated[["pism_config", "run_stats"]].sel({"basin": intersection})
+    simulated = simulated.sel({"basin": intersection})
+    stats = simulated[["pism_config", "run_stats"]]
+
     simulated = (
         simulated.drop_vars(["pism_config", "run_stats"])
         .drop_dims(["pism_config_axis", "run_stats_axis"])
@@ -274,9 +271,7 @@ if __name__ == "__main__":
         add_median=True,
     )
 
-    da = observed.sel(time=slice(f"{filter_range[0]}", f"{filter_range[-1]}"))[
-        "grounding_line_flux"
-    ].mean(dim="time")
+    da = observed.sel(time=slice(f"{filter_range[0]}", f"{filter_range[-1]}"))["grounding_line_flux"].mean(dim="time")
     posterior_basins_sorted = observed.basin.sortby(da).values
     print(
         "Mean Grounding Line Flux by basin:\n",
@@ -289,18 +284,14 @@ if __name__ == "__main__":
     )
 
     discharge_var = ragis_config["Flux Variables"]["grounding_line_flux"]
-    discharge_uncertainty_var = ragis_config["Flux Uncertainty Variables"][
-        "grounding_line_flux_uncertainty"
-    ]
+    discharge_uncertainty_var = ragis_config["Flux Uncertainty Variables"]["grounding_line_flux_uncertainty"]
 
     gis_obs_discharge = observed.sel({"basin": "GIS", "time": slice("1980", "2019")})[
         [discharge_var, discharge_uncertainty_var]
     ]
     gis_obs_discharge_mean = gis_obs_discharge.mean(dim="time").compute()
     gis_sim_discharge = (
-        simulated.sel({"basin": "GIS", "time": slice("1980", "2019")})[discharge_var]
-        .mean(dim="time")
-        .compute()
+        simulated.sel({"basin": "GIS", "time": slice("1980", "2019")})[discharge_var].mean(dim="time").compute()
     )
     gis_sim_discharge_median = gis_sim_discharge.median(dim="exp_id").compute()
     gis_sim_discharge_ci = gis_sim_discharge.quantile(ci, dim="exp_id").compute()
@@ -313,9 +304,7 @@ if __name__ == "__main__":
 
     bins_dict = config["Posterior Bins"]
     parameter_categories = config["Parameter Categories"]
-    params_sorted_by_category: dict = {
-        group: [] for group in sorted(parameter_categories.values())
-    }
+    params_sorted_by_category: dict = {group: [] for group in sorted(parameter_categories.values())}
     for param in params:
         prefix = param.split(".")[0]
         if prefix in parameter_categories:
@@ -328,11 +317,7 @@ if __name__ == "__main__":
     plot_params = params_sorted_dict.copy()
     del plot_params["geometry.front_retreat.prescribed.file"]
 
-    short_bins_dict = {
-        params_short_dict[key]: bins_dict[key]
-        for key in params_short_dict
-        if key in bins_dict
-    }
+    short_bins_dict = {params_short_dict[key]: bins_dict[key] for key in params_short_dict if key in bins_dict}
     pp_retreat_list: list[pd.DataFrame] = []
     posterior_ds_dict: dict[str, xr.Dataset] = {}
     for retreat_method in retreat_methods:
@@ -346,26 +331,21 @@ if __name__ == "__main__":
         data_dir.mkdir(parents=True, exist_ok=True)
         fig_dir = retreat_dir / Path("figures")
         fig_dir.mkdir(parents=True, exist_ok=True)
+        print("retreat")
 
-        simulated_retreat_filtered = prp.filter_by_retreat_method(
-            simulated, retreat_method, compute=True
-        )
+        simulated_retreat_filtered = prp.filter_by_retreat_method(simulated, retreat_method, compute=False)
 
-        simulated_valid, simulated_outliers = filter_outliers(
+        valid_ids, outlier_ids = filter_outliers(
             simulated_retreat_filtered,
             valid_range=valid_range,
             outlier_variable=outlier_variable,
             subset={"basin": "GIS"},
         )
-        stats = simulated_valid[["pism_config", "run_stats"]].sel(
-            {"basin": intersection}
-        )
-
-        outliers_config = prp.filter_config(simulated_outliers["pism_config"], params)
-        outliers_df = prp.config_to_dataframe(outliers_config, ensemble="Outliers")
-
-        valid_config = prp.filter_config(simulated_valid["pism_config"], params)
-        valid_df = prp.config_to_dataframe(valid_config, ensemble="Valid")
+        n_members = simulated_retreat_filtered["exp_id"].size
+        n_members_valid = valid_ids.size
+        simulated_valid = simulated_retreat_filtered.sel(exp_id=valid_ids)
+        simulated_outliers = simulated_retreat_filtered.sel(exp_id=outlier_ids)
+        print(f"Ensemble size: {n_members}, valid size: {n_members_valid}, outlier size: {n_members-n_members_valid}\n")
 
         obs_mean_vars: list[str] = [
             "grounding_line_flux",
@@ -386,26 +366,55 @@ if __name__ == "__main__":
             + ["ensemble"]
         )
 
-        (prior_posterior, simulated_prior, simulated_posterior, simulated_weights) = (
-            run_importance_sampling(
-                observed=observed,
-                simulated=simulated_valid,
-                obs_mean_vars=obs_mean_vars,
-                obs_std_vars=obs_std_vars,
-                sim_vars=sim_vars,
-                filter_range=filter_range,
+        obs_future = client.scatter(observed, broadcast=True)
+
+        futures = []
+        for obs_mean_var, obs_std_var, sim_var in zip(obs_mean_vars, obs_std_vars, sim_vars):
+
+            sim_future = client.scatter(simulated_valid.expand_dims({"filtered_by": [obs_mean_var]}))
+
+            future = client.submit(
+                importance_sampling,
+                observed=obs_future,
+                simulated=sim_future,
+                obs_mean_var=obs_mean_var,
+                obs_std_var=obs_std_var,
+                sim_var=sim_var,
+                n_samples=simulated_valid.sizes["exp_id"],
                 fudge_factor=fudge_factor,
-                params=params,
             )
+            futures.append(future)
+        progress(futures)
+        result = client.gather(futures)
+        posterior_da = xr.concat(
+            result,
+            dim="filtered_by",
         )
+        simulated_prior = simulated_valid
+        simulated_prior["ensemble"] = "Prior"
+        print("load prior")
+        prior_config = prp.filter_config(simulated_prior["pism_config"], params)
+        # prior_config = prp.filter_config(pism_config, params)
+        print("load prior dataframe")
+        prior_df = prp.config_to_dataframe(prior_config, ensemble="Prior")
+
+        simulated_posterior = simulated_valid.sel({"exp_id": posterior_da["exp_id_sampled"]})
+        simulated_posterior["ensemble"] = "Posterior"
+
+        print("load posterior")
+        posterior_config = prp.filter_config(simulated_posterior["pism_config"], params).load()
+        print("load posterior dataframe")
+        posterior_df = prp.config_to_dataframe(posterior_config, ensemble="Posterior")
+
+        prior_posterior = pd.concat([prior_df, posterior_df]).reset_index(drop=True)
+        prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)
 
         for filter_var in obs_mean_vars:
             plot_basins(
                 observed.load(),
                 simulated_prior[sim_plot_vars].load(),
-                simulated_posterior.sel({"filtered_by": filter_var})[
-                    sim_plot_vars
-                ].load(),
+                simulated_posterior.sel({"filtered_by": filter_var})[sim_plot_vars].load(),
+                client=client,
                 filter_var=filter_var,
                 filter_range=filter_range,
                 figsize=(4.6, 2.8),
@@ -432,10 +441,7 @@ if __name__ == "__main__":
                 prior_posterior[col] = prior_posterior[col].apply(func)
 
         prior_posterior.to_parquet(
-            data_dir
-            / Path(
-                f"""prior_posterior_retreat_{retreat_method}_{filter_range[0]}-{filter_range[1]}.parquet"""
-            )
+            data_dir / Path(f"""prior_posterior_retreat_{retreat_method}_{filter_range[0]}-{filter_range[1]}.parquet""")
         )
 
         if "frontal_melt.routing.parameter_a" in prior_posterior.columns:
@@ -472,71 +478,70 @@ if __name__ == "__main__":
 
     retreat_df = pd.concat(pp_retreat_list).reset_index(drop=True)
 
-    # Sensitivity Analysis
-    prior_config = prp.filter_config(simulated["pism_config"], params)
-    prior_df = prp.config_to_dataframe(prior_config, ensemble="Prior")
-    params_df = prp.convert_category_to_integer(prior_df).drop(columns=["aux_id"])
+    # # Sensitivity Analysis
+    # params_df = prp.convert_category_to_integer(prior_df).drop(columns=["aux_id"])
 
-    sensitivity_indices_list = []
-    for basin_group, intersection, filtering_vars in zip(
-        [simulated],
-        [intersection],
-        [["mass_balance", "grounding_line_flux"]],
-    ):
-        sobol_response = basin_group
-        sobol_input_df = params_df[params_df["basin"].isin(intersection)]
+    # sensitivity_indices_list = []
+    # for basin_group, intersection, filtering_vars in zip(
+    #     [simulated],
+    #     [intersection],
+    #     [["mass_balance", "grounding_line_flux"]],
+    # ):
+    #     sobol_response = basin_group
+    #     sobol_input_df = params_df
 
-        sensitivity_indices_list.append(
-            run_sensitivity_analysis(
-                sobol_input_df,
-                sobol_response,
-                filtering_vars,
-                notebook=notebook,
-            )
-        )
+    #     sensitivity_indices_list.append(
+    #         run_sensitivity_analysis(
+    #             sobol_input_df,
+    #             sobol_response,
+    #             filtering_vars,
+    #             notebook=notebook,
+    #         )
+    #     )
 
-    sensitivity_indices = xr.concat(sensitivity_indices_list, dim="basin")
-    si_dir = result_dir / Path("sensitivity_indices")
-    si_dir.mkdir(parents=True, exist_ok=True)
-    sensitivity_indices.to_netcdf(si_dir / Path("sensitivity_indices.nc"))
+    # sensitivity_indices = xr.concat(sensitivity_indices_list, dim="basin")
+    # si_dir = result_dir / Path("sensitivity_indices")
+    # si_dir.mkdir(parents=True, exist_ok=True)
+    # sensitivity_indices.to_netcdf(si_dir / Path("sensitivity_indices.nc"))
 
-    sensitivity_indices = prp.add_prefix_coord(
-        sensitivity_indices, parameter_categories
-    )
+    # sensitivity_indices = prp.add_prefix_coord(
+    #     sensitivity_indices, parameter_categories
+    # )
 
-    # Group by the new coordinate and compute the sum for each group
-    indices_vars = [v for v in sensitivity_indices.data_vars if "_conf" not in v]
-    aggregated_indices = (
-        sensitivity_indices[indices_vars].groupby("sensitivity_indices_group").sum()
-    )
-    # Group by the new coordinate and compute the sum the squares for each group
-    # then take the root.
-    indices_conf = [v for v in sensitivity_indices.data_vars if "_conf" in v]
-    aggregated_conf = (
-        sensitivity_indices[indices_conf]
-        .apply(np.square)
-        .groupby("sensitivity_indices_group")
-        .sum()
-        .apply(np.sqrt)
-    )
-    aggregated = xr.merge([aggregated_indices, aggregated_conf])
-    aggregated.to_netcdf(si_dir / Path("aggregated_sensitivity_indices.nc"))
+    # # Group by the new coordinate and compute the sum for each group
+    # indices_vars = [v for v in sensitivity_indices.data_vars if "_conf" not in v]
+    # aggregated_indices = (
+    #     sensitivity_indices[indices_vars].groupby("sensitivity_indices_group").sum()
+    # )
+    # # Group by the new coordinate and compute the sum the squares for each group
+    # # then take the root.
+    # indices_conf = [v for v in sensitivity_indices.data_vars if "_conf" in v]
+    # aggregated_conf = (
+    #     sensitivity_indices[indices_conf]
+    #     .apply(np.square)
+    #     .groupby("sensitivity_indices_group")
+    #     .sum()
+    #     .apply(np.sqrt)
+    # )
+    # aggregated = xr.merge([aggregated_indices, aggregated_conf])
+    # aggregated.to_netcdf(si_dir / Path("aggregated_sensitivity_indices.nc"))
 
-    for indices_var, indices_conf_var in zip(indices_vars, indices_conf):
-        for basin in aggregated.basin.values:
-            for filter_var in aggregated.filtered_by.values:
-                plot_sensitivity_indices(
-                    aggregated.sel(basin=basin, filtered_by=filter_var)
-                    .rolling({"time": 13})
-                    .mean()
-                    .sel(time=slice("1980-01-01", "2020-01-01")),
-                    indices_var=indices_var,
-                    indices_conf_var=indices_conf_var,
-                    basin=basin,
-                    filter_var=filter_var,
-                    fig_dir=fig_dir,
-                )
+    # for indices_var, indices_conf_var in zip(indices_vars, indices_conf):
+    #     for basin in aggregated.basin.values:
+    #         for filter_var in aggregated.filtered_by.values:
+    #             plot_sensitivity_indices(
+    #                 aggregated.sel(basin=basin, filtered_by=filter_var)
+    #                 .rolling({"time": 13})
+    #                 .mean()
+    #                 .sel(time=slice("1980-01-01", "2020-01-01")),
+    #                 indices_var=indices_var,
+    #                 indices_conf_var=indices_conf_var,
+    #                 basin=basin,
+    #                 filter_var=filter_var,
+    #                 fig_dir=fig_dir,
+    #             )
 
+    client.close()
     end = time.time()
     time_elapsed = end - start
     print(f"Time elapsed {time_elapsed:.0f}s")

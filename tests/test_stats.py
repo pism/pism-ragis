@@ -32,9 +32,7 @@ def test_run_stats():
     """
     Test retrieving run_stats from PISM output file and return pd.DataFrame.
     """
-    infiles = sorted(
-        glob("tests/data/ts_gris_g1200m_v2023_RAGIS_id_*_1980-1-1_2020-1-1.nc")
-    )
+    infiles = sorted(glob("tests/data/ts_gris_g1200m_v2023_RAGIS_id_*_1980-1-1_2020-1-1.nc"))
     df = run_stats(infiles)
     df_true = pd.read_csv("tests/data/test_run_stats.csv")
 
