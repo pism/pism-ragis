@@ -264,7 +264,7 @@ def preprocess_config(
         If the regular expression does not match any part of the filename.
     """
 
-    if dim not in ds.dimensions:
+    if dim not in ds.dims:
         m_id_re = re.search(regexp, ds.encoding["source"])
         ds = ds.expand_dims(dim)
         assert m_id_re is not None
@@ -1370,7 +1370,8 @@ def prepare_simulations(
     >>> reference_date = "2000-01-01"
     >>> ds = prepare_simulations(filenames, config, reference_date)
     """
-    ds = load_ensemble(filenames, preprocess=preprocess, parallel=parallel, engine=engine)
+    ds = load_ensemble(filenames, preprocess=preprocess, parallel=parallel, engine=engine).dropna(dim="exp_id")
+
     ds = xr.apply_ufunc(np.vectorize(convert_bstrings_to_str), ds, dask="parallelized")
 
     ds = standardize_variable_names(ds, config["PISM Spatial"])
@@ -1461,3 +1462,224 @@ def convert_bstrings_to_str(element: Any) -> Any:
     if isinstance(element, bytes):
         return element.decode("utf-8")
     return element
+
+
+def prepare_liafr(
+    obs_ds: xr.Dataset,
+    sim_ds: xr.Dataset,
+    obs_mean_var,
+    obs_std_var,
+    sim_var: str,
+) -> tuple[xr.Dataset, xr.Dataset]:
+    """
+    Prepare land ice area fraction retreat data for analysis.
+
+    Parameters
+    ----------
+    obs_ds : xr.Dataset
+        The observed dataset.
+    sim_ds : xr.Dataset
+        The simulated dataset.
+    obs_mean_var : str
+        The variable name for the observed mean data.
+    obs_std_var : str
+        The variable name for the observed standard deviation data.
+    sim_var : str
+        The variable name for the simulated data.
+
+    Returns
+    -------
+    tuple[xr.Dataset, xr.Dataset]
+        A tuple containing the prepared observed and simulated datasets.
+    """
+    thk_mask = (sim_ds["thk"] > 10).astype("int8").persist()
+    s_liafr = thk_mask.resample(time="YS").mean()
+    s_liafr.name = sim_var
+    o_liafr = obs_ds[obs_mean_var].interp_like(s_liafr, method="nearest").fillna(0)
+    s_liafr_b = s_liafr.astype(bool)
+    o_liafr_b = o_liafr.astype(bool)
+    sim = s_liafr_b.to_dataset()
+
+    o_liafr_b_uncertainty = xr.ones_like(o_liafr_b)
+    o_liafr_b_uncertainty.name = obs_std_var
+    obs = xr.merge([o_liafr_b, o_liafr_b_uncertainty])
+
+    return obs, sim
+
+
+def prepare_dhdt(
+    obs_ds: xr.Dataset,
+    sim_ds: xr.Dataset,
+    obs_mean_var,
+    obs_std_var,
+    sim_var: str,
+    coarsen: dict | None = None,
+) -> tuple[xr.Dataset, xr.Dataset]:
+    """
+    Prepare dh/dt data for analysis.
+
+    Parameters
+    ----------
+    obs_ds : xr.Dataset
+        The observed dataset.
+    sim_ds : xr.Dataset
+        The simulated dataset.
+    obs_mean_var : str
+        The variable name for the observed mean data.
+    obs_std_var : str
+        The variable name for the observed standard deviation data.
+    sim_var : str
+        The variable name for the simulated data.
+    coarsen : dict or None, optional
+        Dictionary specifying the dimensions and factors for coarsening the simulated data, by default None.
+
+    Returns
+    -------
+    tuple[xr.Dataset, xr.Dataset]
+        A tuple containing the prepared observed and simulated datasets.
+    """
+    sim_ds = sim_ds.pint.quantify()
+    sim_ds[sim_var] = sim_ds["dHdt"] * 1000.0 / 910.0
+    sim_ds[sim_var] = sim_ds[sim_var].pint.to("m year^-1")
+    sim_ds = sim_ds.pint.dequantify()
+
+    sim_retreat_resampled = (
+        sim_ds.drop_vars(["pism_config", "run_stats"])
+        .drop_dims(["pism_config_axis", "run_stats_axis"])
+        .resample({"time": "YS"})
+        .mean(dim="time")
+    )
+
+    obs = obs_ds.pint.quantify()
+    for v in [obs_mean_var, obs_std_var]:
+        obs[v] = obs[v].pint.to("m year^-1")
+    obs = obs.pint.dequantify()
+
+    if coarsen is not None:
+        sim = sim_retreat_resampled.coarsen(coarsen).mean()
+    else:
+        sim = sim_retreat_resampled
+    obs = obs.interp_like(sim)
+
+    obs_dhdt = obs[obs_mean_var]
+    obs_mask = obs_dhdt.isnull()
+    obs_mask = obs_mask.any(dim="time")
+
+    sim = sim.where(~obs_mask)[[sim_var]]
+
+    return obs, sim
+
+
+def prepare_v(
+    obs_ds: xr.Dataset,
+    sim_ds: xr.Dataset,
+    obs_mean_var: str | None = None,
+    obs_std_var: str | None = None,
+    sim_var: str | None = None,
+    coarsen: dict | None = None,
+) -> tuple[xr.Dataset, xr.Dataset]:
+    """
+    Prepare dh/dt data for analysis.
+
+    Parameters
+    ----------
+    obs_ds : xr.Dataset
+        The observed dataset.
+    sim_ds : xr.Dataset
+        The simulated dataset.
+    obs_mean_var : str
+        The variable name for the observed mean data.
+    obs_std_var : str
+        The variable name for the observed standard deviation data.
+    sim_var : str
+        The variable name for the simulated data.
+    coarsen : dict or None, optional
+        Dictionary specifying the dimensions and factors for coarsening the simulated data, by default None.
+
+    Returns
+    -------
+    tuple[xr.Dataset, xr.Dataset]
+        A tuple containing the prepared observed and simulated datasets.
+    """
+
+    sim_retreat_resampled = (
+        sim_ds.drop_vars(["pism_config", "run_stats"])
+        .drop_dims(["pism_config_axis", "run_stats_axis"])
+        .resample({"time": "YS"})
+        .mean(dim="time")
+    )
+    obs = obs_ds.pint.quantify()
+    for v in [obs_mean_var, obs_std_var]:
+        obs[v] = obs[v].pint.to("m year^-1")
+    obs = obs.pint.dequantify()
+    obs = obs.where(obs["ice"])
+    if coarsen is not None:
+        sim = sim_retreat_resampled.coarsen(coarsen).mean()
+    else:
+        sim = sim_retreat_resampled
+    obs = obs.interp_like(sim)
+
+    return obs, sim
+
+
+def prepare_grace(
+    obs_ds: xr.Dataset,
+    sim_ds: xr.Dataset,
+    obs_mean_var: str | None = None,
+    obs_std_var: str | None = None,
+    sim_var: str | None = None,
+    coarsen: dict | None = None,
+) -> tuple[xr.Dataset, xr.Dataset]:
+    """
+    Prepare dh/dt data for analysis.
+
+    Parameters
+    ----------
+    obs_ds : xr.Dataset
+        The observed dataset.
+    sim_ds : xr.Dataset
+        The simulated dataset.
+    obs_mean_var : str
+        The variable name for the observed mean data.
+    obs_std_var : str
+        The variable name for the observed standard deviation data.
+    sim_var : str
+        The variable name for the simulated data.
+    coarsen : dict or None, optional
+        Dictionary specifying the dimensions and factors for coarsening the simulated data, by default None.
+
+    Returns
+    -------
+    tuple[xr.Dataset, xr.Dataset]
+        A tuple containing the prepared observed and simulated datasets.
+    """
+
+    obs = obs_ds.where(obs_ds["land_mask"])
+    obs = obs.expand_dims({"basin": ["GIS"]})
+
+    obs = obs.rio.set_spatial_dims(x_dim="lon", y_dim="lat")
+    obs.rio.write_crs("EPSG:4326", inplace=True)
+
+    sim = (
+        sim_ds[[sim_var]]
+        .rio.set_spatial_dims(x_dim="x", y_dim="y")
+        .drop_vars(["time_bounds", "timestamp"], errors="ignore")
+    )
+    sim.rio.write_crs("EPSG:3413", inplace=True)
+
+    print("Reprojecting simulated data to EPSG:4326")
+    sims = []
+    for s in tqdm(
+        sim["exp_id"].values,
+        total=len(sim["exp_id"].values),
+        desc="Reprojecting simulated data",
+    ):
+        sim_s = sim.sel(exp_id=s)
+        sim_s = sim_s.rio.reproject_match(obs)
+        sim_s = sim_s.rename({"x": "lon", "y": "lat"})
+        sims.append(sim_s)
+    sim = xr.concat(sims, dim="exp_id")
+
+    sim = sim.where(obs["land_mask"])
+
+    return obs, sim
