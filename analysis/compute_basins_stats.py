@@ -46,6 +46,12 @@ if __name__ == "__main__":
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Compute ensemble statistics."
     parser.add_argument(
+        "--cf",
+        help="""Make output file CF Convetions compliant. Default="False".""",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
         "--crs",
         help="""Coordinate reference system. Default is EPSG:3413.""",
         type=str,
@@ -85,6 +91,7 @@ if __name__ == "__main__":
     parser.add_argument("FILE", nargs=1, help="netCDF file to process", default=None)
 
     options = parser.parse_args()
+    cf = options.cf
     crs = options.crs
     engine = options.engine
     ensemble = options.ensemble
@@ -149,10 +156,16 @@ if __name__ == "__main__":
 
         config_sorted = OrderedDict(sorted(config.items()))
 
-        pc_keys = np.array(list(config_sorted.keys()))
-        pc_vals = np.array(list(config_sorted.values()))
-        rs_keys = np.array(list(stats.attrs.keys()))
-        rs_vals = np.array(list(stats.attrs.values()))
+    if cf:
+        pc_keys = np.array(list(config_sorted.keys()), dtype="S1024")
+        pc_vals = np.array(list(config_sorted.values()), dtype="S128")
+        rs_keys = np.array(list(stats.attrs.keys()), dtype="S1024")
+        rs_vals = np.array(list(stats.attrs.values()), dtype="S128")
+    else:
+        pc_keys = list(config_sorted.keys())
+        pc_vals = list(config_sorted.values())
+        rs_keys = list(stats.attrs.keys())
+        rs_vals = list(stats.attrs.values())
 
         pism_config = xr.DataArray(
             pc_vals,
@@ -199,6 +212,10 @@ if __name__ == "__main__":
     basin_sums = xr.concat(result, dim="basin").drop_vars(["mapping", "spatial_ref"]).sortby(["basin"])
     basin_sums = xr.merge([basin_sums, pism_config, run_stats])
     basin_sums = basin_sums.expand_dims({"exp_id": [m_id]})
+    if cf:
+        basin_sums["basin"] = basin_sums["basin"].astype(f"S{n_basins}")
+        basin_sums.attrs["Conventions"] = "CF-1.8"
+
     basin_sums.to_netcdf(basins_file, engine=engine)
 
     client.close()
