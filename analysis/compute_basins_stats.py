@@ -210,7 +210,7 @@ if __name__ == "__main__":
     progress(futures)
     result = client.gather(futures)
     basin_sums = xr.concat(result, dim="basin").drop_vars(["mapping", "spatial_ref"]).sortby(["basin"])
-    basin_sums = xr.merge([basin_sums, pism_config, run_stats])
+    basin_sums = xr.merge([basin_sums, p_config, p_run_stats])
     basin_sums = basin_sums.expand_dims({"exp_id": [m_id]})
     if cf:
         basin_sums["basin"] = basin_sums["basin"].astype(f"S{n_basins}")
