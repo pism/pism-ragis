@@ -21,6 +21,7 @@
 Analyze RAGIS ensemble.
 """
 import json
+import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from importlib.resources import files
 from itertools import chain
@@ -38,7 +39,6 @@ import rioxarray as rxr
 import seaborn as sns
 import toml
 import xarray as xr
-from dask.diagnostics import ProgressBar
 from dask.distributed import Client, progress
 from tqdm.auto import tqdm
 
@@ -46,12 +46,19 @@ import pism_ragis.processing as prp
 from pism_ragis.download import save_netcdf
 from pism_ragis.filtering import (
     importance_sampling,
-    run_importance_sampling,
 )
 from pism_ragis.likelihood import log_jaccard_score_xr, log_normal_xr
 from pism_ragis.logger import get_logger
 from pism_ragis.plotting import plot_mapplane, plot_prior_posteriors
-from pism_ragis.processing import filter_by_retreat_method, preprocess_config
+from pism_ragis.processing import (
+    filter_by_retreat_method,
+    load_ensemble,
+    prepare_dhdt,
+    prepare_grace,
+    prepare_liafr,
+    prepare_v,
+    preprocess_config,
+)
 
 xr.set_options(
     keep_attrs=True,
@@ -73,229 +80,6 @@ obs_cmap = ["0.8", "0.7"]
 # obs_cmap = ["#88CCEE", "#44AA99"]
 hist_cmap = ["#a6cee3", "#1f78b4"]
 cartopy_crs = ccrs.NorthPolarStereo(central_longitude=-45, true_scale_latitude=70, globe=None)
-
-
-def prepare_liafr(
-    obs_ds: xr.Dataset,
-    sim_ds: xr.Dataset,
-    obs_mean_var,
-    obs_std_var,
-    sim_var: str,
-) -> tuple[xr.Dataset, xr.Dataset]:
-    """
-    Prepare land ice area fraction retreat data for analysis.
-
-    Parameters
-    ----------
-    obs_ds : xr.Dataset
-        The observed dataset.
-    sim_ds : xr.Dataset
-        The simulated dataset.
-    obs_mean_var : str
-        The variable name for the observed mean data.
-    obs_std_var : str
-        The variable name for the observed standard deviation data.
-    sim_var : str
-        The variable name for the simulated data.
-
-    Returns
-    -------
-    tuple[xr.Dataset, xr.Dataset]
-        A tuple containing the prepared observed and simulated datasets.
-    """
-    s_liafr = xr.where(sim_ds["thk"] > 10, 1, 0).resample({"time": "YS"}).mean()
-    s_liafr.name = sim_var
-    o_liafr = obs_ds[obs_mean_var].resample({"time": "YS"}).mean().interp_like(s_liafr, method="nearest").fillna(0)
-    s_liafr_b = s_liafr.astype(bool)
-    o_liafr_b = o_liafr.astype(bool)
-    sim = s_liafr_b.to_dataset()
-
-    o_liafr_b_uncertainty = xr.ones_like(o_liafr_b)
-    o_liafr_b_uncertainty.name = obs_std_var
-    obs = xr.merge([o_liafr_b, o_liafr_b_uncertainty])
-
-    return obs, sim
-
-
-def prepare_dhdt(
-    obs_ds: xr.Dataset,
-    sim_ds: xr.Dataset,
-    obs_mean_var,
-    obs_std_var,
-    sim_var: str,
-    coarsen: dict | None = None,
-) -> tuple[xr.Dataset, xr.Dataset]:
-    """
-    Prepare dh/dt data for analysis.
-
-    Parameters
-    ----------
-    obs_ds : xr.Dataset
-        The observed dataset.
-    sim_ds : xr.Dataset
-        The simulated dataset.
-    obs_mean_var : str
-        The variable name for the observed mean data.
-    obs_std_var : str
-        The variable name for the observed standard deviation data.
-    sim_var : str
-        The variable name for the simulated data.
-    coarsen : dict or None, optional
-        Dictionary specifying the dimensions and factors for coarsening the simulated data, by default None.
-
-    Returns
-    -------
-    tuple[xr.Dataset, xr.Dataset]
-        A tuple containing the prepared observed and simulated datasets.
-    """
-    sim_ds = sim_ds.pint.quantify()
-    sim_ds[sim_var] = sim_ds["dHdt"] * 1000.0 / 910.0
-    sim_ds[sim_var] = sim_ds[sim_var].pint.to("m year^-1")
-    sim_ds = sim_ds.pint.dequantify()
-
-    sim_retreat_resampled = (
-        sim_ds.drop_vars(["pism_config", "run_stats"])
-        .drop_dims(["pism_config_axis", "run_stats_axis"])
-        .resample({"time": "YS"})
-        .mean(dim="time")
-    )
-
-    obs = obs_ds.pint.quantify()
-    for v in [obs_mean_var, obs_std_var]:
-        obs[v] = obs[v].pint.to("m year^-1")
-    obs = obs.pint.dequantify()
-
-    if coarsen is not None:
-        sim = sim_retreat_resampled.coarsen(coarsen).mean()
-    else:
-        sim = sim_retreat_resampled
-    obs = obs.interp_like(sim)
-
-    obs_dhdt = obs[obs_mean_var]
-    obs_mask = obs_dhdt.isnull()
-    obs_mask = obs_mask.any(dim="time")
-
-    sim = sim.where(~obs_mask)[[sim_var]]
-
-    return obs, sim
-
-
-def prepare_v(
-    obs_ds: xr.Dataset,
-    sim_ds: xr.Dataset,
-    obs_mean_var: str | None = None,
-    obs_std_var: str | None = None,
-    sim_var: str | None = None,
-    coarsen: dict | None = None,
-) -> tuple[xr.Dataset, xr.Dataset]:
-    """
-    Prepare dh/dt data for analysis.
-
-    Parameters
-    ----------
-    obs_ds : xr.Dataset
-        The observed dataset.
-    sim_ds : xr.Dataset
-        The simulated dataset.
-    obs_mean_var : str
-        The variable name for the observed mean data.
-    obs_std_var : str
-        The variable name for the observed standard deviation data.
-    sim_var : str
-        The variable name for the simulated data.
-    coarsen : dict or None, optional
-        Dictionary specifying the dimensions and factors for coarsening the simulated data, by default None.
-
-    Returns
-    -------
-    tuple[xr.Dataset, xr.Dataset]
-        A tuple containing the prepared observed and simulated datasets.
-    """
-
-    sim_retreat_resampled = (
-        sim_ds.drop_vars(["pism_config", "run_stats"])
-        .drop_dims(["pism_config_axis", "run_stats_axis"])
-        .resample({"time": "YS"})
-        .mean(dim="time")
-    )
-    obs = obs_ds.pint.quantify()
-    for v in [obs_mean_var, obs_std_var]:
-        obs[v] = obs[v].pint.to("m year^-1")
-    obs = obs.pint.dequantify()
-    obs = obs.where(obs["ice"])
-    if coarsen is not None:
-        sim = sim_retreat_resampled.coarsen(coarsen).mean()
-    else:
-        sim = sim_retreat_resampled
-    obs = obs.interp_like(sim)
-
-    return obs, sim
-
-
-def prepare_grace(
-    obs_ds: xr.Dataset,
-    sim_ds: xr.Dataset,
-    obs_mean_var: str | None = None,
-    obs_std_var: str | None = None,
-    sim_var: str | None = None,
-    coarsen: dict | None = None,
-) -> tuple[xr.Dataset, xr.Dataset]:
-    """
-    Prepare dh/dt data for analysis.
-
-    Parameters
-    ----------
-    obs_ds : xr.Dataset
-        The observed dataset.
-    sim_ds : xr.Dataset
-        The simulated dataset.
-    obs_mean_var : str
-        The variable name for the observed mean data.
-    obs_std_var : str
-        The variable name for the observed standard deviation data.
-    sim_var : str
-        The variable name for the simulated data.
-    coarsen : dict or None, optional
-        Dictionary specifying the dimensions and factors for coarsening the simulated data, by default None.
-
-    Returns
-    -------
-    tuple[xr.Dataset, xr.Dataset]
-        A tuple containing the prepared observed and simulated datasets.
-    """
-
-    obs = obs_ds.where(obs_ds["land_mask"])
-    obs = obs.expand_dims({"basin": ["GIS"]})
-
-    obs = obs.rio.set_spatial_dims(x_dim="lon", y_dim="lat")
-    obs.rio.write_crs("EPSG:4326", inplace=True)
-
-    sim = (
-        sim_ds[[sim_var]]
-        .rio.set_spatial_dims(x_dim="x", y_dim="y")
-        .drop_vars(["time_bounds", "timestamp"], errors="ignore")
-    )
-    sim.rio.write_crs("EPSG:3413", inplace=True)
-
-    print("Reprojecting simulated data to EPSG:4326")
-    sims = []
-    for s in tqdm(
-        sim["exp_id"].values,
-        total=len(sim["exp_id"].values),
-        desc="Reprojecting simulated data",
-    ):
-        sim_s = sim.sel(exp_id=s)
-        sim_s = sim_s.rio.reproject_match(obs)
-        sim_s = sim_s.rename({"x": "lon", "y": "lat"})
-        sims.append(sim_s)
-    sim = xr.concat(sims, dim="exp_id")
-
-    sim = sim.where(obs["land_mask"])
-
-    # obs = obs.resample(time="YS").mean()
-    # sim = sim.resample(time="YS").mean()
-
-    return obs, sim
 
 
 if __name__ == "__main__":
@@ -413,6 +197,10 @@ if __name__ == "__main__":
 
     mpl.rcParams.update(rcparams)
 
+    client = Client()
+    print(f"Open client in browser: {client.dashboard_link}")
+    start = time.time()
+
     log_likelihood: Callable
     prepare_input: Callable
     obs_mean_var = "land_ice_area_fraction_retreat"
@@ -470,19 +258,29 @@ if __name__ == "__main__":
     retreat_methods = ["Free"]
 
     print("Loading ensemble.")
-    with ProgressBar():
-        simulated = xr.open_mfdataset(
-            spatial_files,
-            preprocess=preprocess_config,
-            parallel=True,
-            decode_cf=True,
-            decode_timedelta=True,
-            engine=engine,
-            combine="nested",
-            concat_dim="exp_id",
-            chunks="auto",
-        )
+    simulated = load_ensemble(
+        spatial_files,
+        preprocess=preprocess_config,
+        parallel=True,
+        engine=engine,
+    )
+    simulated = simulated.sel({"time": slice(*filter_range)})
+
     observed = xr.open_mfdataset(obs_file, chunks={"time": -1})
+    observed = observed.sel({"time": slice(*filter_range)})
+
+    stats = simulated[["pism_config", "run_stats"]]
+
+    simulated = (
+        simulated.drop_vars(["pism_config", "run_stats"])
+        .drop_dims(["pism_config_axis", "run_stats_axis"])
+        .resample({"time": resampling_frequency})
+        .mean()
+    )
+    simulated = xr.merge([simulated, stats])
+
+    simulated_all = simulated
+    simulated_all["ensemble"] = "All"
 
     bins_dict = config["Posterior Bins"]
     parameter_categories = config["Parameter Categories"]
@@ -499,56 +297,6 @@ if __name__ == "__main__":
     short_bins_dict = {params_short_dict[key]: bins_dict[key] for key in params_short_dict if key in bins_dict}
     plot_params = params_sorted_dict.copy()
     del plot_params["geometry.front_retreat.prescribed.file"]
-
-    simulated = simulated.pint.quantify()
-    water_density = xr.DataArray(1000.0).pint.quantify("kg m^-3").pint.to("Gt m^-3")
-    ice_density = xr.DataArray(910.0).pint.quantify("kg m^-3").pint.to("Gt m^-3")
-    dx = simulated.sel({"pism_config_axis": "grid.dx"})["pism_config"].astype(float).values[0]
-    dx = xr.DataArray(dx).pint.quantify("m")
-    simulated["basal_melt"] = (
-        simulated["tendency_of_ice_mass_due_to_basal_mass_flux"] / ice_density / simulated["thk"] / dx
-    )
-    simulated["basal_melt"] = simulated["basal_melt"].where(simulated["basal_melt"] < 0)
-    simulated["frontal_melt"] = (
-        simulated["tendency_of_ice_mass_due_to_frontal_melt"] / ice_density / simulated["thk"] / dx
-    )
-    simulated["frontal_melt"] = simulated["frontal_melt"].where(simulated["frontal_melt"] < 0)
-
-    vs = ["velsurf_mag", "basal_melt", "frontal_melt"]
-    for v, cmap, vmin, vmax in zip(vs, ["speed_colorblind", "turbo_r", "turbo_r"], [10, -250, -1000], [1500, 0, 0]):
-        time = slice(0, 4)
-        fig_dir = result_dir / Path("figures")
-        fig_dir.mkdir(parents=True, exist_ok=True)
-        plot_dir = fig_dir / Path("mapplane")
-        plot_dir.mkdir(parents=True, exist_ok=True)
-
-        client = Client()
-        print(f"Open client in browser: {client.dashboard_link}")
-
-        for i in range(0, len(simulated.exp_id), 100):
-            exp_ids = simulated.exp_id[i : i + 100]
-            das = [
-                simulated.isel({"time": time})
-                .sel({"exp_id": exp_id})
-                .sel({"x": slice(-374500, -97590), "y": slice(-1176000, -901783)})[v]
-                for exp_id in exp_ids
-            ]
-            fnames = [plot_dir / Path(f"{v}_exp_id_{exp_id.values}.png") for exp_id in exp_ids]
-            futures = client.map(
-                plot_mapplane,
-                das,
-                fnames,
-                col="time",
-                col_wrap=2,
-                vmin=vmin,
-                vmax=vmax,
-                cmap=cmap,
-            )
-            progress(futures)
-            client.gather(futures)
-
-    simulated = simulated.sel({"time": slice(*filter_range)})
-    observed = observed.sel({"time": slice(*filter_range)})
 
     for retreat_method in retreat_methods:
         print("-" * 80)
@@ -573,61 +321,63 @@ if __name__ == "__main__":
             sim_var,
             coarsen=coarsen,
         )
-        sim = xr.merge([sim, stats])
+        # sim = xr.merge([sim, stats])
 
-        obs = obs.chunk("auto")
-        sim = sim.chunk("auto")
+        # (prior_posterior, simulated_prior, simulated_posterior, simulated_weights) = run_importance_sampling(
+        #     observed=obs,
+        #     simulated=sim,
+        #     obs_mean_vars=[obs_mean_var],
+        #     obs_std_vars=[obs_std_var],
+        #     sim_vars=[sim_var],
+        #     log_likelihood=log_likelihood,
+        #     filter_range=filter_range,
+        #     fudge_factor=fudge_factor,
+        #     sum_dims=sum_dims,
+        #     params=params,
+        # )
 
-        (prior_posterior, simulated_prior, simulated_posterior, simulated_weights) = run_importance_sampling(
-            observed=obs,
-            simulated=sim,
-            obs_mean_vars=[obs_mean_var],
-            obs_std_vars=[obs_std_var],
-            sim_vars=[sim_var],
-            log_likelihood=log_likelihood,
-            filter_range=filter_range,
-            fudge_factor=fudge_factor,
-            sum_dims=sum_dims,
-            params=params,
-        )
+        # # Apply the functions to the corresponding columns
+        # for col, functions in column_function_mapping.items():
+        #     for func in functions:
+        #         prior_posterior[col] = prior_posterior[col].apply(func)
 
-        # Apply the functions to the corresponding columns
-        for col, functions in column_function_mapping.items():
-            for func in functions:
-                prior_posterior[col] = prior_posterior[col].apply(func)
+        # prior_posterior["basin"] = "GIS"
+        # posterior = prior_posterior[prior_posterior["ensemble"] == "Posterior"].copy()
+        # posterior["fudge_factor"] = fudge_factor
 
-        prior_posterior["basin"] = "GIS"
-        posterior = prior_posterior[prior_posterior["ensemble"] == "Posterior"].copy()
-        posterior["fudge_factor"] = fudge_factor
+        # posterior.to_parquet(
+        #     data_dir / Path(f"""posterior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.parquet""")
+        # )
 
-        posterior.to_parquet(
-            data_dir / Path(f"""posterior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.parquet""")
-        )
+        # plot_prior_posteriors(
+        #     prior_posterior.rename(columns=plot_params),
+        #     x_order=plot_params.values(),
+        #     fig_dir=fig_dir,
+        #     bins_dict=short_bins_dict,
+        # )
 
-        plot_prior_posteriors(
-            prior_posterior.rename(columns=plot_params),
-            x_order=plot_params.values(),
-            fig_dir=fig_dir,
-            bins_dict=short_bins_dict,
-        )
+        # prior_nc = data_dir / Path(
+        #     f"""simulated_prior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
+        # )
+        # print(f"Writing {prior_nc}")
+        # save_netcdf(simulated_prior.chunk("auto"), prior_nc)
 
-        prior_nc = data_dir / Path(
-            f"""simulated_prior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
-        )
-        print(f"Writing {prior_nc}")
-        save_netcdf(simulated_prior.chunk("auto"), prior_nc)
+        # simulated_posterior["fudge_factor"] = fudge_factor
+        # posterior_nc = data_dir / Path(
+        #     f"""simulated_posterior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
+        # )
+        # print(f"Writing {posterior_nc}")
+        # save_netcdf(simulated_posterior.chunk("auto"), posterior_nc)
 
-        simulated_posterior["fudge_factor"] = fudge_factor
-        posterior_nc = data_dir / Path(
-            f"""simulated_posterior_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""
-        )
-        print(f"Writing {posterior_nc}")
-        save_netcdf(simulated_posterior.chunk("auto"), posterior_nc)
+        # simulated_weights = simulated_weights.to_dataset()
+        # simulated_weights["fudge_factor"] = fudge_factor
+        # save_netcdf(
+        #     simulated_weights,
+        #     data_dir
+        #     / Path(f"""simulated_weights_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""),
+        # )
 
-        simulated_weights = simulated_weights.to_dataset()
-        simulated_weights["fudge_factor"] = fudge_factor
-        save_netcdf(
-            simulated_weights,
-            data_dir
-            / Path(f"""simulated_weights_retreat_filtered_by_{sim_var}_{filter_range[0]}-{filter_range[1]}.nc"""),
-        )
+    client.close()
+    end = time.time()
+    time_elapsed = end - start
+    print(f"Time elapsed {time_elapsed:.0f}s")

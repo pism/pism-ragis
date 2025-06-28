@@ -417,8 +417,8 @@ def plot_basins(
     observed: xr.Dataset,
     prior: xr.Dataset,
     posterior: xr.Dataset,
+    client: Client,
     x_lim: list[int] = [1980, 2020],
-    client: Client | None = None,
     **kwargs,
 ):
     """
@@ -435,11 +435,11 @@ def plot_basins(
         The prior simulation dataset. Must have a 'basin' and 'time' dimension.
     posterior : xr.Dataset
         The posterior simulation dataset. Must have a 'basin' and 'time' dimension.
+    client : dask.distributed.Client or None, optional
+        A Dask client for parallel computation. If None, a new client will be created.
     x_lim : list of int, optional
         The [start_year, end_year] for slicing the time dimension before plotting.
         Default is [1980, 2020].
-    client : dask.distributed.Client or None, optional
-        A Dask client for parallel computation. If None, a new client will be created.
     **kwargs
         Additional keyword arguments passed to the `plot_timeseries` function.
 
@@ -453,6 +453,27 @@ def plot_basins(
     plot_timeseries : Function used to create individual basin plots.
     dask.distributed.Client.map : Used to distribute the computation across workers.
     """
+
+    observed_scattered = client.scatter(
+        [observed.sel(basin=basin).sel({"time": slice(str(x_lim[0]), str(x_lim[1]))}) for basin in observed.basin]
+    )
+    prior_scattered = client.scatter(
+        [prior.sel(basin=basin).sel({"time": slice(str(x_lim[0]), str(x_lim[1]))}) for basin in prior.basin]
+    )
+    posterior_scattered = client.scatter(
+        [posterior.sel(basin=basin).sel({"time": slice(str(x_lim[0]), str(x_lim[1]))}) for basin in posterior.basin]
+    )
+
+    futures = client.map(
+        plot_timeseries,
+        observed_scattered,
+        prior_scattered,
+        posterior_scattered,
+        x_lim=x_lim,
+        **kwargs,
+    )
+
+    progress(futures)
 
 
 @timeit

@@ -100,9 +100,6 @@ if __name__ == "__main__":
     result_dir = Path(options.result_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
 
-    basin_url = Path(options.basin_url)
-    basins = gp.read_file(basin_url).to_crs(crs)
-
     mb_vars = [
         "ice_mass",
         "ice_mass_transport_across_grounding_line",
@@ -124,6 +121,9 @@ if __name__ == "__main__":
     print(f"Open client in browser: {client.dashboard_link}")
 
     start = time.time()
+
+    basin_url = Path(options.basin_url)
+    basins = gp.read_file(basin_url).to_crs(crs)
 
     time_coder = xr.coders.CFDatetimeCoder(use_cftime=False)
 
@@ -160,15 +160,22 @@ if __name__ == "__main__":
 
     basins_file = result_dir / f"basins_sums_ensemble_{ensemble}.nc"
 
-    basins_ds_scattered = client.scatter([ds] + [ds.rio.clip([basin.geometry]) for _, basin in basins.iterrows()])
-    basin_names = ["GRACE"] + [basin["SUBREGION1"] for _, basin in basins.iterrows()]
-    n_basins = len(basin_names)
-    futures = client.map(compute_basin, basins_ds_scattered, basin_names)
+    futures = []
+
+    is_scattered = client.scatter(ds)
+    future = client.submit(compute_basin, is_scattered, "GRACE")
+    futures.append(future)
+    for b, basin in basins.iterrows():
+        basin_scattered = client.scatter(ds.rio.clip([basin.geometry]))
+        basin_name = basin["SUBREGION1"]
+        future = client.submit(compute_basin, basin_scattered, basin_name)
+        futures.append(future)
     progress(futures)
     result = client.gather(futures)
     basin_sums = xr.concat(result, dim="basin").drop_vars(["mapping", "spatial_ref"]).sortby(["basin"])
     basin_sums = xr.merge([basin_sums, stats])
     if cf:
+        n_basins = basin_sums["basin"].size
         basin_sums["basin"] = basin_sums["basin"].astype(f"S{n_basins}")
         basin_sums.attrs["Conventions"] = "CF-1.8"
 

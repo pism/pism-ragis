@@ -32,6 +32,7 @@ import dask
 import geopandas as gp
 import numpy as np
 import pint_xarray
+import rioxarray
 import xarray as xr
 from dask.distributed import Client, progress
 

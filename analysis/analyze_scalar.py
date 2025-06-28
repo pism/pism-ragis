@@ -223,7 +223,6 @@ if __name__ == "__main__":
         parallel=parallel,
         engine=engine,
     )
-    pism_config = simulated["pism_config"].load()
     # simulated = simulated.dropna(dim="exp_id")
     simulated = simulated.sel({"time": slice(str(temporal_range[0]), str(temporal_range[1]))})
     observed = prp.prepare_observations(
@@ -243,6 +242,7 @@ if __name__ == "__main__":
     observed = observed.resample({"time": resampling_frequency}).mean()
 
     simulated = simulated.sel({"basin": intersection})
+    pism_config = simulated["pism_config"].load()
     stats = simulated[["pism_config", "run_stats"]]
 
     simulated = (
@@ -331,7 +331,6 @@ if __name__ == "__main__":
         data_dir.mkdir(parents=True, exist_ok=True)
         fig_dir = retreat_dir / Path("figures")
         fig_dir.mkdir(parents=True, exist_ok=True)
-        print("retreat")
 
         simulated_retreat_filtered = prp.filter_by_retreat_method(simulated, retreat_method, compute=False)
 
@@ -346,6 +345,8 @@ if __name__ == "__main__":
         simulated_valid = simulated_retreat_filtered.sel(exp_id=valid_ids)
         simulated_outliers = simulated_retreat_filtered.sel(exp_id=outlier_ids)
         print(f"Ensemble size: {n_members}, valid size: {n_members_valid}, outlier size: {n_members-n_members_valid}\n")
+
+        pism_config_valid = pism_config.sel(exp_id=valid_ids)
 
         obs_mean_vars: list[str] = [
             "grounding_line_flux",
@@ -392,18 +393,14 @@ if __name__ == "__main__":
         )
         simulated_prior = simulated_valid
         simulated_prior["ensemble"] = "Prior"
-        print("load prior")
-        prior_config = prp.filter_config(simulated_prior["pism_config"], params)
-        # prior_config = prp.filter_config(pism_config, params)
-        print("load prior dataframe")
-        prior_df = prp.config_to_dataframe(prior_config, ensemble="Prior")
 
         simulated_posterior = simulated_valid.sel({"exp_id": posterior_da["exp_id_sampled"]})
         simulated_posterior["ensemble"] = "Posterior"
 
-        print("load posterior")
-        posterior_config = prp.filter_config(simulated_posterior["pism_config"], params).load()
-        print("load posterior dataframe")
+        prior_config = prp.filter_config(pism_config, params)
+        prior_df = prp.config_to_dataframe(prior_config, ensemble="Prior")
+
+        posterior_config = prp.filter_config(pism_config_valid.sel({"exp_id": posterior_da["exp_id_sampled"]}), params)
         posterior_df = prp.config_to_dataframe(posterior_config, ensemble="Posterior")
 
         prior_posterior = pd.concat([prior_df, posterior_df]).reset_index(drop=True)

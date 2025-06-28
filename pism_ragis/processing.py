@@ -435,7 +435,7 @@ def compute_basin(ds: xr.Dataset, name: str = "basin", dim: list = ["x", "y"]) -
     """
     ds = ds.sum(dim=dim).expand_dims("basin")
     ds["basin"] = [name]
-    return ds.compute()
+    return ds
 
 
 @contextlib.contextmanager

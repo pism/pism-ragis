@@ -46,10 +46,7 @@ from tqdm.auto import tqdm
 from pism_ragis.filtering import importance_sampling
 from pism_ragis.likelihood import log_jaccard_score_xr, log_normal_xr
 from pism_ragis.logger import get_logger
-from pism_ragis.processing import (
-    preprocess_config,
-    preprocess_nc,
-)
+from pism_ragis.processing import prepare_liafr, preprocess_config, preprocess_nc
 
 xr.set_options(
     keep_attrs=True,
@@ -71,49 +68,6 @@ obs_cmap = ["0.8", "0.7"]
 # obs_cmap = ["#88CCEE", "#44AA99"]
 hist_cmap = ["#a6cee3", "#1f78b4"]
 cartopy_crs = ccrs.NorthPolarStereo(central_longitude=-45, true_scale_latitude=70, globe=None)
-
-
-def prepare_liafr(
-    obs_ds: xr.Dataset,
-    sim_ds: xr.Dataset,
-    obs_mean_var,
-    obs_std_var,
-    sim_var: str,
-) -> tuple[xr.Dataset, xr.Dataset]:
-    """
-    Prepare land ice area fraction retreat data for analysis.
-
-    Parameters
-    ----------
-    obs_ds : xr.Dataset
-        The observed dataset.
-    sim_ds : xr.Dataset
-        The simulated dataset.
-    obs_mean_var : str
-        The variable name for the observed mean data.
-    obs_std_var : str
-        The variable name for the observed standard deviation data.
-    sim_var : str
-        The variable name for the simulated data.
-
-    Returns
-    -------
-    tuple[xr.Dataset, xr.Dataset]
-        A tuple containing the prepared observed and simulated datasets.
-    """
-    thk_mask = (sim_ds["thk"] > 10).astype("int8").persist()
-    s_liafr = thk_mask.resample(time="YS").mean()
-    s_liafr.name = sim_var
-    o_liafr = obs_ds[obs_mean_var].interp_like(s_liafr, method="nearest").fillna(0)
-    s_liafr_b = s_liafr.astype(bool)
-    o_liafr_b = o_liafr.astype(bool)
-    sim = s_liafr_b.to_dataset()
-
-    o_liafr_b_uncertainty = xr.ones_like(o_liafr_b)
-    o_liafr_b_uncertainty.name = obs_std_var
-    obs = xr.merge([o_liafr_b, o_liafr_b_uncertainty])
-
-    return obs, sim
 
 
 if __name__ == "__main__":
