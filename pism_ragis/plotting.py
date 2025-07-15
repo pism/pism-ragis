@@ -413,6 +413,94 @@ def plot_prior_posteriors(
 
 
 @timeit
+def plot_prior_posterior(
+    df: pd.DataFrame,
+    figsize: tuple[float, float] | None = (3.2, 2.4),
+    fig_dir: str | Path = "figures",
+    fontsize: float = 4,
+    x_order: list[str] = [],
+    bins_dict: dict | None = None,
+    group_columns: list = ["basin", "filtered_by"],
+):
+    """
+    Plot histograms of prior and posterior distributions.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing the data to plot.
+    figsize : tuple[float, float] or None, optional
+        Size of the figure, by default (6.4, 3.2).
+    fig_dir : str or Path, optional
+        Directory to save the figures, by default "figures".
+    fontsize : float, optional
+        Font size for the plot, by default 4.
+    x_order : list[str], optional
+        Order of the variables for the x-axis, by default [].
+    bins_dict : dict, optional
+        Dictionary specifying the number of bins for each variable, by default None.
+    group_columns : list, optional
+        List of columns to group by, by default ["basin", "filtered_by"].
+    """
+
+    plot_dir = fig_dir / Path("basin_histograms")
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    pdf_dir = plot_dir / Path("pdfs")
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    png_dir = plot_dir / Path("pngs")
+    png_dir.mkdir(parents=True, exist_ok=True)
+
+    rc_params = {
+        "font.size": fontsize,
+        "font.family": "DejaVu Sans",
+        # Add other rcParams settings if needed
+    }
+
+    with mpl.rc_context(rc=rc_params):
+        with tqdm(
+            desc="Plotting prior and posterior histograms",
+            total=len(df.groupby(by=group_columns, observed=True)),
+        ) as progress_bar:
+            for (basin, filter_var), m_df in df.groupby(by=group_columns, observed=True):
+                for k, v in enumerate(x_order):
+                    if bins_dict is not None:
+                        bins = bins_dict.get(v, "auto")
+                    else:
+                        bins = None
+                    fig, ax = plt.subplots(1, 1, figsize=figsize)
+                    _ = sns.histplot(
+                        data=m_df,
+                        x=v,
+                        hue="ensemble",
+                        hue_order=["Prior", "Posterior"],
+                        palette=sim_cmap,
+                        bins=bins,
+                        common_norm=False,
+                        stat="probability",
+                        multiple="dodge",
+                        alpha=0.8,
+                        linewidth=0.2,
+                        ax=ax,
+                        legend=True,
+                    )
+
+                    ax.set_ylabel("")
+                    ax.set_ylim(0, 1)
+                    ticklabels = ax.get_xticklabels()
+                    for tick in ticklabels:
+                        tick.set_rotation(15)
+
+                    fig.set_dpi(600)
+                    fn = pdf_dir / Path(f"{basin}_{v}_prior_posterior_filtered_by_{filter_var}.pdf")
+                    fig.savefig(fn)
+                    fn = png_dir / Path(f"{basin}_{v}_prior_posterior_filtered_by_{filter_var}.png")
+                    fig.savefig(fn)
+                    plt.close()
+                    del fig
+                progress_bar.update()
+
+
+@timeit
 def plot_basins(
     observed: xr.Dataset,
     prior: xr.Dataset,
@@ -715,8 +803,9 @@ def plot_timeseries(
                             add_legend=False,
                             ax=ax,
                             lw=0.20,
-                            ls="dotted",
+                            ls="dashed",
                             dashes=(1, 5),
+                            zorder=-1,
                         )
                     if add_median:
                         sim_prior_quantiles[0.5][p_var].plot(

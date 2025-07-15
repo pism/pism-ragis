@@ -927,7 +927,7 @@ def simplify_retreat(my_str: str) -> str:
     return short_str
 
 
-def simplify_ocean(my_str: str) -> int:
+def simplify_ocean(my_str: str) -> str:
     """
     Simplify ocean string.
 
@@ -941,16 +941,16 @@ def simplify_ocean(my_str: str) -> int:
     int
         The simplified ocean value.
     """
-    gcms: dict[str, int] = {
-        "ACCESS1-3_rcp85": 0,
-        "CNRM-CM6_ssp126": 1,
-        "CNRM-ESM2_ssp585": 2,
-        "CSIRO-Mk3.6_rcp85": 3,
-        "HadGEM2-ES_rcp85": 4,
-        "IPSL-CM5-MR_rcp85": 5,
-        "MIROC-ESM-CHEM_rcp26": 6,
-        "NorESM1-M_rcp85": 7,
-        "UKESM1-CM6_ssp585": 8,
+    gcms: dict[str, str] = {
+        "ACCESS1-3_rcp85": "ACCESS1-3",
+        "CNRM-CM6_ssp126": "CNRM-CM6",
+        "CNRM-ESM2_ssp585": "CNRM-ESM2",
+        "CSIRO-Mk3.6_rcp85": "CSIRO-Mk3.6",
+        "HadGEM2-ES_rcp85": "HadGEM2-ES",
+        "IPSL-CM5-MR_rcp85": "IPSL-CM5",
+        "MIROC-ESM-CHEM_rcp26": "MIROC-ESM",
+        "NorESM1-M_rcp85": "NorESM1-M",
+        "UKESM1-CM6_ssp585": "UKESM1-CM6",
     }
 
     gcm = "_".join(my_str.split("_")[1:3])

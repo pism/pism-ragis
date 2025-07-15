@@ -134,6 +134,7 @@ if __name__ == "__main__":
         decode_timedelta=True,
         decode_times=time_coder,
         engine=engine,
+        chunks={"time": -1},
     )
     stats = ds[["pism_config", "run_stats"]]
 
@@ -161,18 +162,17 @@ if __name__ == "__main__":
     basins_file = result_dir / f"basins_sums_ensemble_{ensemble}.nc"
 
     futures = []
-
     is_scattered = client.scatter(ds)
     future = client.submit(compute_basin, is_scattered, "GRACE")
     futures.append(future)
     for b, basin in basins.iterrows():
-        basin_scattered = client.scatter(ds.rio.clip([basin.geometry]))
+        basin_scattered = client.scatter(ds.rio.clip([basin.geometry], drop=False))
         basin_name = basin["SUBREGION1"]
         future = client.submit(compute_basin, basin_scattered, basin_name)
         futures.append(future)
     progress(futures)
     result = client.gather(futures)
-    basin_sums = xr.concat(result, dim="basin").drop_vars(["mapping", "spatial_ref"]).sortby(["basin"])
+    basin_sums = xr.concat(result, dim="basin").drop_vars(["mapping", "spatial_ref"], errors="ignore").sortby(["basin"])
     basin_sums = xr.merge([basin_sums, stats])
     if cf:
         n_basins = basin_sums["basin"].size
@@ -181,7 +181,7 @@ if __name__ == "__main__":
 
     basin_sums.to_netcdf(basins_file, engine=engine)
 
-    client.close()
+    # client.close()
     end = time.time()
     time_elapsed = end - start
     print(f"Time elapsed {time_elapsed:.0f}s")

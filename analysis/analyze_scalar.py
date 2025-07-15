@@ -49,6 +49,7 @@ from pism_ragis.filtering import (
 from pism_ragis.logger import get_logger
 from pism_ragis.plotting import (
     plot_basins,
+    plot_prior_posterior,
     plot_prior_posteriors,
     plot_sensitivity_indices,
     plot_timeseries,
@@ -183,7 +184,7 @@ if __name__ == "__main__":
     obs_cmap = config["Plotting"]["obs_cmap"]
     sim_cmap = config["Plotting"]["sim_cmap"]
     fudge_factor = config["Importance Sampling"]["mankoff_fudge_factor"]
-    retreat_methods = ["All"]
+    retreat_methods = ["All", "Free", "Prescribed Retreat"]
 
     if not notebook:
         backend = "Agg"
@@ -266,9 +267,9 @@ if __name__ == "__main__":
         plot_vars=["cumulative_mass_flux", "grounding_line_flux"],
         config=config,
         reference_date=reference_date,
-        y_lim=[[-20_000, 4000], [-2000, 0]],
-        add_lineplot=True,
-        add_median=True,
+        y_lim=[[-25_000, 4000], [-2500, 0]],
+        add_lineplot=False,
+        add_median=False,
     )
 
     da = observed.sel(time=slice(f"{filter_range[0]}", f"{filter_range[-1]}"))["grounding_line_flux"].mean(dim="time")
@@ -314,6 +315,7 @@ if __name__ == "__main__":
 
     params_sorted_list = list(chain(*params_sorted_by_category.values()))
     params_sorted_dict = {k: params_short_dict[k] for k in params_sorted_list}
+    plot_params_all = params_sorted_dict.copy()
     plot_params = params_sorted_dict.copy()
     del plot_params["geometry.front_retreat.prescribed.file"]
 
@@ -369,7 +371,10 @@ if __name__ == "__main__":
 
         obs_future = client.scatter(observed, broadcast=True)
 
+        prior_config = prp.filter_config(pism_config, params)
+
         futures = []
+        priors_df = []
         for obs_mean_var, obs_std_var, sim_var in zip(obs_mean_vars, obs_std_vars, sim_vars):
 
             sim_future = client.scatter(simulated_valid.expand_dims({"filtered_by": [obs_mean_var]}))
@@ -385,6 +390,10 @@ if __name__ == "__main__":
                 fudge_factor=fudge_factor,
             )
             futures.append(future)
+            prior_df = prp.config_to_dataframe(prior_config, ensemble="Prior")
+            prior_df["filtered_by"] = obs_mean_var
+            priors_df.append(prior_df)
+
         progress(futures)
         result = client.gather(futures)
         posterior_da = xr.concat(
@@ -397,14 +406,18 @@ if __name__ == "__main__":
         simulated_posterior = simulated_valid.sel({"exp_id": posterior_da["exp_id_sampled"]})
         simulated_posterior["ensemble"] = "Posterior"
 
-        prior_config = prp.filter_config(pism_config, params)
-        prior_df = prp.config_to_dataframe(prior_config, ensemble="Prior")
+        prior_df = pd.concat(priors_df).reset_index(drop=True)
 
         posterior_config = prp.filter_config(pism_config_valid.sel({"exp_id": posterior_da["exp_id_sampled"]}), params)
         posterior_df = prp.config_to_dataframe(posterior_config, ensemble="Posterior")
 
         prior_posterior = pd.concat([prior_df, posterior_df]).reset_index(drop=True)
         prior_posterior = prior_posterior.apply(prp.convert_column_to_numeric)
+
+        # Apply the functions to the corresponding columns
+        for col, functions in column_function_mapping.items():
+            for func in functions:
+                prior_posterior[col] = prior_posterior[col].apply(func)
 
         for filter_var in obs_mean_vars:
             plot_basins(
@@ -414,7 +427,7 @@ if __name__ == "__main__":
                 client=client,
                 filter_var=filter_var,
                 filter_range=filter_range,
-                figsize=(4.6, 2.8),
+                figsize=(4.8, 2.8),
                 fig_dir=fig_dir,
                 fontsize=6,
                 fudge_factor=fudge_factor,
@@ -431,11 +444,6 @@ if __name__ == "__main__":
         pdf_dir.mkdir(parents=True, exist_ok=True)
         png_dir = plot_dir / Path("pngs")
         png_dir.mkdir(parents=True, exist_ok=True)
-
-        # Apply the functions to the corresponding columns
-        for col, functions in column_function_mapping.items():
-            for func in functions:
-                prior_posterior[col] = prior_posterior[col].apply(func)
 
         prior_posterior.to_parquet(
             data_dir / Path(f"""prior_posterior_retreat_{retreat_method}_{filter_range[0]}-{filter_range[1]}.parquet""")
@@ -460,8 +468,14 @@ if __name__ == "__main__":
             if col in prior_posterior.columns:
                 prior_posterior[col] = prior_posterior[col].astype("category")
 
+        plot_prior_posterior(
+            prior_posterior.rename(columns=plot_params_all),
+            x_order=plot_params_all.values(),
+            fig_dir=fig_dir,
+            bins_dict=short_bins_dict,
+        )
         plot_prior_posteriors(
-            prior_posterior.rename(columns=plot_params),
+            prior_posterior.rename(columns=plot_params_all),
             x_order=plot_params.values(),
             fig_dir=fig_dir,
             bins_dict=short_bins_dict,
