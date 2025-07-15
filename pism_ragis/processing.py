@@ -1575,7 +1575,6 @@ def prepare_v(
     sim_ds: xr.Dataset,
     obs_mean_var: str | None = None,
     obs_std_var: str | None = None,
-    sim_var: str | None = None,
     coarsen: dict | None = None,
 ) -> tuple[xr.Dataset, xr.Dataset]:
     """
@@ -1591,8 +1590,6 @@ def prepare_v(
         The variable name for the observed mean data.
     obs_std_var : str
         The variable name for the observed standard deviation data.
-    sim_var : str
-        The variable name for the simulated data.
     coarsen : dict or None, optional
         Dictionary specifying the dimensions and factors for coarsening the simulated data, by default None.
 
@@ -1625,10 +1622,7 @@ def prepare_v(
 def prepare_grace(
     obs_ds: xr.Dataset,
     sim_ds: xr.Dataset,
-    obs_mean_var: str | None = None,
-    obs_std_var: str | None = None,
     sim_var: str | None = None,
-    coarsen: dict | None = None,
 ) -> tuple[xr.Dataset, xr.Dataset]:
     """
     Prepare dh/dt data for analysis.
@@ -1639,14 +1633,8 @@ def prepare_grace(
         The observed dataset.
     sim_ds : xr.Dataset
         The simulated dataset.
-    obs_mean_var : str
-        The variable name for the observed mean data.
-    obs_std_var : str
-        The variable name for the observed standard deviation data.
     sim_var : str
         The variable name for the simulated data.
-    coarsen : dict or None, optional
-        Dictionary specifying the dimensions and factors for coarsening the simulated data, by default None.
 
     Returns
     -------

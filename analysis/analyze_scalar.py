@@ -40,21 +40,18 @@ import xarray as xr
 from dask.distributed import Client, progress
 
 import pism_ragis.processing as prp
-from pism_ragis.analyze import run_sensitivity_analysis
+
+# from pism_ragis.analyze import run_sensitivity_analysis
 from pism_ragis.filtering import (
     filter_outliers,
     importance_sampling,
-    run_importance_sampling,
 )
 from pism_ragis.logger import get_logger
-from pism_ragis.plotting import (
+from pism_ragis.plotting import (  # plot_prior_posterior,
     plot_basins,
-    plot_prior_posterior,
     plot_prior_posteriors,
-    plot_sensitivity_indices,
     plot_timeseries,
 )
-from pism_ragis.processing import preprocess_config as preprocess
 
 logger = get_logger("pism_ragis")
 
@@ -185,6 +182,7 @@ if __name__ == "__main__":
     sim_cmap = config["Plotting"]["sim_cmap"]
     fudge_factor = config["Importance Sampling"]["mankoff_fudge_factor"]
     retreat_methods = ["All", "Free", "Prescribed Retreat"]
+    retreat_methods = ["All"]
 
     if not notebook:
         backend = "Agg"
@@ -394,7 +392,7 @@ if __name__ == "__main__":
             prior_df["filtered_by"] = obs_mean_var
             priors_df.append(prior_df)
 
-        progress(futures)
+        progress(futures, notebook=notebook)
         result = client.gather(futures)
         posterior_da = xr.concat(
             result,
@@ -468,12 +466,12 @@ if __name__ == "__main__":
             if col in prior_posterior.columns:
                 prior_posterior[col] = prior_posterior[col].astype("category")
 
-        plot_prior_posterior(
-            prior_posterior.rename(columns=plot_params_all),
-            x_order=plot_params_all.values(),
-            fig_dir=fig_dir,
-            bins_dict=short_bins_dict,
-        )
+        # plot_prior_posterior(
+        #     prior_posterior.rename(columns=plot_params_all),
+        #     x_order=plot_params_all.values(),
+        #     fig_dir=fig_dir,
+        #     bins_dict=short_bins_dict,
+        # )
         plot_prior_posteriors(
             prior_posterior.rename(columns=plot_params_all),
             x_order=plot_params.values(),
@@ -502,12 +500,7 @@ if __name__ == "__main__":
     #     sobol_input_df = params_df
 
     #     sensitivity_indices_list.append(
-    #         run_sensitivity_analysis(
-    #             sobol_input_df,
-    #             sobol_response,
-    #             filtering_vars,
-    #             notebook=notebook,
-    #         )
+    #         run_sensitivity_analysis(sobol_input_df, sobol_response, filtering_vars, notebook=notebook, client=client)
     #     )
 
     # sensitivity_indices = xr.concat(sensitivity_indices_list, dim="basin")
@@ -515,24 +508,16 @@ if __name__ == "__main__":
     # si_dir.mkdir(parents=True, exist_ok=True)
     # sensitivity_indices.to_netcdf(si_dir / Path("sensitivity_indices.nc"))
 
-    # sensitivity_indices = prp.add_prefix_coord(
-    #     sensitivity_indices, parameter_categories
-    # )
+    # sensitivity_indices = prp.add_prefix_coord(sensitivity_indices, parameter_categories)
 
     # # Group by the new coordinate and compute the sum for each group
     # indices_vars = [v for v in sensitivity_indices.data_vars if "_conf" not in v]
-    # aggregated_indices = (
-    #     sensitivity_indices[indices_vars].groupby("sensitivity_indices_group").sum()
-    # )
+    # aggregated_indices = sensitivity_indices[indices_vars].groupby("sensitivity_indices_group").sum()
     # # Group by the new coordinate and compute the sum the squares for each group
     # # then take the root.
     # indices_conf = [v for v in sensitivity_indices.data_vars if "_conf" in v]
     # aggregated_conf = (
-    #     sensitivity_indices[indices_conf]
-    #     .apply(np.square)
-    #     .groupby("sensitivity_indices_group")
-    #     .sum()
-    #     .apply(np.sqrt)
+    #     sensitivity_indices[indices_conf].apply(np.square).groupby("sensitivity_indices_group").sum().apply(np.sqrt)
     # )
     # aggregated = xr.merge([aggregated_indices, aggregated_conf])
     # aggregated.to_netcdf(si_dir / Path("aggregated_sensitivity_indices.nc"))

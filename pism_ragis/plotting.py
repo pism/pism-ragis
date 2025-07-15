@@ -462,7 +462,7 @@ def plot_prior_posterior(
             total=len(df.groupby(by=group_columns, observed=True)),
         ) as progress_bar:
             for (basin, filter_var), m_df in df.groupby(by=group_columns, observed=True):
-                for k, v in enumerate(x_order):
+                for _, v in enumerate(x_order):
                     if bins_dict is not None:
                         bins = bins_dict.get(v, "auto")
                     else:

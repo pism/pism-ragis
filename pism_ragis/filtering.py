@@ -30,7 +30,6 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 import xarray as xr
-from dask.diagnostics import ProgressBar
 
 import pism_ragis.processing as prp
 from pism_ragis.decorators import timeit
