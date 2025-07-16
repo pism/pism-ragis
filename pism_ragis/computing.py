@@ -631,22 +631,8 @@ systems["debug"] = {
     "queue": {},
 }
 
+
 systems["chinook"] = {
-    "mpido": "mpirun -np {cores} ./nodes_$SLURM_JOBID",
-    "submit": "sbatch",
-    "work_dir": "SLURM_SUBMIT_DIR",
-    "job_id": "SLURM_JOBID",
-    "queue": {
-        "t1standard": 24,
-        "t1small": 24,
-        "t2standard": 24,
-        "t2small": 24,
-        "debug": 24,
-        "analysis": 24,
-    },
-}
-
-systems["chinook-rl8"] = {
     "mpido": "mpirun -np {cores}",
     "submit": "sbatch",
     "work_dir": "SLURM_SUBMIT_DIR",
@@ -656,11 +642,12 @@ systems["chinook-rl8"] = {
         "t1small": 40,
         "t2standard": 40,
         "t2small": 40,
-        "debug": 40,
+        "debug": 24,
+        "analysis": 28,
     },
 }
 
-systems["chinook-rl8-24"] = {
+systems["chinook-24"] = {
     "mpido": "mpirun -np {cores}",
     "submit": "sbatch",
     "work_dir": "SLURM_SUBMIT_DIR",
@@ -671,10 +658,11 @@ systems["chinook-rl8-24"] = {
         "t2standard": 24,
         "t2small": 24,
         "debug": 24,
+        "analysis": 28,
     },
 }
 
-systems["chinook-rl8-40"] = {
+systems["chinook-40"] = {
     "mpido": "mpirun -np {cores}",
     "submit": "sbatch",
     "work_dir": "SLURM_SUBMIT_DIR",
@@ -684,7 +672,8 @@ systems["chinook-rl8-40"] = {
         "t1small": 40,
         "t2standard": 40,
         "t2small": 40,
-        "debug": 40,
+        "debug": 24,
+        "analysis": 28,
     },
 }
 
