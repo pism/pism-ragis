@@ -980,21 +980,21 @@ systems["chinook"][
 rm -rf ./nodes_$SLURM_JOBID
 """
 
-systems["chinook-rl8"][
+systems["chinook"][
     "footer"
 ] = """
 # clean up the list of hostnames
 rm -rf ./nodes_$SLURM_JOBID
 """
 
-systems["chinook-rl8-40"][
+systems["chinook-40"][
     "footer"
 ] = """
 # clean up the list of hostnames
 rm -rf ./nodes_$SLURM_JOBID
 """
 
-systems["chinook-rl8-24"][
+systems["chinook-24"][
     "footer"
 ] = """
 # clean up the list of hostnames
