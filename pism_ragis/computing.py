@@ -802,7 +802,7 @@ ulimit
 
 """
 
-systems["chinook-rl8"][
+systems["chinook-40"][
     "header"
 ] = """#!/bin/sh
 #SBATCH --partition={queue}
@@ -831,36 +831,7 @@ ulimit
 
 """
 
-systems["chinook-rl8-40"][
-    "header"
-] = """#!/bin/sh
-#SBATCH --partition={queue}
-#SBATCH --ntasks={cores}
-#SBATCH --tasks-per-node={ppn}
-#SBATCH --time={walltime}
-#SBATCH --mail-type=BEGIN
-#SBATCH --mail-type=END
-#SBATCH --mail-type=FAIL
-#SBATCH --output=pism.%j
-
-module list
-
-umask 007
-
-cd $SLURM_SUBMIT_DIR
-
-# Generate a list of compute node hostnames reserved for this job,
-# this ./nodes file is necessary for slurm to spawn mpi processes
-# across multiple compute nodes
-srun -l /bin/hostname | sort -n | awk '{{print $2}}' > ./nodes_$SLURM_JOBID
-
-ulimit -l unlimited
-ulimit -s unlimited
-ulimit
-
-"""
-
-systems["chinook-rl8-24"][
+systems["chinook-24"][
     "header"
 ] = """#!/bin/sh
 #SBATCH --partition={queue}
