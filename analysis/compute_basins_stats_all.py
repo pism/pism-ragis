@@ -25,6 +25,7 @@ import re
 import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from collections import OrderedDict
+from functools import partial
 from pathlib import Path
 
 import dask
@@ -83,6 +84,12 @@ if __name__ == "__main__":
         default="data/mouginot/Greenland_Basins_PS_v1.4.2_w_shelves.gpkg",
     )
     parser.add_argument(
+        "--regexp",
+        help="""Regular expression.""",
+        type=str,
+        default="id_(.+?)_",
+    )
+    parser.add_argument(
         "--temporal_range",
         help="""Time slice to extract.""",
         type=str,
@@ -96,9 +103,10 @@ if __name__ == "__main__":
     crs = options.crs
     engine = options.engine
     ensemble = options.ensemble
-    spatial_files = sorted(options.FILES)
+    regexp = options.regexp
     result_dir = Path(options.result_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
+    spatial_files = sorted(options.FILES)
 
     mb_vars = [
         "ice_mass",
@@ -115,7 +123,6 @@ if __name__ == "__main__":
         "tendency_of_ice_mass_due_to_calving",
         "tendency_of_ice_mass_due_to_forced_retreat",
     ]
-    regexp: str = "id_(.+?)_"
 
     client = Client()
     print(f"Open client in browser: {client.dashboard_link}")
@@ -125,11 +132,11 @@ if __name__ == "__main__":
     basin_url = Path(options.basin_url)
     basins = gp.read_file(basin_url).to_crs(crs)
 
-    time_coder = xr.coders.CFDatetimeCoder(use_cftime=False)
+    time_coder = xr.coders.CFDatetimeCoder(use_cftime=True)
 
     ds = xr.open_mfdataset(
         spatial_files,
-        preprocess=preprocess_config,
+        preprocess=partial(preprocess_config, regexp=regexp),
         parallel=True,
         decode_timedelta=True,
         decode_times=time_coder,
@@ -181,7 +188,7 @@ if __name__ == "__main__":
 
     basin_sums.to_netcdf(basins_file, engine=engine)
 
-    # client.close()
+    client.close()
     end = time.time()
     time_elapsed = end - start
     print(f"Time elapsed {time_elapsed:.0f}s")

@@ -25,6 +25,7 @@ import re
 import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from collections import OrderedDict
+from functools import partial
 from pathlib import Path
 from typing import Union
 
@@ -71,6 +72,12 @@ if __name__ == "__main__":
         default="RAGIS",
     )
     parser.add_argument(
+        "--regexp",
+        help="""Regular expression.""",
+        type=str,
+        default="id_(.+?)_",
+    )
+    parser.add_argument(
         "--result_dir",
         help="""Result directory.""",
         type=str,
@@ -96,6 +103,7 @@ if __name__ == "__main__":
     crs = options.crs
     engine = options.engine
     ensemble = options.ensemble
+    regexp = options.regexp
     result_dir = Path(options.result_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
 
@@ -117,18 +125,15 @@ if __name__ == "__main__":
         "tendency_of_ice_mass_due_to_calving",
         "tendency_of_ice_mass_due_to_forced_retreat",
     ]
-    regexp: str = "id_(.+?)_"
-
     client = Client()
     print(f"Open client in browser: {client.dashboard_link}")
 
     start = time.time()
-    time_coder = xr.coders.CFDatetimeCoder()
+    time_coder = xr.coders.CFDatetimeCoder(use_cftime=True)
 
     with dask.config.set(**{"array.slicing.split_large_chunks": True}):
         ds = xr.open_dataset(
             options.FILE[-1],
-            chunks="auto",
             decode_timedelta=True,
             decode_times=time_coder,
         )
