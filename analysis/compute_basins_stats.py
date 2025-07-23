@@ -117,26 +117,23 @@ if __name__ == "__main__":
         "tendency_of_ice_mass_due_to_basal_mass_flux",
         "tendency_of_ice_mass_due_to_basal_mass_flux_grounded",
         "tendency_of_ice_mass_due_to_basal_mass_flux_floating",
-        "tendency_of_ice_mass_due_to_frontal_melt",
+        # "tendency_of_ice_mass_due_to_frontal_melt",
         "tendency_of_ice_mass_due_to_discharge",
         "tendency_of_ice_mass_due_to_surface_mass_flux",
         "tendency_of_ice_mass_due_to_conservation_error",
         "tendency_of_ice_mass_due_to_flow",
-        "tendency_of_ice_mass_due_to_calving",
-        "tendency_of_ice_mass_due_to_forced_retreat",
+        # "tendency_of_ice_mass_due_to_calving",
+        # "tendency_of_ice_mass_due_to_forced_retreat",
     ]
+
     client = Client()
     print(f"Open client in browser: {client.dashboard_link}")
 
     start = time.time()
-    time_coder = xr.coders.CFDatetimeCoder(use_cftime=True)
+    time_coder = xr.coders.CFDatetimeCoder(use_cftime=False)
 
     with dask.config.set(**{"array.slicing.split_large_chunks": True}):
-        ds = xr.open_dataset(
-            options.FILE[-1],
-            decode_timedelta=True,
-            decode_times=time_coder,
-        )
+        ds = xr.open_dataset(options.FILE[-1], decode_timedelta=True, decode_times=time_coder, chunks="auto")
         stats = ds[["pism_config", "run_stats"]]
 
         m_id_re = re.search(regexp, ds.encoding["source"])
@@ -216,7 +213,7 @@ if __name__ == "__main__":
     progress(futures)
     result = client.gather(futures)
     basin_sums = xr.concat(result, dim="basin").drop_vars(["mapping", "spatial_ref"]).sortby(["basin"])
-    basin_sums = xr.merge([basin_sums, p_config, p_run_stats])
+    basin_sums = xr.merge([basin_sums, pism_config, run_stats])
     basin_sums = basin_sums.expand_dims({"exp_id": [m_id]})
     if cf:
         basin_sums["basin"] = basin_sums["basin"].astype(f"S{n_basins}")

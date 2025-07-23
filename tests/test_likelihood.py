@@ -23,7 +23,6 @@ Tests for likelihood module.
 """
 
 import numpy as np
-import pytest
 import xarray as xr
 from scipy.special import pseudo_huber
 from sklearn.metrics import jaccard_score
@@ -33,50 +32,6 @@ from pism_ragis.likelihood import (
     log_normal,
     log_pseudo_huber,
 )
-
-
-@pytest.fixture(name="weights_da")
-def fixture_create_weights_da() -> xr.DataArray:
-    """
-    Fixture to create a sample weights DataArray for testing.
-
-    Returns
-    -------
-    xr.DataArray
-        A DataArray with dimensions ('basin', 'exp_id', 'ensemble_id') and sample weights data.
-    """
-    return xr.DataArray.from_dict(
-        {
-            "dims": ("basin", "exp_id", "ensemble_id"),
-            "attrs": {},
-            "data": [
-                [
-                    [6.060561375673975e-05],
-                    [0.696964558202507],
-                    [0.29823485321531285],
-                    [0.004739861264801057],
-                    [1.2170362236786714e-07],
-                ],
-                [
-                    [0.15397218134232646],
-                    [0.056671155910062845],
-                    [0.13327299064213569],
-                    [0.09575498529499678],
-                    [0.5603286868104781],
-                ],
-            ],
-            "coords": {
-                "ensemble_id": {
-                    "dims": ("ensemble_id",),
-                    "attrs": {},
-                    "data": ["RAGIS"],
-                },
-                "basin": {"dims": ("basin",), "attrs": {}, "data": ["CE", "NO"]},
-                "exp_id": {"dims": ("exp_id",), "attrs": {}, "data": [0, 1, 2, 3, 5]},
-            },
-            "name": "weights",
-        }
-    )
 
 
 def test_log_normal_ndarray() -> None:

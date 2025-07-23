@@ -425,6 +425,7 @@ done\n\n
             pism = computing.generate_prefix_str(pism_exec)
 
             general_params_dict = {
+                "time.reference_date": simulation_start_year,
                 "time.start": simulation_start_year,
                 "time.end": simulation_end_year,
                 "time.calendar": "standard",
