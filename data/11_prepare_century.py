@@ -28,13 +28,13 @@ from pathlib import Path
 import cf_xarray.units  # pylint: disable=unused-import
 import numpy as np
 import pint_xarray  # pylint: disable=unused-import
-import toml
+import rioxarray
 import xarray as xr
 from pyproj import Proj, Transformer
 
 from pism_ragis.domain import create_domain
 
-xr.set_options(keep_attrs=True)
+xr.set_options(keep_attrs=False)
 
 
 if __name__ == "__main__":
@@ -66,8 +66,8 @@ if __name__ == "__main__":
     b = bmelt_0 - a * lat_0
 
     X, Y = np.meshgrid(bm.x, bm.y)
-
-    proj_map = Proj("EPSG:3413")
+    crs = "EPSG:3413"
+    proj_map = Proj(crs)
     wgs84 = Proj("EPSG:4326")
     tf = Transformer.from_proj(proj_map, wgs84, always_xy=True)
 
@@ -77,18 +77,33 @@ if __name__ == "__main__":
     bmelt[Lat < lat_0] = a * lat_0 + b
     bmelt[Lat > lat_1] = a * lat_1 + b
     shelfbmassflux[:] = bmelt
-    shelfbmassflux.attrs.update({"units": "kg m^-2 yr^-1"})
+    shelfbmassflux.attrs = {"units": "kg m^-2 yr^-1"}
     shelfbmassflux.name = "shelfbmassflux"
     shelfbtemp = xr.zeros_like(bm["bed"])
-    shelfbtemp.attrs.update({"units": "celsisus"})
+    shelfbtemp.attrs = {"units": "celsisus"}
     shelfbtemp.name = "shelfbtemp"
 
-    ds = xr.merge([shelfbmassflux, shelfbtemp])
+    lat_0 = 74.0
+    lat_1 = 76.0
+    tct_0 = 400.0
+    tct_1 = 50.0
+    a_tct = (tct_1 - tct_0) / (lat_1 - lat_0)
+    b_tct = tct_0 - a_tct * lat_0
+    tct = a_tct * Lat + b_tct
+    tct[Lat < lat_0] = a_tct * lat_0 + b_tct
+    tct[Lat > lat_1] = a_tct * lat_1 + b_tct
+    thickness_calving_threshold = xr.zeros_like(bm["bed"])
+    thickness_calving_threshold[:] = tct
+    thickness_calving_threshold.name = "thickness_calving_threshold"
+    thickness_calving_threshold.attrs = {"units": "m"}
+
+    ds = xr.merge([shelfbmassflux, shelfbtemp, thickness_calving_threshold])
     t = xr.date_range("1900-01-01,", "2100-01-01", freq="YS")
     ds = ds.expand_dims({"time": [t[0]]})
     ds["time_bounds"] = [t[0], t[-1]]
     ds["time"].attrs["bounds"] = "time_bounds"
     ds["time"].encoding["units"] = "hours since 1900-01-01 00:00:00"
     ds["time"].encoding["calendar"] = "standard"
-
+    ds = ds.rio.set_spatial_dims(x_dim="x", y_dim="y")
+    ds.rio.write_crs(crs, inplace=True)
     ds.to_netcdf(p / Path("as19_latitudinal_forcing.nc"))
