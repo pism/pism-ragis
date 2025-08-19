@@ -239,6 +239,8 @@ def create_domain(
         x_bounds = [[x_bnds[0], x_bnds[1]]]
         y_bounds = [[y_bnds[0], y_bnds[1]]]
 
+    print(len(x))
+
     x_bnds_dim = f"{x_dim}_bnds"
     y_bnds_dim = f"{y_dim}_bnds"
     coords = {

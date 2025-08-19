@@ -429,11 +429,11 @@ done\n\n
                 "time.start": simulation_start_year,
                 "time.end": simulation_end_year,
                 "time.calendar": "standard",
+                "input.forcing.time_extrapolation": "yes",
                 "output.format": oformat,
                 "output.compression_level": compression_level,
                 "config_override": "$config",
                 "stress_balance.ice_free_thickness_standard": 5,
-                "input.forcing.time_extrapolation": "true",
                 "energy.ch_warming.enabled": "false",
                 "energy.bedrock_thermal.file": "$data_dir/bheatflux/geothermal_heat_flow_map_10km.nc",
             }
