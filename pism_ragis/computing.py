@@ -209,6 +209,9 @@ spatial_ts_vars["ml"] = [
     "strain_rates",
     "topg",
     "taud",
+    "taub",
+    "tauxz",
+    "tauyz",
 ]
 
 spatial_ts_vars["standard"] = [
