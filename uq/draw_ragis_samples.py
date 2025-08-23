@@ -12,7 +12,7 @@ from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
-from pyDOE2 import lhs
+from pyDOE3 import lhs
 from SALib.sample import sobol
 from scipy.stats.distributions import randint, uniform
 
@@ -87,7 +87,7 @@ dists: Dict[str, Any] = {
     },
     "calving-calib": {
         "uq": {
-            "calving.vonmises_calving.sigma_max": uniform(loc=250_000, scale=750_000),
+            "calving.vonmises_calving.sigma_max": uniform(loc=350_000, scale=750_000),
         },
         "default_values": {
             "basal_resistance.pseudo_plastic.q": 0.7508221,
