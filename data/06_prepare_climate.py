@@ -406,7 +406,7 @@ def process_mar_cdo(
     start = time.time()
     # fix year and grid
     cdo.setmisstodis(
-        input=f"""-settbounds,1mon -settaxis,1900-01-01,,1mon -aexpr,"precipitation=snowfall+rainfall" -chname,{chname} -setattribute,{setattribute} -setgrid,grids/grid_mar_v3.5.2.txt -selvar,{",".join(vars_dict.keys())} -mergetime """
+        input=f"""-settbounds,1mon -settaxis,1940-01-01,,1mon -aexpr,"precipitation=snowfall+rainfall" -chname,{chname} -setattribute,{setattribute} -setgrid,grids/grid_mar_v3.12.txt -selvar,{",".join(vars_dict.keys())} -mergetime """
         + infiles,
         output=outfile,
         options=f"-f nc4 -z zip_2 -P {max_workers}",
@@ -525,13 +525,13 @@ def download_mar(
             year_file = year_file_pattern.format(year=year)
             url = base_url + year_file
             output_path = output_dir / year_file
-            futures.append(executor.submit(download_file, url, output_path))
+            #  futures.append(executor.submit(download_file, url, output_path))
             responses.append(output_path)
-        for future in as_completed(futures):
-            try:
-                future.result()
-            except Exception as e:
-                print(f"An error occurred: {e}")
+        # for future in as_completed(futures):
+        #     try:
+        #         future.result()
+        #     except Exception as e:
+        #         print(f"An error occurred: {e}")
 
     return responses
 
@@ -635,18 +635,18 @@ if __name__ == "__main__":
     }
 
     # http://ftp.climato.be/fettweis/MARv3.5.2/Greenland/20CRv2c_1900-2014_20km/MARv3.5.2-20km-monthly-20CRv2c-1900.nc
-    start_year, end_year = 1900, 2014
-    output_file = result_dir / Path(f"MARv3.5.2-20CRv2c_{start_year}_{end_year}.nc")
-    process_mar_cdo(
-        data_dir=result_dir,
-        vars_dict=mar20c_vars_dict,
-        start_year=start_year,
-        end_year=end_year,
-        output_file=output_file,
-        mar_url="http://ftp.climato.be/fettweis/MARv3.5.2/Greenland/20CRv2c_1900-2014_20km/",
-        year_file_pattern="MARv3.5.2-20km-monthly-20CRv2c-{year}.nc",
-        max_workers=max_workers,
-    )
+    # start_year, end_year = 1900, 2014
+    # output_file = result_dir / Path(f"MARv3.5.2-20CRv2c_{start_year}_{end_year}.nc")
+    # process_mar_cdo(
+    #     data_dir=result_dir,
+    #     vars_dict=mar20c_vars_dict,
+    #     start_year=start_year,
+    #     end_year=end_year,
+    #     output_file=output_file,
+    #     mar_url="http://ftp.climato.be/fettweis/MARv3.5.2/Greenland/20CRv2c_1900-2014_20km/",
+    #     year_file_pattern="MARv3.5.2-20km-monthly-20CRv2c-{year}.nc",
+    #     max_workers=max_workers,
+    # )
 
     # start_year, end_year = 1940, 2023
     # output_file = result_dir / Path(
@@ -661,16 +661,16 @@ if __name__ == "__main__":
     #     max_workers=max_workers,
     # )
 
-    # start_year, end_year = 1940, 2023
-    # output_file = result_dir / Path(f"MARv3.14-monthly-ERA5_{start_year}_{end_year}.nc")
-    # process_mar_cdo(
-    #     data_dir=result_dir,
-    #     vars_dict=mar_vars_dict,
-    #     start_year=start_year,
-    #     end_year=end_year,
-    #     output_file=output_file,
-    #     max_workers=max_workers,
-    # )
+    start_year, end_year = 1940, 2023
+    output_file = result_dir / Path(f"MARv3.14-monthly-ERA5_{start_year}_{end_year}.nc")
+    process_mar_cdo(
+        data_dir=result_dir,
+        vars_dict=mar_vars_dict,
+        start_year=start_year,
+        end_year=end_year,
+        output_file=output_file,
+        max_workers=max_workers,
+    )
 
     # start_year, end_year = 1980, 2021
     # output_file = result_dir / Path(f"HIRHAM5-monthly-ERA5_1975_{end_year}.nc")
