@@ -72,9 +72,7 @@ if __name__ == "__main__":
     speed_ds = xr.open_dataset(speed_file)
     speed_da = speed_ds[speed_var].interp_like(pism_ds["tillwat"])
     tillwat_da = pism_ds["tillwat"]
-    pism_ds["tillwat"] = tillwat_da.where(
-        speed_da <= speed_threshold, other=tillwat_max
-    )
+    pism_ds["tillwat"] = tillwat_da.where(speed_da <= speed_threshold, other=tillwat_max)
     tillwat_mask_updated = (pism_ds["tillwat"] > 0.0).where(pism_ds["mask"] == 2)
 
     twa_o = tillwat_mask.sum() * area_km2

@@ -1,6 +1,6 @@
 [project]
 name = "pism-ragis"
-version = "0.3.2"
+version = "0.3.3"
 maintainers = [{name = "Andy Aschwanden", email = "andy.aschwanden@gmail.com"}]
 description = """Home of NASA ROSES project "A Reanalysis of the Greenland Ice Sheet"""
 readme = "README.md"

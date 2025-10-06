@@ -41,12 +41,19 @@ import seaborn as sns
 import toml
 import xarray as xr
 from dask.distributed import Client, progress
+from shapely.geometry import mapping
 from tqdm.auto import tqdm
 
 from pism_ragis.filtering import importance_sampling
 from pism_ragis.likelihood import log_jaccard_score_xr, log_normal_xr
 from pism_ragis.logger import get_logger
-from pism_ragis.processing import prepare_liafr, preprocess_config, preprocess_nc
+from pism_ragis.processing import (
+    config_to_dataframe,
+    filter_config,
+    prepare_liafr,
+    preprocess_config,
+    preprocess_nc,
+)
 
 xr.set_options(
     keep_attrs=True,
@@ -55,6 +62,7 @@ xr.set_options(
     use_bottleneck=True,
     use_opt_einsum=True,
 )
+
 
 plt.style.use("tableau-colorblind10")
 logger = get_logger("pism_ragis")
@@ -115,12 +123,6 @@ if __name__ == "__main__":
     )
     parser.add_argument("--n_jobs", help="""Number of parallel jobs.""", type=int, default=4)
     parser.add_argument(
-        "--notebook",
-        help="""Use when running in a notebook to display a nicer progress bar. Default=False.""",
-        action="store_true",
-        default=False,
-    )
-    parser.add_argument(
         "--parallel",
         help="""Open dataset in parallel. Default=False.""",
         action="store_true",
@@ -149,7 +151,6 @@ if __name__ == "__main__":
     spatial_files = sorted(options.FILES)
     filter_var = options.filter_var
     fudge_factor = options.fudge_factor
-    notebook = options.notebook
     parallel = options.parallel
     input_data_dir = options.data_dir
     resampling_frequency = options.resampling_frequency
@@ -168,20 +169,21 @@ if __name__ == "__main__":
 
     start = time.time()
 
+    filter_range = ["1980", "2018"]
     obs_mean_var = "land_ice_area_fraction_retreat"
     obs_std_var = "land_ice_area_fraction_retreat_uncertainty"
     sim_var = "land_ice_area_fraction_retreat"
-    filter_range = ["1980", "2019"]
     sum_dims = ["y", "x", "time"]
-    obs_file = input_data_dir + "/front_retreat/pism_g450m_frontretreat_calfin_1980_2019_YM.nc"
+    obs_file = input_data_dir + "/front_retreat/pism_g450m_frontretreat_calfin_1972_2019_YE.nc"
     log_likelihood = log_jaccard_score_xr
     prepare_input = prepare_liafr
 
-    basins_file = input_data_dir + "/basins/Greenland_Basins_PS_v1.4.2.shp"
-    basins = gp.read_file(basins_file)
-    basins = basins[basins["GL_TYPE"] == "TW"]
-
     crs = "EPSG:3413"
+    basins_file = input_data_dir + "/basins/glaciers_ext.gpkg"
+    basins = gp.read_file(basins_file).to_crs(crs)
+    basins = basins[basins["GL_TYPE"] == "TW"]
+    basins = basins[basins["SUBREGION1"] == "CW"]
+    # basins = basins[basins["NAME"] == "JAKOBSHAVN_ISBRAE"]
 
     params = ["calving.vonmises_calving.sigma_max"]
 
@@ -202,7 +204,7 @@ if __name__ == "__main__":
     simulated = simulated.sel({"time": slice(*filter_range)})
     observed = observed.sel({"time": slice(*filter_range)})
 
-    stats = simulated[["pism_config", "run_stats"]]
+    stats = simulated[["pism_config"]].isel(time=0).sel(pism_config_axis=params).astype(float)
 
     obs, sim = prepare_input(
         observed,
@@ -214,24 +216,30 @@ if __name__ == "__main__":
 
     obs = obs.chunk({"time": -1, "x": 1000, "y": 1000})
     sim = sim.chunk({"time": -1, "exp_id": 1, "x": 1000, "y": 1000})
-
-    obs_future = client.scatter(obs, broadcast=True)
     futures = []
     results = []
-    for b, basin in tqdm(basins.iterrows(), total=len(basins)):
-        if b < 2:
+    print("=" * 80)
+    print("Processing glaciers")
+    print("=" * 80)
+    for b, basin in basins.iterrows():
+        try:
+            print(basin.NAME)
+            obs_glacier = (
+                obs.rio.set_spatial_dims(x_dim="x", y_dim="y")
+                .rio.write_crs(crs)
+                .rio.clip([basin.geometry], drop=True)
+                .expand_dims({"basin": [basin["NAME"]]})
+            )
             sim_glacier = (
                 sim.rio.set_spatial_dims(x_dim="x", y_dim="y")
                 .rio.write_crs(crs)
-                .rio.clip([basin.geometry], drop=False)
+                .rio.clip([basin.geometry], drop=True)
                 .expand_dims({"basin": [basin["NAME"]]})
             )
-            sim_future = client.scatter(xr.merge([sim_glacier, stats]))
 
-            f = client.submit(
-                importance_sampling,
-                observed=obs_future,
-                simulated=sim_future,
+            f = importance_sampling(
+                observed=obs_glacier,
+                simulated=sim_glacier,
                 obs_mean_var=obs_mean_var,
                 obs_std_var=obs_std_var,
                 sim_var=sim_var,
@@ -239,14 +247,25 @@ if __name__ == "__main__":
                 log_likelihood=log_likelihood,
                 fudge_factor=fudge_factor,
                 sum_dims=sum_dims,
+                compute=False,
             )
-            futures.append(f)
-    progress(futures)
-    results = client.gather(futures)
+            fut = client.compute(f)
+            futures.append(fut)
+        except:
+            print(f"Not processed: {basin.NAME}")
 
-    print(results)
+    progress(futures)  # <-- now shows live progress
+    results = client.gather(futures)
     end = time.time()
     time_elapsed = end - start
     print(f"Time elapsed {time_elapsed:.0f}s")
+
+    result = xr.concat(results, dim="basin")
+
+    importance_sampled_ids = result["exp_id_sampled"]
+    simulated_posterior = stats.sel(exp_id=importance_sampled_ids).sel(pism_config_axis=params)
+    posterior_config = simulated_posterior.pism_config
+    df = config_to_dataframe(posterior_config).drop(columns=["exp_id", "aux_id", "time", "spatial_ref"])
+    m = df.groupby(by="basin").median().reset_index()
 
     client.close()

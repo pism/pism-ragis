@@ -370,9 +370,7 @@ def uniquify_list(seq: list, idfun: Callable | None = None) -> list:
     return result
 
 
-def generate_stress_balance(
-    stress_balance: str, additional_params_dict: dict
-) -> OrderedDict[str, str]:
+def generate_stress_balance(stress_balance: str, additional_params_dict: dict) -> OrderedDict[str, str]:
     """
     Generate stress balance params.
 
@@ -499,9 +497,7 @@ def generate_calving(calving: str, **kwargs: dict) -> OrderedDict[str, str]:
     ):
         params_dict["calving.methods"] = f"{calving},thickness_calving"
     elif calving in ("hybrid_calving"):
-        params_dict["calving.methods"] = (
-            "eigen_calving,vonmises_calving,thickness_calving"
-        )
+        params_dict["calving.methods"] = "eigen_calving,vonmises_calving,thickness_calving"
 
     elif calving in ("float_kill",):
         params_dict["calving.models"] = calving
@@ -1221,9 +1217,7 @@ def make_batch_header(
             ppn = system["queue"][queue]
         except Exception as exc:
             queues = list(system["queue"].keys())
-            raise ValueError(
-                f"There is no queue {queue} on {system_name}. Pick one of {queues}."
-            ) from exc
+            raise ValueError(f"There is no queue {queue} on {system_name}. Pick one of {queues}.") from exc
         # round up when computing the number of nodes needed to run on 'n_cores' cores
         nodes = int(math.ceil(float(n_cores) / ppn))
 

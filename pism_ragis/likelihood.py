@@ -50,7 +50,21 @@ def log_jaccard_score(
         The log-likelihood of the data given the distribution parameters.
     """
 
-    return -fudge_factor * jaccard_score(mu, x, average="binary")
+    xa = np.asarray(x)
+    ma = np.asarray(mu)
+
+    # common finite mask
+    mask = np.isfinite(xa) & np.isfinite(ma)
+
+    if not mask.any():
+        # no overlapping finite data → define score = 0 (or pick a convention)
+        return -fudge_factor * 0.0
+
+    # binarize: treat >0 as 1 (adjust threshold to your use-case)
+    y_true = (ma[mask] > 0).astype(np.int8)
+    y_pred = (xa[mask] > 0).astype(np.int8)
+
+    return -fudge_factor * jaccard_score(y_true, y_pred, average="binary")
 
 
 def log_jaccard_score_xr(

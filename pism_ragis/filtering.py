@@ -180,7 +180,6 @@ def importance_sampling(
 
     # Extract the simulated data
     sim = simulated[sim_var]
-
     if likelihood_kwargs is None:
         likelihood_kwargs = {}
 

@@ -26,7 +26,6 @@ import time
 import warnings
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from pathlib import Path
-from typing import Dict, Union
 
 import cf_xarray as cfxr
 import dask
@@ -124,11 +123,11 @@ def create_ds(
     date: pd.Timestamp,
     ds1: gp.GeoDataFrame,
     ds2: gp.GeoDataFrame,
-    geom: Dict,
+    geom: dict,
     resolution: float = 450,
     crs: str = "EPSG:3413",
-    result_dir: Union[Path, str] = "front_retreat",
-    encoding_time: Dict = {"time": {"units": "hours since 1972-01-01 00:00:00", "calendar": "standard"}},
+    result_dir: Path | str = "front_retreat",
+    encoding_time: dict = {"time": {"units": "hours since 1972-01-01 00:00:00", "calendar": "standard"}},
 ) -> Path:
     """
     Create a dataset representing land ice area fraction retreat and save it to a NetCDF file.
@@ -141,7 +140,7 @@ def create_ds(
         The first GeoDataFrame containing the initial geometries.
     ds2 : gp.GeoDataFrame
         The second GeoDataFrame containing the geometries to be compared.
-    geom : Dict
+    geom : dict
         The geometry dictionary for the geocube.
     resolution : float, optional
         The resolution of the geocube, by default 450.
@@ -149,7 +148,7 @@ def create_ds(
         The coordinate reference system, by default "EPSG:3413".
     result_dir : Union[Path, str], optional
         The directory where the result NetCDF file will be saved, by default "front_retreat".
-    encoding_time : Dict, optional
+    encoding_time : dict, optional
         The encoding settings for the time variable, by default {"time": {"units": "hours since 1972-01-01 00:00:00", "calendar": "standard"}}.
 
     Returns
@@ -241,7 +240,8 @@ if __name__ == "__main__":
     calfin.geometry = geom_valid
     calfin_dissolved = calfin.dissolve()
 
-    imbie_dissolved = imbie.dissolve()
+    imbie_gis = imbie[imbie["SUBREGION1"] == "GIS"]
+    imbie_dissolved = imbie_gis.dissolve()
     imbie_union = imbie_dissolved.union(calfin_dissolved)
 
     def dissolve_range(df, k):
@@ -250,58 +250,40 @@ if __name__ == "__main__":
         """
         return df.reset_index().iloc[range(k)].dissolve(aggfunc="last")
 
-    n_calfin_grouped = len([date for date, df in calfin.groupby(by=pd.Grouper(freq="ME")) if len(df) > 0])
-    with tqdm_joblib(tqdm(desc="Grouping geometries", total=n_calfin_grouped)) as progress_bar:
-        result = Parallel(n_jobs=n_jobs)(
-            delayed(dissolve)(ds, date) for date, ds in calfin.groupby(by=pd.Grouper(freq="ME")) if len(ds) > 0
-        )
-    calfin_grouped = pd.concat(result)
+    for freq in ["YE", "ME"]:
+        n_calfin_grouped = len([date for date, df in calfin.groupby(by=pd.Grouper(freq=freq)) if len(df) > 0])
+        with tqdm_joblib(tqdm(desc="Grouping geometries", total=n_calfin_grouped)) as progress_bar:
+            result = Parallel(n_jobs=n_jobs)(
+                delayed(dissolve)(ds, date) for date, ds in calfin.groupby(by=pd.Grouper(freq=freq)) if len(ds) > 0
+            )
+        calfin_grouped = pd.concat(result)
 
-    with tqdm_joblib(tqdm(desc="Dissolving geometries", total=n_calfin_grouped)) as progress_bar:
-        result = Parallel(n_jobs=n_jobs)(delayed(dissolve_range)(calfin_grouped, k) for k in range(len(calfin_grouped)))
+        with tqdm_joblib(tqdm(desc="Dissolving geometries", total=n_calfin_grouped)) as progress_bar:
+            result = Parallel(n_jobs=n_jobs)(
+                delayed(dissolve_range)(calfin_grouped, k) for k in range(len(calfin_grouped))
+            )
 
-    calfin_aggregated = pd.concat(result[1::]).set_index("Date")
-    n_calfin_aggregated = len(calfin_aggregated)
-    with tqdm_joblib(tqdm(desc="Aggregating geometries", total=n_calfin_aggregated)) as progress_bar:
-        result = Parallel(n_jobs=n_jobs)(
-            delayed(create_ds)(date, ds, imbie_union, geom=geom, resolution=resolution)
-            for date, ds in calfin_aggregated.groupby(by=pd.Grouper(freq="ME"))
-            if len(ds) > 0
-        )
+        calfin_aggregated = pd.concat(result[1::]).set_index("Date")
+        n_calfin_aggregated = len(calfin_aggregated)
+        with tqdm_joblib(tqdm(desc="Aggregating geometries", total=n_calfin_aggregated)) as progress_bar:
+            result = Parallel(n_jobs=n_jobs)(
+                delayed(create_ds)(date, ds, imbie_union, geom=geom, resolution=resolution)
+                for date, ds in calfin_aggregated.groupby(by=pd.Grouper(freq=freq))
+                if len(ds) > 0
+            )
 
-    p = Path("front_retreat")
-    fn = Path(f"pism_g{resolution}m_frontretreat_calfin_1972_2019.nc")
-    p_fn = p / fn
+        p = Path("front_retreat")
+        fn = Path(f"pism_g{resolution}m_frontretreat_calfin_1972_2019_{freq}.nc")
+        p_fn = p / fn
 
-    print(f"Merging datasets and saving to {str(p_fn.absolute())}")
+        print(f"Merging datasets and saving to {str(p_fn.absolute())}")
 
-    result_filtered = [element for element in result if element is not None]
+        result_filtered = [element for element in result if element is not None]
 
-    start = time.time()
-    ds = xr.open_mfdataset(result_filtered).load()
-    ds = ds.cf.add_bounds("time")
-    ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
-    ds.rio.write_crs(crs, inplace=True)
+        start = time.time()
+        ds = xr.open_mfdataset(result_filtered).load()
+        ds = ds.cf.add_bounds("time")
+        ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
+        ds.rio.write_crs(crs, inplace=True)
 
-    ds.to_netcdf(p_fn)
-
-    p = Path("front_retreat")
-    fn = Path(f"pism_g{resolution}m_frontretreat_calfin_1980_2019_YM.nc")
-    p_fn = p / fn
-
-    ds.sel({"time": slice("1980", "2019")}).resample({"time": "YS"}).mean().to_netcdf(p_fn)
-
-    p = Path("front_retreat")
-    fn = Path(f"pism_g{resolution}m_frontretreat_calfin_1972.nc")
-    p_fn = p / fn
-
-    ds.sel({"time": "1972"}).isel({"time": 0}).to_netcdf(p_fn)
-
-    p = Path("front_retreat")
-    fn = Path(f"pism_g{resolution}m_frontretreat_calfin_2007.nc")
-    p_fn = p / fn
-
-    ds.sel({"time": "2007"}).isel({"time": -1}).to_netcdf(p_fn)
-    end = time.time()
-    time_elapsed = end - start
-    print(f"Time elapsed {time_elapsed:.0f}s")
+        ds.to_netcdf(p_fn)

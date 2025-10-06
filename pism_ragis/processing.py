@@ -276,7 +276,6 @@ def preprocess_config(
         ds[dim] = [m_id]
 
     p_config = ds["pism_config"]
-    p_run_stats = ds["run_stats"]
 
     # List of suffixes to exclude
     suffixes_to_exclude = ["_doc", "_type", "_units", "_option", "_choices"]
@@ -286,13 +285,10 @@ def preprocess_config(
     if "geometry.front_retreat.prescribed.file" not in config.keys():
         config["geometry.front_retreat.prescribed.file"] = "false"
 
-    stats = p_run_stats
     config_sorted = OrderedDict(sorted(config.items()))
 
     pc_keys = np.array(list(config_sorted.keys()))
     pc_vals = np.array(list(config_sorted.values()))
-    rs_keys = np.array(list(stats.attrs.keys()))
-    rs_vals = np.array(list(stats.attrs.values()))
 
     pism_config = xr.DataArray(
         pc_vals.reshape(-1, 1),
@@ -300,19 +296,12 @@ def preprocess_config(
         coords={"pism_config_axis": pc_keys, dim: [m_id]},
         name="pism_config",
     )
-    run_stats = xr.DataArray(
-        rs_vals.reshape(-1, 1),
-        dims=["run_stats_axis", dim],
-        coords={"run_stats_axis": rs_keys, dim: [m_id]},
-        name="run_stats",
-    )
     ds = xr.merge(
         [
             ds.drop_vars(["pism_config", "run_stats"], errors="ignore").drop_dims(
                 ["pism_config_axis", "run_stats_axis"], errors="ignore"
             ),
             pism_config,
-            run_stats,
         ]
     )
     return ds.drop_vars(drop_vars, errors="ignore").drop_dims(drop_dims, errors="ignore")
@@ -1492,12 +1481,12 @@ def prepare_liafr(
     tuple[xr.Dataset, xr.Dataset]
         A tuple containing the prepared observed and simulated datasets.
     """
-    thk_mask = (sim_ds["thk"] > 10).astype("int8").persist()
-    s_liafr = thk_mask.resample(time="YS").mean()
+    thk_mask = (sim_ds["thk"] > 10).persist()
+    s_liafr = thk_mask.resample(time="YE").mean()
     s_liafr.name = sim_var
-    o_liafr = obs_ds[obs_mean_var].interp_like(s_liafr, method="nearest").fillna(0)
-    s_liafr_b = s_liafr.astype(bool)
-    o_liafr_b = o_liafr.astype(bool)
+    o_liafr = obs_ds[obs_mean_var].interp_like(s_liafr, method="nearest")
+    s_liafr_b = s_liafr
+    o_liafr_b = o_liafr
     sim = s_liafr_b.to_dataset()
 
     o_liafr_b_uncertainty = xr.ones_like(o_liafr_b)

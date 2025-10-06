@@ -96,9 +96,7 @@ if __name__ == "__main__":
     # set up the option parser
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.description = "Generating scripts for warming experiments."
-    parser.add_argument(
-        "FILE", nargs=1, help="Input file to restart from", default=None
-    )
+    parser.add_argument("FILE", nargs=1, help="Input file to restart from", default=None)
     parser.add_argument(
         "-n",
         "--n_procs",
@@ -181,9 +179,7 @@ if __name__ == "__main__":
         help="data directory",
         default=abspath(join(script_directory, "../data/")),
     )
-    parser.add_argument(
-        "--o_dir", dest="output_dir", help="output directory", default="test_dir"
-    )
+    parser.add_argument("--o_dir", dest="output_dir", help="output directory", default="test_dir")
     parser.add_argument(
         "--o_size",
         dest="osize",
@@ -391,9 +387,7 @@ done\n\n
     simulation_start_year = options.start
     simulation_end_year = options.end
 
-    batch_header, batch_system = computing.make_batch_header(
-        options.system, nn, walltime, queue, gid=gid
-    )
+    batch_header, batch_system = computing.make_batch_header(options.system, nn, walltime, queue, gid=gid)
     post_header = computing.make_batch_post_header(options.system)
 
     for n, row in enumerate(uq_df.iterrows()):
@@ -405,17 +399,13 @@ done\n\n
 
         full_exp_name = "_".join(
             [
-                "_".join(
-                    ["_".join([k, str(v)]) for k, v in list(name_options.items())]
-                ),
+                "_".join(["_".join([k, str(v)]) for k, v in list(name_options.items())]),
             ]
         )
 
         experiment = "_".join(
             [
-                "_".join(
-                    ["_".join([k, str(v)]) for k, v in list(name_options.items())]
-                ),
+                "_".join(["_".join([k, str(v)]) for k, v in list(name_options.items())]),
                 f"{start_date}",
                 f"{end_date}",
             ]
@@ -467,9 +457,7 @@ done\n\n
             if osize != "custom":
                 general_params_dict["output.size"] = osize
             else:
-                general_params_dict["output.sizes.medium"] = (
-                    "sftgif,velsurf_mag,mask,usurf,bmelt"
-                )
+                general_params_dict["output.sizes.medium"] = "sftgif,velsurf_mag,mask,usurf,bmelt"
 
             grid = {}
             grid["grid.file"] = grid_file
@@ -483,45 +471,27 @@ done\n\n
             grid_params_dict = grid
 
             sb_params_dict: dict[str, str | int | float] = {
-                "stress_balance.sia.enhancement_factor": combination[
-                    "stress_balance.sia.enhancement_factor"
-                ],
+                "stress_balance.sia.enhancement_factor": combination["stress_balance.sia.enhancement_factor"],
                 "stress_balance.ssa.enhancement_factor": ssa_e,
-                "stress_balance.ssa.Glen_exponent": combination[
-                    "stress_balance.ssa.Glen_exponent"
-                ],
-                "basal_resistance.pseudo_plastic.q": combination[
-                    "basal_resistance.pseudo_plastic.q"
-                ],
+                "stress_balance.ssa.Glen_exponent": combination["stress_balance.ssa.Glen_exponent"],
+                "basal_resistance.pseudo_plastic.q": combination["basal_resistance.pseudo_plastic.q"],
                 "basal_yield_stress.mohr_coulomb.topg_to_phi.enabled": "yes",
                 "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden": combination[
                     "basal_yield_stress.mohr_coulomb.till_effective_fraction_overburden"
                 ],
-                "stress_balance.blatter.enhancement_factor": combination[
-                    "stress_balance.sia.enhancement_factor"
-                ],
+                "stress_balance.blatter.enhancement_factor": combination["stress_balance.sia.enhancement_factor"],
             }
             phi_min = combination["basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min"]
             phi_max = combination["basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max"]
             z_min = combination["basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min"]
             z_max = combination["basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max"]
 
-            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max"] = (
-                phi_max
-            )
-            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min"] = (
-                phi_min
-            )
-            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max"] = (
-                z_max
-            )
-            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min"] = (
-                z_min
-            )
+            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.phi_max"] = phi_max
+            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.phi_min"] = phi_min
+            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.topg_max"] = z_max
+            sb_params_dict["basal_yield_stress.mohr_coulomb.topg_to_phi.topg_min"] = z_min
 
-            if (hasattr(combination, "fractures")) and (
-                combination["fractures"] is True
-            ):
+            if (hasattr(combination, "fractures")) and (combination["fractures"] is True):
                 sb_params_dict["fractures"] = True
                 sb_params_dict["fracture_density.include_grounded_ice"] = True
                 sb_params_dict["fracture_density.constant_healing"] = True
@@ -532,9 +502,7 @@ done\n\n
                 sb_params_dict["fracture_gamma"] = combination["fracture_gamma"]
                 sb_params_dict["fracture_gamma_h"] = combination["fracture_gamma_h"]
                 sb_params_dict["fracture_softening"] = combination["fracture_softening"]
-                sb_params_dict["fracture_initiation_threshold"] = combination[
-                    "fracture_initiation_threshold"
-                ]
+                sb_params_dict["fracture_initiation_threshold"] = combination["fracture_initiation_threshold"]
                 sb_params_dict["healing_threshold"] = combination["healing_threshold"]
 
             sliding_law = "pseudo_plastic"
@@ -542,14 +510,10 @@ done\n\n
                 sliding_law = combination["sliding_law"]
             sb_params_dict[f"basal_resistance.{sliding_law}.enabled"] = "yes"
 
-            stress_balance_params_dict = computing.generate_stress_balance(
-                stress_balance, sb_params_dict
-            )
+            stress_balance_params_dict = computing.generate_stress_balance(stress_balance, sb_params_dict)
 
             climate_file_p = f"""$data_dir/climate/{combination["climate_file"]}"""
-            climate_offset_file_p = join(
-                uq_dir, f"""ragis_offset_file_id_{combination["id"]}.nc"""
-            )
+            climate_offset_file_p = join(uq_dir, f"""ragis_offset_file_id_{combination["id"]}.nc""")
 
             climate_parameters: dict[str, str | int | float] = {
                 "atmosphere.given.file": climate_file_p,
@@ -557,18 +521,10 @@ done\n\n
             }
 
             if combination["climate"] in ("given_pdd", "given_pdd_delta"):
-                climate_parameters["surface.pdd.factor_ice"] = (
-                    combination["surface.pdd.factor_ice"] / 910.0
-                )
-                climate_parameters["surface.pdd.factor_snow"] = (
-                    combination["surface.pdd.factor_snow"] / 910.0
-                )
-                climate_parameters["surface.pdd.refreeze"] = combination[
-                    "surface.pdd.refreeze"
-                ]
-                climate_parameters["surface.pdd.std_dev.value"] = combination[
-                    "surface.pdd.std_dev.value"
-                ]
+                climate_parameters["surface.pdd.factor_ice"] = combination["surface.pdd.factor_ice"] / 910.0
+                climate_parameters["surface.pdd.factor_snow"] = combination["surface.pdd.factor_snow"] / 910.0
+                climate_parameters["surface.pdd.refreeze"] = combination["surface.pdd.refreeze"]
+                climate_parameters["surface.pdd.std_dev.value"] = combination["surface.pdd.std_dev.value"]
                 create_offset_file(
                     realpath(climate_offset_file_p),
                     combination["delta_T"],
@@ -576,9 +532,7 @@ done\n\n
                 )
                 climate_parameters["atmosphere.delta_T.file"] = climate_offset_file_p
                 climate_parameters["atmosphere.frac_P.file"] = climate_offset_file_p
-            climate_params_dict = computing.generate_climate(
-                combination["climate"], **climate_parameters
-            )
+            climate_params_dict = computing.generate_climate(combination["climate"], **climate_parameters)
 
             runoff_file_p = f"""$data_dir/climate/{combination["climate_file"]}"""
             hydrology_parameters: dict[str, str | int | float] = {
@@ -587,9 +541,7 @@ done\n\n
                 "hydrology.add_water_input_to_till_storage": False,
             }
 
-            hydro_params_dict = computing.generate_hydrology(
-                combination["hydrology"], **hydrology_parameters
-            )
+            hydro_params_dict = computing.generate_hydrology(combination["hydrology"], **hydrology_parameters)
 
             ocean_file_p = f"""$data_dir/ocean/{combination["ocean_file"]}"""
             frontal_melt = combination["frontal_melt"]
@@ -627,13 +579,9 @@ done\n\n
             }
             if hasattr(combination, "salinity"):
                 if combination["salinity"] is not False:
-                    ocean_parameters["constants.sea_water.salinity"] = combination[
-                        "salinity"
-                    ]
+                    ocean_parameters["constants.sea_water.salinity"] = combination["salinity"]
 
-            ocean_params_dict = computing.generate_ocean(
-                combination["ocean.models"], **ocean_parameters
-            )
+            ocean_params_dict = computing.generate_ocean(combination["ocean.models"], **ocean_parameters)
 
             calving_parameters: dict[str, str | int | float] = {
                 "calving.float_kill.calve_near_grounding_line": float_kill_calve_near_grounding_line,
@@ -642,16 +590,12 @@ done\n\n
                 "geometry.front_retreat.use_cfl": True,
             }
 
-            if hasattr(combination, "prescribed_retreat_file") & (
-                combination["prescribed_retreat_file"] is not False
-            ):
+            if hasattr(combination, "prescribed_retreat_file") & (combination["prescribed_retreat_file"] is not False):
                 calving_parameters["geometry.front_retreat.prescribed.file"] = (
                     f"""$data_dir/front_retreat/{combination["prescribed_retreat_file"]}"""
                 )
 
-            calving_parameters["calving.vonmises_calving.sigma_max"] = combination[
-                "calving.vonmises_calving.sigma_max"
-            ]
+            calving_parameters["calving.vonmises_calving.sigma_max"] = combination["calving.vonmises_calving.sigma_max"]
             if "calving.thickness_calving.threshold" in combination:
                 calving_parameters["calving.thickness_calving.threshold"] = combination[
                     "calving.thickness_calving.threshold"
@@ -665,13 +609,9 @@ done\n\n
                     del calving_parameters["calving.thickness_calving.threshold"]
 
             calving = options.calving
-            calving_params_dict = computing.generate_calving(
-                calving, **calving_parameters
-            )
+            calving_params_dict = computing.generate_calving(calving, **calving_parameters)
 
-            scalar_ts_dict = computing.generate_scalar_ts(
-                outfile, tsstep, odir=dirs["scalar"]
-            )
+            scalar_ts_dict = computing.generate_scalar_ts(outfile, tsstep, odir=dirs["scalar"])
             solver_dict: dict[str, str | int | float] = {}
 
             all_params_dict = computing.merge_dicts(
@@ -688,12 +628,8 @@ done\n\n
             )
             if spatial_ts != "none":
                 exvars = computing.spatial_ts_vars[spatial_ts]
-                spatial_ts_dict = computing.generate_spatial_ts(
-                    outfile, exvars, exstep, odir=dirs["spatial"]
-                )
-                all_params_dict = computing.merge_dicts(
-                    all_params_dict, spatial_ts_dict
-                )
+                spatial_ts_dict = computing.generate_spatial_ts(outfile, exvars, exstep, odir=dirs["spatial"])
+                all_params_dict = computing.merge_dicts(all_params_dict, spatial_ts_dict)
 
             print("\nChecking parameters")
             print("------------------------------------------------------------")
@@ -703,9 +639,7 @@ done\n\n
                         print(f"  - {key} not found in pism_config")
             print("------------------------------------------------------------\n")
 
-            all_params = " \\\n  ".join(
-                [f"-{k} {v}" for k, v in sorted(list(all_params_dict.items()))]
-            )
+            all_params = " \\\n  ".join([f"-{k} {v}" for k, v in sorted(list(all_params_dict.items()))])
 
             if commandline_options is not None:
                 all_params = f"{all_params} \\\n  {commandline_options[1:-1]}"
@@ -725,9 +659,7 @@ done\n\n
 
             template = "{mpido} {pism} {params}" + redirect
 
-            context = computing.merge_dicts(
-                batch_system, dirs, {"pism": pism, "params": all_params}
-            )
+            context = computing.merge_dicts(batch_system, dirs, {"pism": pism, "params": all_params})
             cmd = template.format(**context)
             f.write(cmd)
             f.write("\n")
