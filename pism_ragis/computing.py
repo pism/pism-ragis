@@ -422,7 +422,11 @@ def generate_stress_balance(stress_balance: str, additional_params_dict: dict) -
         params_dict["bp_ksp_view_singularvalues"] = ""
         params_dict["bp_snes_ksp_ew"] = "1"
         params_dict["bp_snes_ksp_ew_version"] = "3"
-        params_dict["time_stepping.adaptive_ratio"] = "100"
+        params_dict["time_stepping.adaptive_ratio"] = "250"
+        params_dict["stress_balance.blatter.use_eta_transform"] = "yes"
+        params_dict["stress_balance.sia.surface_gradient_method"] = "eta"
+        params_dict["bp_snes_rtol"] = "1e-3"
+        params_dict["bp_ksp_rtol"] = "1e-3"
 
     return merge_dicts(additional_params_dict, params_dict)
 
