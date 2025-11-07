@@ -282,6 +282,7 @@ if __name__ == "__main__":
 
         start = time.time()
         ds = xr.open_mfdataset(result_filtered).load()
+        print(ds.time)
         ds = ds.cf.add_bounds("time")
         ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
         ds.rio.write_crs(crs, inplace=True)

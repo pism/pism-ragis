@@ -1484,9 +1484,9 @@ def prepare_liafr(
     thk_mask = (sim_ds["thk"] > 10).persist()
     s_liafr = thk_mask.resample(time="YE").mean()
     s_liafr.name = sim_var
-    o_liafr = obs_ds[obs_mean_var].interp_like(s_liafr, method="nearest")
+    o_liafr = obs_ds[obs_mean_var].resample(time="YE").mean()
+    o_liafr_b = o_liafr.interp_like(s_liafr, method="nearest")
     s_liafr_b = s_liafr
-    o_liafr_b = o_liafr
     sim = s_liafr_b.to_dataset()
 
     o_liafr_b_uncertainty = xr.ones_like(o_liafr_b)

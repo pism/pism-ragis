@@ -132,7 +132,7 @@ if __name__ == "__main__":
         "--resampling_frequency",
         help="""Resampling data to resampling_frequency for importance sampling. Default is "YS".""",
         type=str,
-        default="YS",
+        default="YE",
     )
     parser.add_argument(
         "--engine",
@@ -169,7 +169,7 @@ if __name__ == "__main__":
 
     start = time.time()
 
-    filter_range = ["1980", "2018"]
+    filter_range = ["2018", "2019"]
     obs_mean_var = "land_ice_area_fraction_retreat"
     obs_std_var = "land_ice_area_fraction_retreat_uncertainty"
     sim_var = "land_ice_area_fraction_retreat"
