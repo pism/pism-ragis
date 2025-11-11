@@ -47,7 +47,6 @@ ds.rio.write_crs(crs, inplace=True)
 for m_id, basin in basins.iterrows():
     name = basin["Name"]
     if name is not None:
-        print(name)
         minx, miny, maxx, maxy = basin.geometry.buffer(buffer).bounds
         ll = ds.sel({"x": minx, "y": miny}, method="nearest")
         ur = ds.sel({"x": maxx, "y": maxy}, method="nearest")
