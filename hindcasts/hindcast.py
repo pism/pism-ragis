@@ -240,7 +240,7 @@ if __name__ == "__main__":
         default=False,
     )
     parser.add_argument(
-        "---no-regrid-thickness",
+        "--no-regrid-thickness",
         dest="regrid_thickness",
         action="store_false",
         help="Use regional mode",
