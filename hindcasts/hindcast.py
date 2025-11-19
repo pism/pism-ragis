@@ -200,6 +200,7 @@ if __name__ == "__main__":
         dest="spatial_ts",
         choices=[
             "basic",
+            "qaamerujup",
             "standard",
             "none",
             "ismip6",
