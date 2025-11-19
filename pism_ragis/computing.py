@@ -174,6 +174,23 @@ spatial_ts_vars["ragis"] = [
     "tendency_of_ice_mass_due_to_forced_retreat",
 ]
 
+spatial_ts_vars["qaamerujup"] = [
+    "climatic_mass_balance",
+    "dHdt",
+    "ice_mass_transport_across_grounding_line",
+    "ice_mass",
+    "mask",
+    "mass_fluxes",
+    "thk",
+    "usurf",
+    "velbase",
+    "velsurf",
+    "velsurf_mag",
+    "tendency_of_ice_mass_due_to_calving",
+    "tendency_of_ice_mass_due_to_frontal_melt",
+    "tendency_of_ice_mass_due_to_forced_retreat",
+]
+
 spatial_ts_vars["dem"] = [
     "usurf",
     "velsurf_mag",
