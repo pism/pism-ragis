@@ -142,11 +142,11 @@ dists: Dict[str, Any] = {
     "dem": {
         "uq": {
             "calving.vonmises_calving.sigma_max": uniform(loc=350_000, scale=350_000),
-            "delta_T": uniform(-4, 8.0),
-            "frac_P": uniform(0.9, 0.4),
-            "surface.pdd.factor_ice": uniform(loc=1, scale=9),
-            "surface.pdd.factor_snow": uniform(loc=0.5, scale=4.5),
-            "surface.pdd.std_dev.value": uniform(loc=1, scale=5),
+            "delta_T": uniform(-2, 4.0),
+            "frac_P": uniform(0.9, 0.2),
+            "surface.pdd.factor_ice": uniform(loc=4, scale=6),
+            "surface.pdd.factor_snow": uniform(loc=1, scale=5),
+            "surface.pdd.std_dev.value": uniform(loc=2, scale=5),
         },
         "default_values": {
             "climate": "given_pdd_delta",
