@@ -147,6 +147,7 @@ dists: Dict[str, Any] = {
             "surface.pdd.factor_ice": uniform(loc=4, scale=6),
             "surface.pdd.factor_snow": uniform(loc=1, scale=5),
             "surface.pdd.std_dev.value": uniform(loc=2, scale=5),
+            "prescribed_retreat_file": randint(0, len(retreatfiles)),
         },
         "default_values": {
             "climate": "given_pdd_delta",
@@ -159,7 +160,6 @@ dists: Dict[str, Any] = {
             "ocean.th.gamma_T": 0.0001,
             "ocean.models": "const",
             "ocean_file": "MAR3.9_CNRM-ESM2_ssp585_ocean_1960-2100_v4.nc",
-            "prescribed_retreat_file": "pism_g450m_frontretreat_calfin_1972_2019.nc",
             "surface.pdd.refreeze": 0.6,
             "sliding_law": "pseudo_plastic",
         },
