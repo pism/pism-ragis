@@ -543,6 +543,8 @@ done\n\n
                 )
                 climate_parameters["atmosphere.delta_T.file"] = climate_offset_file_p
                 climate_parameters["atmosphere.frac_P.file"] = climate_offset_file_p
+            if combination["climate"] in ("forcing_pdd", "forcing_pdd_delta", "forcing_smb"):
+                climate_parameters["surface.force_to_thickness.file"] = boot_file
             climate_params_dict = computing.generate_climate(combination["climate"], **climate_parameters)
 
             runoff_file_p = f"""$data_dir/climate/{combination["climate_file"]}"""
