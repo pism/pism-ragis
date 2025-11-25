@@ -554,7 +554,7 @@ def generate_climate(climate: str, **kwargs: dict) -> OrderedDict[str, str]:
         "given_pdd": {"atmosphere.models": "given", "surface.models": "pdd"},
         "given_pdd_delta": {
             "atmosphere.models": "given,delta_T,frac_P",
-            "surface.models": "pdd",
+            "surface.models": "pdd,forcing",
         },
         "given_smb": {"atmosphere.models": "given", "surface.models": "given"},
         "forcing_smb": {
