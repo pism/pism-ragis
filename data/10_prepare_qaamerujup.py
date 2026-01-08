@@ -31,15 +31,12 @@ import xarray as xr
 
 from pism_ragis.domain import create_domain, get_bounds
 
-multipliers = [1, 2, 3, 9]
+multipliers = [1, 2, 3, 4]
 max_mult = multipliers[-1]
 
-# buffer in m
-buffer = 1200
-
 crs = "EPSG:3413"
-basins = gp.read_file("grids/domain_qaamerujup.gpkg").to_crs(crs)
-ds = xr.open_dataset("dem/BedMachineGreenland-v5.nc")
+basins = gp.read_file("dem/domain_qaamerujup.gpkg")
+ds = xr.open_dataset("dem/bedmachine-1931-qaamerujup.nc")
 
 ds = ds.rio.set_spatial_dims(x_dim="x", y_dim="y")
 ds.rio.write_crs(crs, inplace=True)
@@ -47,11 +44,11 @@ ds.rio.write_crs(crs, inplace=True)
 for m_id, basin in basins.iterrows():
     name = basin["Name"]
     if name is not None:
-        minx, miny, maxx, maxy = basin.geometry.buffer(buffer).bounds
+        minx, miny, maxx, maxy = basin.geometry.bounds
         ll = ds.sel({"x": minx, "y": miny}, method="nearest")
         ur = ds.sel({"x": maxx, "y": maxy}, method="nearest")
         tmp_ds = ds.sel({"x": slice(ll["x"], ur["x"]), "y": slice(ur["y"], ll["y"])})
-        x_bnds, y_bnds = get_bounds(tmp_ds)
+        x_bnds, y_bnds = get_bounds(tmp_ds, base_resolution=32, multipliers=multipliers)
         sub_ds = ds.sel({"x": slice(*x_bnds), "y": slice(*y_bnds[::-1])})
         grid = create_domain(x_bnds, y_bnds)
         grid.attrs.update({"domain": name})
