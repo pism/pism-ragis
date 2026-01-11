@@ -1,4 +1,4 @@
-# Copyright (C) 2024 Andy Aschwanden
+# Copyright (C) 2025 Andy Aschwanden
 #
 # This file is part of pism-ragis.
 #
@@ -28,11 +28,8 @@ from pathlib import Path
 import cf_xarray.units  # pylint: disable=unused-import
 import numpy as np
 import pint_xarray  # pylint: disable=unused-import
-import rioxarray
 import xarray as xr
 from pyproj import Proj, Transformer
-
-from pism_ragis.domain import create_domain
 
 xr.set_options(keep_attrs=False)
 
