@@ -409,7 +409,7 @@ def process_mar_cdo(
     start = time.time()
     # fix year and grid
     cdo.setmisstodis(
-        input=f"""-settbounds,1mon -settaxis,{start_year}-01-01,,1mon -aexpr,"precipitation=snowfall+rainfall" -chname,{chname} -setattribute,{setattribute} -setgrid,grids/{grid_file} -selvar,{",".join(vars_dict.keys())} -mergetime """
+        input=f"""-setattribute,precipitation@units="kg m^-2 month^-1" -settbounds,1mon -settaxis,{start_year}-01-01,,1mon -aexpr,"precipitation=snowfall+rainfall" -chname,{chname} -setattribute,{setattribute} -setgrid,grids/{grid_file} -selvar,{",".join(vars_dict.keys())} -mergetime """
         + infiles,
         output=outfile,
         options=f"-f nc4 -z zip_2 -P {max_workers}",
