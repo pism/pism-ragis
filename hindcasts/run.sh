@@ -1,5 +1,55 @@
 export PISM_PREFIX=$HOME/local/pism
 export RAGIS_DIR=/import/c1/ICESHEET/ICESHEET/pism-ragis/
+export odir=${RAGIS_DIR}/hindcasts/2026_01_grimp
+export grid=1200
+
+python $RAGIS_DIR/hindcasts/hindcast.py --start 1978-01-01 --end 2020-12-31 --boot_file $RAGIS_DIR/data/dem/BedMachineGreenland-v5_0.nc --exstep monthly --spatial_ts ragis --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/data/grids/pism-bedmachine-greenland.nc -s chinook -n 160 -q t2standard -w 36:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_mode.csv $RAGIS_DIR/calibration/2025_08_grimp_tw/state/g1200m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
+
+
+export PISM_PREFIX=$HOME/local/pism
+export RAGIS_DIR=/import/c1/ICESHEET/ICESHEET/pism-ragis/
+export odir=${RAGIS_DIR}/hindcasts/2026_01_svd
+export grid=1200
+
+python $RAGIS_DIR/hindcasts/hindcast.py --start 1978-01-01 --end 2020-12-31 --boot_file $RAGIS_DIR/data/dem/bedmachine1980_reconstructed_g600_SVD_0.nc  --exstep monthly --spatial_ts ragis --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/data/grids/pism-bedmachine-greenland.nc -s chinook -n 160 -q t2standard -w 36:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_mode.csv $RAGIS_DIR/calibration/2026_01_svd_tw/state/g1200m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
+
+export PISM_PREFIX=$HOME/local/pism
+export RAGIS_DIR=/import/c1/ICESHEET/ICESHEET/pism-ragis/
+export odir=${RAGIS_DIR}/hindcasts/2026_01_krig
+export grid=1200
+
+python $RAGIS_DIR/hindcasts/hindcast.py --start 1978-01-01 --end 2020-12-31 --boot_file $RAGIS_DIR/data/dem/bedmachine1980_reconstructed_g600_kriging_0.nc  --exstep monthly --spatial_ts ragis --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/data/grids/pism-bedmachine-greenland.nc -s chinook -n 160 -q t2standard -w 36:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_mode.csv $RAGIS_DIR/calibration/2026_01_krig_tw/state/g1200m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
+
+
+
+export PISM_PREFIX=$HOME/local/pism
+export RAGIS_DIR=/import/c1/ICESHEET/ICESHEET/pism-ragis/
+export odir=${RAGIS_DIR}/hindcasts/2026_01_grimp
+export grid=600
+
+python $RAGIS_DIR/hindcasts/hindcast.py --start 1978-01-01 --end 1986-01-01 --boot_file $RAGIS_DIR/data/dem/BedMachineGreenland-v5_0.nc --exstep monthly --spatial_ts ragis --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/data/grids/pism-bedmachine-greenland.nc -s chinook -n 320 -q t2standard -w 48:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_mode.csv $RAGIS_DIR/calibration/2026_01_grimp/state/g600m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
+
+
+export PISM_PREFIX=$HOME/local/pism
+export RAGIS_DIR=/import/c1/ICESHEET/ICESHEET/pism-ragis/
+export odir=${RAGIS_DIR}/hindcasts/2026_01_svd
+export grid=600
+
+python $RAGIS_DIR/hindcasts/hindcast.py --start 1978-01-01 --end 1986-01-01 --boot_file $RAGIS_DIR/data/dem/bedmachine1980_reconstructed_g600_SVD_0.nc  --exstep monthly --spatial_ts ragis --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/data/grids/pism-bedmachine-greenland.nc -s chinook -n 320 -q t2standard -w 48:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_mode.csv $RAGIS_DIR/calibration/2026_01_svd_tw/state/g600m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
+
+export PISM_PREFIX=$HOME/local/pism
+export RAGIS_DIR=/import/c1/ICESHEET/ICESHEET/pism-ragis/
+export odir=${RAGIS_DIR}/hindcasts/2026_01_krig
+export grid=600
+
+python $RAGIS_DIR/hindcasts/hindcast.py --start 1978-01-01 --end 1986-01-01 --boot_file $RAGIS_DIR/data/dem/bedmachine1980_reconstructed_g600_kriging_0.nc  --exstep monthly --spatial_ts ragis --data_dir $RAGIS_DIR/data  --grid_file $RAGIS_DIR/data/grids/pism-bedmachine-greenland.nc -s chinook -n 320 -q t2standard -w 48:00:00 --o_dir $odir -r $grid -e $RAGIS_DIR/uq/ensemble_gris_ragis_mode.csv $RAGIS_DIR/calibration/2026_01_krig_tw/state/g600m_id_BAYES-MEDIAN_1980-1-1_1984-12-31.nc
+
+
+
+####################################################
+
+export PISM_PREFIX=$HOME/local/pism
+export RAGIS_DIR=/import/c1/ICESHEET/ICESHEET/pism-ragis/
 export odir=${RAGIS_DIR}/hindcasts/2025_08_ml
 export grid=4800
 
