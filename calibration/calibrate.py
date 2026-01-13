@@ -239,6 +239,13 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
+        "--no-regrid-thickness",
+        dest="regrid_thickness",
+        action="store_false",
+        help="Use regional mode",
+        default=True,
+    )
+    parser.add_argument(
         "--stable_gl",
         dest="float_kill_calve_near_grounding_line",
         action="store_false",
@@ -282,6 +289,7 @@ if __name__ == "__main__":
     walltime = options.walltime
     # system = available_systems[options.system]
     gid = options.gid
+    regrid_thickness = options.regrid_thickness
 
     spatial_ts = options.spatial_ts
     test_climate_models = options.test_climate_models
@@ -299,7 +307,9 @@ if __name__ == "__main__":
 
     master_config_file = computing.get_path_to_config()
 
-    regridvars = "litho_temp,enthalpy,age,tillwat,bmelt,ice_area_specific_volume,thk"
+    regridvars = "litho_temp,enthalpy,age,tillwat,bmelt,ice_area_specific_volume"
+    if regrid_thickness:
+        regridvars += ",thk"
 
     dirs = {"output": "$output_dir"}
     for d in ["performance", "state", "scalar", "spatial", "jobs", "basins"]:
