@@ -41,6 +41,6 @@ if __name__ == "__main__":
 
     print("Preparing BedMachine")
     result_dir = Path("dem")
-    filter_str = "v5.nc"
-    doi = "10.5067/GMEVBWFLWA7X"
+    filter_str = "v6.nc"
+    doi = "10.5067/6B6B225BBV2D"
     results = download_earthaccess(doi=doi, filter_str=filter_str, result_dir=result_dir)
