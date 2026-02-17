@@ -14,7 +14,7 @@ netcdf pism_overrides {
 
     pism_overrides:energy.minimum_allowed_temperature = 0.0;
 
-    pism_overrides:stress_balance.sia.max_diffusivity = 100000.0;
+    pism_overrides:stress_balance.sia.max_diffusivity = 500000.0;
 
     pism_overrides:surface.pdd.air_temp_all_precip_as_snow = 272.15;
 
