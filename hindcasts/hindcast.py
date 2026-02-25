@@ -586,6 +586,7 @@ done\n\n
             frontalmelt_params_dict = frontalmelt_parameters
 
             ocean_parameters = {
+                "ocean.given.file": ocean_file_p,
                 "ocean.th.file": ocean_file_p,
                 "ocean.th.clip_salinity": False,
                 "ocean.th.gamma_T": combination["ocean.th.gamma_T"],
