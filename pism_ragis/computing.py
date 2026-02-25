@@ -597,6 +597,7 @@ def generate_ocean(ocean: str, **kwargs: dict) -> OrderedDict[str, str]:
     ocean_dict = {
         "th": {"ocean.models": "th"},
         "constant": {"ocean.models": "constant"},
+        "given": {"ocean.models": "given"},
     }
     if ocean in ocean_dict:
         params_dict = OrderedDict(ocean_dict[ocean])
