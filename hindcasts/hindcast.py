@@ -391,7 +391,7 @@ done\n\n
     ssa_e = 1.0
 
     uq_df = pd.read_csv(ensemble_file)
-    # uq_df.fillna(False, inplace=True)
+    uq_df = uq_df.fillna({col: False if uq_df[col].dtype == 'bool' else 0 for col in uq_df.columns})
 
     scripts = []
 
