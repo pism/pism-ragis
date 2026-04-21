@@ -682,7 +682,7 @@ done\n\n
             run_id = combination["id"]
             id_cmd = f"ncatted -a id,global,a,c,{run_id}"
             for m_file in [
-                scalar_ts_dict["output.timeseries.filename"],
+                scalar_ts_dict["output.scalar.file"],
                 join(dirs["state"], outfile),
             ]:
                 cmd = f"{id_cmd} {m_file}\n"

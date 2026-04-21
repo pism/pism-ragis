@@ -8,7 +8,7 @@ netcdf pism_overrides {
 
     pism_overrides:input.forcing.buffer_size = 400;
 
-    pism_overrides:output.extra.stop_missing = "no";
+    pism_overrides:output.spatial.stop_missing = "no";
 
     pism_overrides:grid.allow_extrapolation = "yes";
 
