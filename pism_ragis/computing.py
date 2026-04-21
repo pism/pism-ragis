@@ -426,8 +426,8 @@ def generate_stress_balance(stress_balance: str, additional_params_dict: dict) -
         params_dict["time_stepping.skip.max"] = "500"
 
     if stress_balance == "blatter":
-        params_dict["stress_balance.blatter.coarsening_factor"] = "4"
-        params_dict["blatter_Mz"] = "17"
+        params_dict["stress_balance.blatter.coarsening_factor"] = "3"
+        params_dict["blatter_Mz"] = "10"
         params_dict["bp_ksp_type"] = "gmres"
         params_dict["bp_pc_type"] = "mg"
         params_dict["bp_pc_mg_levels"] = "3"
