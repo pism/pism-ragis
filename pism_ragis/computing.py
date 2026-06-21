@@ -428,6 +428,10 @@ def generate_stress_balance(stress_balance: str, additional_params_dict: dict) -
     if stress_balance == "blatter":
         params_dict["stress_balance.blatter.coarsening_factor"] = "3"
         params_dict["blatter_Mz"] = "10"
+        params_dict["bp_pc_type"] = "mg"
+        params_dict["bp_pc_mg_levels"] = "3"
+        params_dict["bp_mg_levels_ksp_type"] = "richardson"
+        params_dict["bp_mg_levels_pc_type"] = "sor"
         params_dict["bp_mg_coarse_pc_type"] = "gamg"
         params_dict["bp_mg_coarse_ksp_type"] = "gmres"
         params_dict["bp_mg_coarse_ksp_rtol"] = "1e-2"
@@ -435,7 +439,6 @@ def generate_stress_balance(stress_balance: str, additional_params_dict: dict) -
         params_dict["bp_snes_rtol"] = "1e-3"
         params_dict["bp_ksp_rtol"] = "1e-3"
         params_dict["bp_snes_monitor_ratio"] = ""
-        params_dict["bp_ksp_view_singularvalues"] = ""
         params_dict["bp_snes_ksp_ew"] = "1"
         params_dict["bp_snes_ksp_ew_version"] = "3"
         params_dict["time_stepping.adaptive_ratio"] = "500"
