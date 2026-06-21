@@ -426,25 +426,21 @@ def generate_stress_balance(stress_balance: str, additional_params_dict: dict) -
         params_dict["time_stepping.skip.max"] = "500"
 
     if stress_balance == "blatter":
-        params_dict["stress_balance.blatter.coarsening_factor"] = "4"
-        params_dict["blatter_Mz"] = "17"
-        params_dict["bp_ksp_type"] = "gmres"
-        params_dict["bp_pc_type"] = "mg"
-        params_dict["bp_pc_mg_levels"] = "3"
-        params_dict["bp_mg_levels_ksp_type"] = "richardson"
-        params_dict["bp_mg_levels_pc_type"] = "sor"
-        params_dict["bp_mg_coarse_ksp_type"] = "preonly"
-        params_dict["bp_mg_coarse_pc_type"] = "lu"
+        params_dict["stress_balance.blatter.coarsening_factor"] = "3"
+        params_dict["blatter_Mz"] = "10"
+        params_dict["bp_mg_coarse_pc_type"] = "gamg"
+        params_dict["bp_mg_coarse_ksp_type"] = "gmres"
+        params_dict["bp_mg_coarse_ksp_rtol"] = "1e-2"
+        params_dict["bp_mg_coarse_ksp_max_it"] = "30"
+        params_dict["bp_snes_rtol"] = "1e-3"
+        params_dict["bp_ksp_rtol"] = "1e-3"
         params_dict["bp_snes_monitor_ratio"] = ""
-        params_dict["bp_ksp_monitor"] = ""
         params_dict["bp_ksp_view_singularvalues"] = ""
         params_dict["bp_snes_ksp_ew"] = "1"
         params_dict["bp_snes_ksp_ew_version"] = "3"
         params_dict["time_stepping.adaptive_ratio"] = "500"
         params_dict["stress_balance.blatter.use_eta_transform"] = "yes"
         params_dict["stress_balance.sia.surface_gradient_method"] = "eta"
-        params_dict["bp_snes_rtol"] = "1e-3"
-        params_dict["bp_ksp_rtol"] = "1e-3"
 
     return merge_dicts(additional_params_dict, params_dict)
 
