@@ -270,7 +270,7 @@ spatial_ts_vars["standard"] = [
 
 def generate_spatial_ts(
     outfile: str,
-    exvars: list[str],
+    spatialvars: list[str],
     step: str = "yearly",
     odir: str = ".",
 ) -> OrderedDict[str, str]:
@@ -281,8 +281,8 @@ def generate_spatial_ts(
     ----------
     outfile : str
         The output file name.
-    exvars : list[str]
-        The extra variables to include in the time series.
+    spatialvars : list[str]
+        The spatial variables to include in the time series.
     step : str, optional
         The time step for the time series, by default "yearly".
     odir : str, optional
@@ -295,12 +295,12 @@ def generate_spatial_ts(
     """
 
     # check if list or comma-separated string is given.
-    extravars = ",".join(exvars)
+    spatial_vars = ",".join(spatialvars)
 
     params_dict = OrderedDict()
-    params_dict["output.extra.file"] = os.path.join(odir, "ex_" + outfile)
-    params_dict["output.extra.vars"] = extravars
-    params_dict["output.extra.times"] = step
+    params_dict["output.spatial.file"] = os.path.join(odir, "spatial_" + outfile)
+    params_dict["output.spatial.vars"] = spatial_vars
+    params_dict["output.spatial.times"] = step
 
     return params_dict
 
@@ -329,8 +329,8 @@ def generate_scalar_ts(
     """
 
     params_dict = OrderedDict()
-    params_dict["output.timeseries.filename"] = os.path.join(odir, "ts_" + outfile)
-    params_dict["output.timeseries.times"] = step
+    params_dict["output.scalar.file"] = os.path.join(odir, "scalar_" + outfile)
+    params_dict["output.scalar.times"] = step
 
     return params_dict
 
@@ -593,6 +593,7 @@ def generate_ocean(ocean: str, **kwargs: dict) -> OrderedDict[str, str]:
     ocean_dict = {
         "th": {"ocean.models": "th"},
         "constant": {"ocean.models": "constant"},
+        "given": {"ocean.models": "given"},
     }
     if ocean in ocean_dict:
         params_dict = OrderedDict(ocean_dict[ocean])

@@ -1,4 +1,4 @@
-# Copyright (C) 2023 Andy Aschwanden
+# Copyright (C) 2023-26 Andy Aschwanden
 #
 # This file is part of pism-ragis.
 #
@@ -391,7 +391,7 @@ done\n\n
     ssa_e = 1.0
 
     uq_df = pd.read_csv(ensemble_file)
-    uq_df.fillna(False, inplace=True)
+    uq_df = uq_df.fillna({col: False if uq_df[col].dtype == 'bool' else 0 for col in uq_df.columns})
 
     scripts = []
 
@@ -586,6 +586,7 @@ done\n\n
             frontalmelt_params_dict = frontalmelt_parameters
 
             ocean_parameters = {
+                "ocean.given.file": ocean_file_p,
                 "ocean.th.file": ocean_file_p,
                 "ocean.th.clip_salinity": False,
                 "ocean.th.gamma_T": combination["ocean.th.gamma_T"],
@@ -681,7 +682,7 @@ done\n\n
             run_id = combination["id"]
             id_cmd = f"ncatted -a id,global,a,c,{run_id}"
             for m_file in [
-                scalar_ts_dict["output.timeseries.filename"],
+                scalar_ts_dict["output.scalar.file"],
                 join(dirs["state"], outfile),
             ]:
                 cmd = f"{id_cmd} {m_file}\n"
