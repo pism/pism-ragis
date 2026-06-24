@@ -454,7 +454,7 @@ done\n\n
                 "stress_balance.ice_free_thickness_standard": 5,
                 "input.forcing.time_extrapolation": "true",
                 "energy.ch_warming.enabled": "false",
-                "energy.bedrock_thermal.file": "$data_dir/bheatflux/geothermal_heat_flow_map_10km.nc",
+                "energy.bedrock_thermal.file": "$data_dir/bheatflux/heatflux_g900m_GreenlandObsISMIP7-v1.3.nc",
             }
 
             outfile = f"g{horizontal_resolution}m_{experiment}.nc"
@@ -621,18 +621,14 @@ done\n\n
                     "calving.thickness_calving.threshold"
                 ]
             if "calving.thickness_calving.file" in combination:
-                calving_parameters[
-                    "calving.thickness_calving.file"
-                ] = f"""$data_dir/calving/{combination[
+                calving_parameters["calving.thickness_calving.file"] = f"""$data_dir/calving/{combination[
                     "calving.thickness_calving.file"]}"""
                 if "calving.thickness_calving.threshold" in calving_parameters:
                     del calving_parameters["calving.thickness_calving.threshold"]
 
             if "calving.rate_scaling.file" in combination:
                 if combination["calving.rate_scaling.file"]:
-                    calving_parameters[
-                        "calving.rate_scaling.file"
-                    ] = f"""$data_dir/calving/{combination[
+                    calving_parameters["calving.rate_scaling.file"] = f"""$data_dir/calving/{combination[
                     "calving.rate_scaling.file"]}"""
                     calving_parameters["calving.rate_scaling.period"] = 0
 
