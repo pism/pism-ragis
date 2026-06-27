@@ -307,7 +307,7 @@ if __name__ == "__main__":
 
     master_config_file = computing.get_path_to_config()
 
-    regridvars = "litho_temp,enthalpy,age,tillwat,bmelt,ice_area_specific_volume"
+    regridvars = "litho_temp,enthalpy,age,tillwat,bmelt,ice_area_specific_volume,uvel_sigma,vvel_sigma"
     if regrid_thickness:
         regridvars += ",thk"
 
