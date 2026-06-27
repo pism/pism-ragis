@@ -427,7 +427,7 @@ def generate_stress_balance(stress_balance: str, additional_params_dict: dict) -
 
     if stress_balance == "blatter":
         params_dict["stress_balance.blatter.coarsening_factor"] = "3"
-        params_dict["blatter_Mz"] = "10"
+        params_dict["stress_balance.blatter.Mz"] = 10
         params_dict["bp_pc_type"] = "mg"
         params_dict["bp_pc_mg_levels"] = "3"
         params_dict["bp_mg_levels_ksp_type"] = "richardson"
@@ -436,7 +436,7 @@ def generate_stress_balance(stress_balance: str, additional_params_dict: dict) -
         params_dict["bp_mg_coarse_pc_type"] = "gamg"
         params_dict["bp_mg_coarse_ksp_type"] = "gmres"
         params_dict["bp_mg_coarse_ksp_rtol"] = "1e-2"
-        params_dict["bp_mg_coarse_ksp_max_it"] = "100"
+        params_dict["bp_mg_coarse_ksp_max_it"] = "50"
         params_dict["bp_snes_rtol"] = "1e-3"
         params_dict["bp_ksp_rtol"] = "1e-3"
         params_dict["bp_snes_monitor_ratio"] = ""
@@ -444,7 +444,6 @@ def generate_stress_balance(stress_balance: str, additional_params_dict: dict) -
         params_dict["bp_snes_ksp_ew_version"] = "3"
         params_dict["time_stepping.adaptive_ratio"] = "500"
         params_dict["stress_balance.blatter.use_eta_transform"] = "yes"
-        params_dict["stress_balance.sia.surface_gradient_method"] = "eta"
 
     return merge_dicts(additional_params_dict, params_dict)
 
@@ -815,9 +814,7 @@ systems["electra_skylake"]["queue"] = {
 
 systems["debug"]["header"] = ""
 
-systems["chinook"][
-    "header"
-] = """#!/bin/sh
+systems["chinook"]["header"] = """#!/bin/sh
 #SBATCH --partition={queue}
 #SBATCH --ntasks={cores}
 #SBATCH --tasks-per-node={ppn}
@@ -844,9 +841,7 @@ ulimit
 
 """
 
-systems["chinook-40"][
-    "header"
-] = """#!/bin/sh
+systems["chinook-40"]["header"] = """#!/bin/sh
 #SBATCH --partition={queue}
 #SBATCH --ntasks={cores}
 #SBATCH --tasks-per-node={ppn}
@@ -873,9 +868,7 @@ ulimit
 
 """
 
-systems["chinook-24"][
-    "header"
-] = """#!/bin/sh
+systems["chinook-24"]["header"] = """#!/bin/sh
 #SBATCH --partition={queue}
 #SBATCH --ntasks={cores}
 #SBATCH --tasks-per-node={ppn}
@@ -902,9 +895,7 @@ ulimit
 
 """
 
-systems["stampede2"][
-    "header"
-] = """#!/bin/sh
+systems["stampede2"]["header"] = """#!/bin/sh
 #SBATCH -n {cores}
 #SBATCH -N {nodes}
 #SBATCH --time={walltime}
@@ -931,9 +922,7 @@ ulimit
 
 """
 
-systems["stampede3"][
-    "header"
-] = """#!/bin/sh
+systems["stampede3"]["header"] = """#!/bin/sh
 #SBATCH -n {cores}
 #SBATCH -N {nodes}
 #SBATCH --time={walltime}
@@ -955,9 +944,7 @@ ulimit
 
 """
 
-systems["frontera"][
-    "header"
-] = """#!/bin/sh
+systems["frontera"]["header"] = """#!/bin/sh
 #SBATCH -n {cores}
 #SBATCH -N {nodes}
 #SBATCH --time={walltime}
@@ -984,9 +971,7 @@ ulimit
 
 """
 
-systems["anvil"][
-    "header"
-] = """#!/bin/sh
+systems["anvil"]["header"] = """#!/bin/sh
 #SBATCH -A ees240003
 #SBATCH --ntasks={cores}
 #SBATCH --nodes={nodes}
@@ -1015,37 +1000,27 @@ ulimit
 """
 
 
-systems["chinook"][
-    "footer"
-] = """
+systems["chinook"]["footer"] = """
 # clean up the list of hostnames
 rm -rf ./nodes_$SLURM_JOBID
 """
 
-systems["chinook"][
-    "footer"
-] = """
+systems["chinook"]["footer"] = """
 # clean up the list of hostnames
 rm -rf ./nodes_$SLURM_JOBID
 """
 
-systems["chinook-40"][
-    "footer"
-] = """
+systems["chinook-40"]["footer"] = """
 # clean up the list of hostnames
 rm -rf ./nodes_$SLURM_JOBID
 """
 
-systems["chinook-24"][
-    "footer"
-] = """
+systems["chinook-24"]["footer"] = """
 # clean up the list of hostnames
 rm -rf ./nodes_$SLURM_JOBID
 """
 
-systems["electra_broadwell"][
-    "header"
-] = """#PBS -S /bin/bash
+systems["electra_broadwell"]["header"] = """#PBS -S /bin/bash
 #PBS -N cfd
 #PBS -l walltime={walltime}
 #PBS -m e
@@ -1059,9 +1034,7 @@ cd $PBS_O_WORKDIR
 
 """
 
-systems["pleiades"][
-    "header"
-] = """#PBS -S /bin/bash
+systems["pleiades"]["header"] = """#PBS -S /bin/bash
 #PBS -N cfd
 #PBS -l walltime={walltime}
 #PBS -m e
@@ -1076,9 +1049,7 @@ cd $PBS_O_WORKDIR
 
 """
 
-systems["pleiades_broadwell"][
-    "header"
-] = """#PBS -S /bin/bash
+systems["pleiades_broadwell"]["header"] = """#PBS -S /bin/bash
 #PBS -N cfd
 #PBS -l walltime={walltime}
 #PBS -m e
@@ -1093,9 +1064,7 @@ cd $PBS_O_WORKDIR
 
 """
 
-systems["pleiades_sandy"][
-    "header"
-] = """#PBS -S /bin/bash
+systems["pleiades_sandy"]["header"] = """#PBS -S /bin/bash
 #PBS -N cfd
 #PBS -l walltime={walltime}
 #PBS -m e
@@ -1110,9 +1079,7 @@ cd $PBS_O_WORKDIR
 
 """
 
-systems["pleiades_haswell"][
-    "header"
-] = """#PBS -S /bin/bash
+systems["pleiades_haswell"]["header"] = """#PBS -S /bin/bash
 #PBS -N cfd
 #PBS -l walltime={walltime}
 #PBS -m e
@@ -1127,9 +1094,7 @@ cd $PBS_O_WORKDIR
 
 """
 
-systems["pleiades_ivy"][
-    "header"
-] = """#PBS -S /bin/bash
+systems["pleiades_ivy"]["header"] = """#PBS -S /bin/bash
 #PBS -N cfd
 #PBS -l walltime={walltime}
 #PBS -m e
@@ -1144,9 +1109,7 @@ cd $PBS_O_WORKDIR
 
 """
 
-systems["electra_skylake"][
-    "header"
-] = """#PBS -S /bin/bash
+systems["electra_skylake"]["header"] = """#PBS -S /bin/bash
 #PBS -N cfd
 #PBS -l walltime={walltime}
 #PBS -m e
@@ -1161,24 +1124,18 @@ cd $PBS_O_WORKDIR
 
 """
 
-systems["debug"][
-    "header"
-] = """
+systems["debug"]["header"] = """
 
 """
 
 # headers for post-processing jobs
 
 post_headers = {}
-post_headers[
-    "default"
-] = """#!/bin/bash
+post_headers["default"] = """#!/bin/bash
 
 """
 
-post_headers[
-    "pbs"
-] = """#PBS -S /bin/bash
+post_headers["pbs"] = """#PBS -S /bin/bash
 #PBS -l select=1:mem=94GB
 #PBS -l walltime=8:00:00
 #PBS -q ldan
@@ -1187,9 +1144,7 @@ cd $PBS_O_WORKDIR
 
 """
 
-post_headers[
-    "slurm"
-] = """#!/bin/bash
+post_headers["slurm"] = """#!/bin/bash
 #SBATCH --partition=analysis
 #SBATCH --ntasks=1
 #SBATCH --tasks-per-node=1
