@@ -307,9 +307,9 @@ if __name__ == "__main__":
 
     master_config_file = computing.get_path_to_config()
 
-    regridvars = "litho_temp,enthalpy,age,tillwat,bmelt,ice_area_specific_volume,uvel_sigma,vvel_sigma"
+    regridvars = "litho_temp,enthalpy,age,tillwat,bmelt,uvel_sigma,vvel_sigma"
     if regrid_thickness:
-        regridvars += ",thk"
+        regridvars += ",thk,ice_area_specific_volume"
 
     dirs = {"output": "$output_dir"}
     for d in ["performance", "state", "scalar", "spatial", "jobs", "basins"]:

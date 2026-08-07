@@ -1,7 +1,28 @@
 
+
 RAGIS_DIR=/import/c1/ICESHEET/ICESHEET/pism-ragis/
 resolution=2400
 n=40
+odir=${RAGIS_DIR}/calibration/2026_06_init
+
+python ${RAGIS_DIR}/calibration/calibrate.py --no-regrid-thickness --end 1985-01-01 --boot_file ${RAGIS_DIR}/data/dem/boot_g900m_GreenlandObsISMIP7-v1.3.nc --force_to_thickness_file ${RAGIS_DIR}/data/dem/boot_g900m_GreenlandObsISMIP7-v1.3.nc --exstep yearly --spatial_ts calibrate --data_dir ${RAGIS_DIR}/data --grid_file ${RAGIS_DIR}/data/grids/pism-bedmachine-greenland.nc -s chinook -n 40 -q t2small -w 36:00:00 --o_dir $odir -r $resolution -e ${RAGIS_DIR}/uq/ensemble_gris_calibrate.csv $RAGIS_DIR/calibration/2026_03_grimp_init/state/g900m_id_BAYES-MEDIAN_2007-01-01_2010-01-01.nc
+
+RAGIS_DIR=/import/c1/ICESHEET/ICESHEET/pism-ragis/
+resolution=2400
+n=40
+odir=${RAGIS_DIR}/calibration/2026_06_init_ho
+
+python ${RAGIS_DIR}/calibration/calibrate.py --stress_balance blatter --end 1985-01-01 --boot_file ${RAGIS_DIR}/data/dem/boot_g900m_GreenlandObsISMIP7-v1.3.nc --force_to_thickness_file ${RAGIS_DIR}/data/dem/boot_g900m_GreenlandObsISMIP7-v1.3.nc --exstep yearly --spatial_ts calibrate --data_dir ${RAGIS_DIR}/data --grid_file ${RAGIS_DIR}/data/grids/pism-bedmachine-greenland.nc -s chinook -n 40 -q t2small -w 36:00:00 --o_dir $odir -r $resolution -e ${RAGIS_DIR}/uq/ensemble_gris_calibrate.csv $RAGIS_DIR/calibration/2026_06_init/state/g{resolution}m_id_BAYES-MEDIAN_1980-1-1_1985-01-01.nc 
+
+RAGIS_DIR=/import/c1/ICESHEET/ICESHEET/pism-ragis/
+resolution=900
+n=160
+odir=${RAGIS_DIR}/calibration/2026_06_init_ho
+
+python ${RAGIS_DIR}/calibration/calibrate.py --stress_balance blatter --end 1985-01-01 --boot_file ${RAGIS_DIR}/data/dem/boot_g900m_GreenlandObsISMIP7-v1.3.nc --force_to_thickness_file ${RAGIS_DIR}/data/dem/boot_g900m_GreenlandObsISMIP7-v1.3.nc --exstep yearly --spatial_ts calibrate --data_dir ${RAGIS_DIR}/data --grid_file ${RAGIS_DIR}/data/grids/pism-bedmachine-greenland.nc -s chinook -n $n -q t2standard -w 36:00:00 --o_dir $odir -r $resolution -e ${RAGIS_DIR}/uq/ensemble_gris_calibrate.csv $RAGIS_DIR/calibration/2026_06_init_ho/state/g2400m_id_BAYES-MEDIAN_1980-1-1_1985-01-01.nc 
+
+
+
 odir=${RAGIS_DIR}/calibration/2026_03_grimp_init
 start="2007-01-01"
 end="2010-01-01"
